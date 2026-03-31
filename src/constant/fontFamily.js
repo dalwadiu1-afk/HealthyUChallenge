@@ -1,0 +1,15 @@
+export const fontFamily = {
+  montserratLight: 'MontserratAlternates-Light',
+  montserratRegular: 'MontserratAlternates-Regular',
+  montserratBold: 'MontserratAlternates-Bold',
+  montserratMedium: 'MontserratAlternates-Medium',
+  montserratSemiBold: 'MontserratAlternates-SemiBold',
+  urbanistRegular: 'Urbanist-Regular',
+  urbanistBold: 'Urbanist-Bold',
+  urbanistMedium: 'Urbanist-Medium',
+  urbanistSemiBold: 'Urbanist-SemiBold',
+  urbanistLight: 'Urbanist-Light',
+  urbanistExtraBold: 'Urbanist-ExtraBold',
+  CircularRegular: 'CircularStd-Book',
+  CircularMedium: 'CircularStd-Medium',
+};
