@@ -3,7 +3,7 @@ import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
 import { Button, Header, Wrapper } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
 
-export default function BookAnAppointment() {
+export default function BookAnAppointment({ navigation }) {
   const menus = [
     {
       label: 'Patients',
@@ -82,6 +82,7 @@ export default function BookAnAppointment() {
 
           <View style={styles.btnContainer}>
             <Button
+              onPress={() => navigation.navigate('SessionConfirmation')}
               title="Book An Appointment"
               containerStyle={{ marginTop: 20 }}
             />

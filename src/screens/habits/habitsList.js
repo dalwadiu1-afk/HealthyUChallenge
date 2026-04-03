@@ -12,87 +12,9 @@ import { Header, Wrapper } from '../../components';
 import { fontFamily } from '../../constant';
 
 /* =========================
-   Flip Card Component
-========================= */
-const FlipCard = ({ item, index }) => {
-  const animatedValue = useRef(new Animated.Value(0)).current;
-  const [flipped, setFlipped] = useState(false);
-
-  const flipCard = () => {
-    Animated.timing(animatedValue, {
-      toValue: flipped ? 0 : 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
-    setFlipped(!flipped);
-  };
-
-  const isEven = index % 2 === 0;
-
-  // Rotation values
-  const frontRotate = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', isEven ? '180deg' : '180deg'],
-  });
-
-  const backRotate = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [isEven ? '180deg' : '180deg', '360deg'],
-  });
-
-  return (
-    <Pressable style={{ flex: 1 }} onPress={flipCard}>
-      <View style={styles.cardContainer}>
-        {/* FRONT */}
-        <Animated.View
-          style={[
-            styles.card,
-            {
-              transform: [
-                { perspective: 1000 },
-                isEven
-                  ? !isEven
-                    ? { rotateY: frontRotate }
-                    : { rotateX: frontRotate }
-                  : { rotateY: frontRotate },
-              ],
-            },
-          ]}
-        >
-          <Text style={styles.title}>{item?.title}</Text>
-          <Text style={styles.description}>{item?.description}</Text>
-        </Animated.View>
-
-        {/* BACK */}
-        <Animated.View
-          style={[
-            styles.card,
-            styles.cardBack,
-            {
-              position: 'absolute',
-              top: 0,
-              transform: [
-                { perspective: 1000 },
-                isEven ? { rotateY: backRotate } : { rotateX: backRotate },
-              ],
-            },
-          ]}
-        >
-          {/* 👇 TEXT DOES NOT ROTATE NOW */}
-          <View style={styles.innerContent}>
-            <Text style={styles.title}>{item?.title}</Text>
-            <Text style={styles.description}>{item?.description}</Text>
-          </View>
-        </Animated.View>
-      </View>
-    </Pressable>
-  );
-};
-
-/* =========================
    Main Screen
 ========================= */
-export default function HabitsList() {
+export default function HabitsList({ navigation }) {
   const data = [
     {
       id: 1,
@@ -102,6 +24,7 @@ export default function HabitsList() {
       progress: 0,
       target: 1,
       category: 'nutrition',
+      screenName: 'BookAnAppointment',
     },
     {
       id: 2,
@@ -194,6 +117,87 @@ export default function HabitsList() {
       description: 'Add your own personal health goal',
     },
   ];
+
+  /* =========================
+   Flip Card Component
+========================= */
+  const FlipCard = ({ item, index }) => {
+    const animatedValue = useRef(new Animated.Value(0)).current;
+    const [flipped, setFlipped] = useState(false);
+
+    const flipCard = () => {
+      Animated.timing(animatedValue, {
+        toValue: flipped ? 0 : 1,
+        duration: 500,
+        useNativeDriver: true,
+      }).start();
+      setFlipped(!flipped);
+    };
+
+    const isEven = index % 2 === 0;
+
+    // Rotation values
+    const frontRotate = animatedValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['0deg', isEven ? '180deg' : '180deg'],
+    });
+
+    const backRotate = animatedValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: [isEven ? '180deg' : '180deg', '360deg'],
+    });
+
+    return (
+      <Pressable
+        style={{ flex: 1 }}
+        onPress={() => navigation?.navigate(item?.screenName)}
+      >
+        <View style={styles.cardContainer}>
+          {/* FRONT */}
+          <Animated.View
+            style={[
+              styles.card,
+              {
+                transform: [
+                  { perspective: 1000 },
+                  isEven
+                    ? !isEven
+                      ? { rotateY: frontRotate }
+                      : { rotateX: frontRotate }
+                    : { rotateY: frontRotate },
+                ],
+              },
+            ]}
+          >
+            <Text style={styles.title}>{item?.title}</Text>
+            <Text style={styles.description}>{item?.description}</Text>
+          </Animated.View>
+
+          {/* BACK */}
+          <Animated.View
+            style={[
+              styles.card,
+              styles.cardBack,
+              {
+                position: 'absolute',
+                top: 0,
+                transform: [
+                  { perspective: 1000 },
+                  isEven ? { rotateY: backRotate } : { rotateX: backRotate },
+                ],
+              },
+            ]}
+          >
+            {/* 👇 TEXT DOES NOT ROTATE NOW */}
+            <View style={styles.innerContent}>
+              <Text style={styles.title}>{item?.title}</Text>
+              <Text style={styles.description}>{item?.description}</Text>
+            </View>
+          </Animated.View>
+        </View>
+      </Pressable>
+    );
+  };
 
   return (
     <Wrapper>

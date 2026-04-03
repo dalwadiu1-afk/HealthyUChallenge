@@ -10,11 +10,14 @@ import {
   Image,
   TouchableOpacity,
 } from 'react-native';
-import { SearchBar, SvgImg, Wrapper } from '../../components';
+
 import { colors } from '../../constant/colors';
 import { chatIcon, heartIcon, shareIcon } from '../../assets/images';
 import ChatCard from '../../components/social/chatCard';
 import { fontFamily } from '../../constant';
+import ProfileCard from '../../components/profile/ProfileCard';
+import ProfileHeader from '../../components/profile/ProfileHeader';
+import { SearchBar, Wrapper } from '../../components';
 
 const { height } = Dimensions.get('window');
 
@@ -72,39 +75,14 @@ export default function Feeds({ navigation }) {
 
   return (
     <Wrapper>
-      <View style={styles.container}>
-        <TouchableOpacity
-          onPress={() =>
-            navigation.navigate('ProfileStack', {
-              screen: 'ProfileDetails',
-            })
-          }
-          style={styles.leftPhoto}
-        />
-        <View style={{ marginLeft: 12, justifyContent: 'center', flex: 1 }}>
-          <Text
-            style={{
-              fontSize: 14,
-              color: colors.white,
-              fontFamily: fontFamily.montserratMedium,
-            }}
-          >
-            Hello Linh!
-          </Text>
-          <Text
-            style={{
-              fontSize: 18,
-              fontFamily: fontFamily.montserratBold,
-              color: colors.white,
-            }}
-          >
-            Thursday, 08 July
-          </Text>
-        </View>
-        <View style={styles.chatBtn}>
-          <SvgImg iconName={chatIcon} height={35} width={35} />
-        </View>
-      </View>
+      <ProfileHeader
+        profile={{ date: 'Thursday, 08 July', name: 'Hello Linh!' }}
+        onProfileClick={() =>
+          navigation.navigate('ProfileStack', {
+            screen: 'ProfileDetails',
+          })
+        }
+      />
 
       {/* Search bar */}
       <View style={styles.searchBoxContainer}>

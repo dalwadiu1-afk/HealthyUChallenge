@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StatusBar } from 'react-native';
 import { colors } from '../../constant/colors';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export function Wrapper({
   children,
@@ -18,14 +19,16 @@ export function Wrapper({
         backgroundColor: bgColor,
       }}
     >
-      <StatusBar
-        translucent={translucent}
-        backgroundColor={statusBarColor}
-        barStyle={barStyle}
-      />
-      <View style={{ paddingHorizontal: 23, flex: 1, ...containerStyle }}>
-        {children}
-      </View>
+      <SafeAreaProvider>
+        <StatusBar
+          translucent={translucent}
+          backgroundColor={statusBarColor}
+          barStyle={barStyle}
+        />
+        <View style={{ paddingHorizontal: 23, flex: 1, ...containerStyle }}>
+          {children}
+        </View>
+      </SafeAreaProvider>
       {/* <Loader isLoading={isLoading} /> */}
     </View>
   );

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,78 +12,26 @@ import {
 } from 'react-native';
 import { Button, Header, Wrapper } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
+import { generateDaysFromToday } from '../../../utils/helper';
 
 const { height } = Dimensions.get('window');
-export default function SessionConfirmation() {
-  const [currentDateIndex, setCurrentDateIndex] = useState(5);
-  const menus = [
-    {
-      label: 'Patients',
-      counts: '116+',
-    },
-    {
-      label: 'Patients',
-      counts: '116+',
-    },
-    {
-      label: 'Patients',
-      counts: '116+',
-    },
-    {
-      label: 'Patients',
-      counts: '116+',
-    },
-  ];
+export default function SessionConfirmation({ navigation }) {
+  const [dates, setDates] = useState([]);
+  const [currentDateIndex, setCurrentDateIndex] = useState(0);
+  const [currentTimeSlotIndex, setCurrentTimeSlotIndex] = useState(0);
 
-  const dates = [
-    {
-      label: 'Mon',
-      date: '12',
-      timeSlots: [
-        '10:00 AM',
-        '11:00 AM',
-        '12:00 PM',
-        '10:00 AM',
-        '11:00 AM',
-        '12:00 PM',
-      ],
-    },
-    {
-      label: 'Mon',
-      date: '12',
-      timeSlots: ['10:00 AM', '11:00 AM', '12:00 PM'],
-    },
-    {
-      label: 'Mon',
-      date: '12',
-      timeSlots: ['10:00 AM', '11:00 AM', '12:00 PM'],
-    },
-    {
-      label: 'Mon',
-      date: '12',
-      timeSlots: ['10:00 AM', '11:00 AM', '12:00 PM'],
-    },
-    {
-      label: 'Mon',
-      date: '12',
-      timeSlots: ['10:00 AM', '11:00 AM', '12:00 PM'],
-    },
-    {
-      label: 'Mon',
-      date: '12',
-      timeSlots: ['10:00 AM', '11:00 AM', '12:00 PM'],
-    },
-    {
-      label: 'Mon',
-      date: '12',
-      timeSlots: ['10:00 AM', '11:00 AM', '12:00 PM'],
-    },
-  ];
+  // make date and timeslot object booked:{} , unbooked:{}
+
+  useEffect(() => {
+    const date = generateDaysFromToday();
+    setDates(date);
+  }, []);
+
   return (
     <Wrapper containerStyle={{ paddingHorizontal: 0 }}>
-      <StatusBar barStyle="dark-content" backgroundColor={'transparent'} />
+      <StatusBar barStyle="dark-content" backgroundColor={'#ffdfff'} />
 
-      <View style={{ flex: 0.4 }}>
+      <View style={{ flex: 0.5 }}>
         <Image
           source={{
             uri: 'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
@@ -130,6 +78,8 @@ export default function SessionConfirmation() {
                   <TouchableOpacity
                     onPress={() => setCurrentDateIndex(index)}
                     style={{
+                      marginLeft: index == 0 ? 15 : 0,
+                      marginRight: index == dates.length - 1 ? 15 : 0,
                       backgroundColor:
                         currentDateIndex == index
                           ? colors.primary
@@ -168,54 +118,57 @@ export default function SessionConfirmation() {
           </View>
         </View>
 
-        <View style={{ marginTop: 5 }}>
+        <View style={{ marginTop: 25 }}>
           <Text style={{ ...styles.name, fontSize: 20 }}>Available Time</Text>
-          {/* <View
+
+          <View
             style={{
               marginTop: 10,
-              height: 1,
-              backgroundColor: colors.grey,
+              // justifyContent: 'center',
             }}
-              
-          /> */}
-          <ScrollView>
-            <View
-              contentContainerStyle={{
-                flexDirection: 'row',
-                marginTop: 10,
-                // justifyContent: 'center',
-              }}
-            >
-              {dates[currentDateIndex].timeSlots.map((item, index) => {
-                return (
-                  <View
-                    key={index}
-                    style={{
-                      // marginTop: 10,
-                      paddingHorizontal: 20,
-                      backgroundColor: 'red',
-                      marginHorizontal: 10,
-                    }}
-                  >
-                    <Text
+          >
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {dates?.length ? (
+                dates[currentDateIndex].timeSlots.map((item, index) => {
+                  return (
+                    <TouchableOpacity
+                      onPress={() => setCurrentTimeSlotIndex(index)}
+                      key={index}
                       style={{
-                        ...styles.name,
-                        fontSize: 16,
-                        color: colors.primary,
+                        ...styles.timeSlider,
+                        backgroundColor:
+                          index == currentTimeSlotIndex
+                            ? colors.primary
+                            : 'transparent',
+                        elevation: index == currentTimeSlotIndex ? 5 : 0,
+                        borderWidth: 1,
                       }}
                     >
-                      {item}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          </ScrollView>
+                      <Text
+                        style={{
+                          ...styles.timeSlots,
+                          color:
+                            index == currentTimeSlotIndex
+                              ? 'white'
+                              : colors.primary,
+                        }}
+                      >
+                        {item}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })
+              ) : (
+                <View />
+              )}
+            </ScrollView>
+          </View>
         </View>
 
         <View style={styles.btnContainer}>
           <Button
-            title="Book An Appointment"
+            onPress={() => navigation.navigate('ConfirmationCode')}
+            title="Confirm"
             containerStyle={{ marginTop: 20 }}
           />
         </View>
@@ -259,7 +212,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 37,
     right: 0,
     left: 0,
-    top: height / 3,
+    top: height / 2.95,
     zIndex: 1,
     borderRadius: 17,
     alignItems: 'center',
@@ -267,11 +220,14 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   profileDetailsContainer: {
-    flex: 0.6,
     backgroundColor: '#DBD9EC',
     paddingHorizontal: 15,
     borderTopLeftRadius: 42,
     borderTopRightRadius: 42,
+    position: 'absolute',
+    width: '100%',
+    bottom: 0,
+    height: height / 2,
   },
   datesContainer: {
     flexDirection: 'row',
@@ -287,6 +243,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 10,
+    borderRadius: 11,
+  },
+  timeSlots: {
+    marginTop: 0,
+    fontSize: 16,
+    color: colors.primary,
+    textAlignVertical: 'center',
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+  timeSlider: {
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 11,
   },
 });
