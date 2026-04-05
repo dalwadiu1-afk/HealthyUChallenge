@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import globalStyle from '../../styles/styles';
 import { scale } from '../../utils/helper';
-import { fontFamily } from '../../constant';
+import { colors, fontFamily } from '../../constant';
 import { SvgImg } from './SvgImg';
 
 export default function InputBox({
@@ -43,7 +43,7 @@ export default function InputBox({
           globalStyle.IBTextInput,
           !editable && globalStyle.disableIBTextInput,
           inputContainerStyle,
-          { fontFamily: fontFamily.montserratRegular },
+          { fontFamily: fontFamily.montserratRegular, color: colors.white },
         ]}
         value={value}
         maxLength={maxLength}
@@ -53,6 +53,7 @@ export default function InputBox({
         placeholder={placeHolder ? placeHolder : label}
         returnKeyType={returnKeyType}
         multiline={multiline}
+        placeholderTextColor={colors.white}
         {...otherProps}
       />
       {textIcon && (
