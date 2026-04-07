@@ -1,4 +1,4 @@
-import { Dimensions } from 'react-native';
+import { PermissionsAndroid, Platform, Dimensions } from 'react-native';
 import moment from 'moment';
 
 const guidelineBaseWidth = 350;
@@ -37,4 +37,28 @@ const generateDaysFromToday = (
   return daysArray;
 };
 
-export { scale, generateDaysFromToday };
+const requestCameraPermission = async () => {
+  try {
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+      PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+      {
+        title: 'App Camera Permission',
+        message: 'App needs access to your camera ',
+        buttonNeutral: 'Ask Me Later',
+        buttonNegative: 'Cancel',
+        buttonPositive: 'OK',
+      },
+    );
+    if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+      return true;
+    } else {
+      showError('Camera permission denied');
+      console.log('Camera permission denied');
+    }
+  } catch (err) {
+    console.warn(err);
+  }
+};
+
+export { scale, generateDaysFromToday, requestCameraPermission };

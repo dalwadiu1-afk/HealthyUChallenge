@@ -20,7 +20,7 @@ export default function Profile({ navigation }) {
       isMissingInfo: false,
       title: 'Goals',
       screenName: 'PersonalProfile',
-      onPress: item => onCardPress(item, user),
+      onPress: item => onCardPress(item),
     },
     {
       icon: chatIcon,
