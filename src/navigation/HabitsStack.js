@@ -13,14 +13,15 @@ import FriendWorkoutChallenge from '../screens/habits/exWithFriend/ExWithFriend'
 import HalfPlateFruitsVeggies from '../screens/habits/fruitMeal/HalfFruitMeal';
 import MeatlessChallenge from '../screens/habits/meatLess/MeatLessWeek';
 import VeggieChallenge from '../screens/habits/newVeggi/VeggieChallenge';
-import FiberChartDays from '../screens/habits/meatLess/FiberChartDays';
 import SleepChart from '../screens/habits/sleepMeasurement/SleepChart';
 import SleepClock from '../screens/habits/sleepMeasurement/SleepMeasure';
+import SleepChartDays from '../screens/habits/sleepMeasurement/SleepChart';
 import BeverageChallengeUI from '../screens/habits/sugarBeverage/BeverageChallenge';
 import FitnessClassUI from '../screens/habits/weeklyClass/WeeklyFitnessClass';
 import SugarChartDays from '../screens/habits/sugarIntake/SugarIntake';
-import SugarChartDays from '../screens/habits/sugarIntake/SugarIntake';
+import FruitTrackerUI from '../screens/habits/fruitServing/FruitTrackerUI';
 import WeightChallengeUI from '../screens/habits/weight/WeightChallengeUI';
+import CardioTrackerUI from '../screens/habits/cardioIntencey/cardioInteceyTraker';
 import WeightTrainingUI from '../screens/habits/weightResistance/WeightResistanceTraining';
 
 const Stack = createNativeStackNavigator();
@@ -46,15 +47,15 @@ export default function HabitsStack() {
       <Stack.Screen name="SugarChartDays" component={SugarChartDays} />
       <Stack.Screen name="FitnessClassUI" component={FitnessClassUI} />
       <Stack.Screen name="WeightChallengeUI" component={WeightChallengeUI} />
+      <Stack.Screen name="FruitTrackerUI" component={FruitTrackerUI} />
       <Stack.Screen name="WeightTrainingUI" component={WeightTrainingUI} />
+      <Stack.Screen name="CardioTrackerUI" component={CardioTrackerUI} />
       <Stack.Screen
         name="BeverageChallengeUI"
         component={BeverageChallengeUI}
       />
-      <Stack.Screen
-        name="BeverageChallengeUI"
-        component={BeverageChallengeUI}
-      />
+      <Stack.Screen name="SleepChartDays" component={SleepChartDays} />
+
       <Stack.Screen
         name="HalfPlateFruitsVeggies"
         component={HalfPlateFruitsVeggies}

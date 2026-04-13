@@ -8,145 +8,215 @@ import {
   TextInput,
   ScrollView,
   Dimensions,
-  FlatList,
 } from 'react-native';
 import { launchCamera } from 'react-native-image-picker';
 import { Button, Header, Wrapper } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
 
-const { width } = Dimensions.get('window');
+const { height, width } = Dimensions.get('window');
+export default function CardioTrackerUI() {
+  const [sessionStarted, setSessionStarted] = useState(false);
+  const [startTime, setStartTime] = useState(null);
+  const [endTime, setEndTime] = useState(null);
+  const [selectedTab, setSelectedTab] = useState(true);
 
-export default function SnackListingUI() {
-  const [snackName, setSnackName] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [snacks, setSnacks] = useState([]);
-  const [selectedTab, setSelectedTab] = useState('request');
+  const [startPhoto, setStartPhoto] = useState(null);
+  const [endPhoto, setEndPhoto] = useState(null);
 
-  // Add Snack
-  const addSnack = () => {
-    if (!snackName || !quantity) return;
+  const [manualTime, setManualTime] = useState('');
+  const [manualIntensity, setManualIntensity] = useState('');
 
-    const newSnack = {
-      id: Date.now().toString(),
-      name: snackName,
-      qty: quantity,
-      status: 'pending',
-      image: null,
-    };
+  // 📸 Camera handler
+  const openCamera = async type => {
+    const result = await launchCamera({ mediaType: 'photo' });
 
-    setSnacks(prev => [newSnack, ...prev]);
-    setSnackName('');
-    setQuantity('');
-  };
-
-  // Approve / Reject (mock admin)
-  const updateStatus = (id, status) => {
-    setSnacks(prev =>
-      prev.map(item => (item.id === id ? { ...item, status } : item)),
-    );
-  };
-
-  // Upload Proof
-  const uploadImage = async id => {
-    const result = await launchCamera({ mediaType: 'photo', quality: 0.6 });
-
-    if (result?.assets?.length > 0) {
+    if (result.assets && result.assets.length > 0) {
       const uri = result.assets[0].uri;
 
-      setSnacks(prev =>
-        prev.map(item => (item.id === id ? { ...item, image: uri } : item)),
-      );
+      if (type === 'start') setStartPhoto(uri);
+      else setEndPhoto(uri);
     }
   };
 
-  const getStatusColor = status => {
-    if (status === 'approved') return '#22c55e';
-    if (status === 'rejected') return '#ef4444';
-    return '#eab308';
+  // ▶️ Start session
+  const handleStart = async () => {
+    const now = new Date();
+    setStartTime(now);
+    setSessionStarted(true);
+
+    await openCamera('start');
   };
 
-  const SnackCard = ({ item }) => (
-    <View style={styles.card}>
-      <Text style={styles.title}>{item.name}</Text>
-      <Text style={styles.small}>Qty: {item.qty}</Text>
+  // ⏹ Stop session
+  const handleStop = async () => {
+    const now = new Date();
+    setEndTime(now);
+    setSessionStarted(false);
 
-      <Text style={[styles.status, { color: getStatusColor(item.status) }]}>
-        {item.status.toUpperCase()}
-      </Text>
+    await openCamera('end');
+  };
 
-      {item.status === 'pending' && (
-        <View style={styles.row}>
-          <Button
-            title="Approve"
-            onPress={() => updateStatus(item.id, 'approved')}
-          />
-          <Button
-            title="Reject"
-            onPress={() => updateStatus(item.id, 'rejected')}
-          />
-        </View>
-      )}
+  // ⏱ Duration (minutes)
+  const getDuration = () => {
+    if (!startTime || !endTime) return 0;
+    return Math.floor((endTime - startTime) / 60000);
+  };
 
-      {item.status === 'approved' && !item.image && (
-        <TouchableOpacity
-          style={styles.uploadBtn}
-          onPress={() => uploadImage(item.id)}
-        >
-          <Text style={styles.uploadText}>Upload Proof</Text>
-        </TouchableOpacity>
-      )}
+  // 🔥 Auto Intensity Logic
+  const getIntensity = minutes => {
+    if (minutes >= 30) return 'High';
+    if (minutes >= 15) return 'Medium';
+    return 'Low';
+  };
 
-      {item.image && (
-        <Image source={{ uri: item.image }} style={styles.image} />
-      )}
-    </View>
-  );
-
-  const approvedSnacks = snacks.filter(s => s.status === 'approved');
+  const duration = getDuration();
+  const intensity = getIntensity(duration);
 
   return (
     <Wrapper>
-      <Header header="Snack Management" />
+      <Header header="Cardio Session Tracker" />
 
-      {/* Tabs */}
-      <View style={styles.tabContainer}>
-        {['request', 'list', 'approved'].map(tab => (
-          <TouchableOpacity
-            key={tab}
-            onPress={() => setSelectedTab(tab)}
-            style={[styles.tabBtn, selectedTab === tab && styles.activeTab]}
+      <View
+        style={{
+          backgroundColor: '#DBD9EC',
+          flexDirection: 'row',
+          alignContent: 'center',
+          borderRadius: 50,
+          overflow: 'hidden',
+          padding: 5,
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => setSelectedTab(true)}
+          style={{
+            ...styles.radioBtn,
+            backgroundColor: selectedTab ? colors.primary : 'transparent',
+          }}
+        >
+          <Text
+            style={{
+              ...styles.tabText,
+              color: selectedTab ? '#DBD9EC' : colors.primary,
+            }}
           >
-            <Text
-              style={[styles.tabText, selectedTab === tab && styles.activeText]}
-            >
-              {tab.toUpperCase()}
-            </Text>
-          </TouchableOpacity>
-        ))}
+            Time Tracker
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setSelectedTab(false)}
+          style={{
+            ...styles.radioBtn,
+
+            backgroundColor: !selectedTab ? colors.primary : 'transparent',
+          }}
+        >
+          <Text
+            style={{
+              ...styles.tabText,
+              color: !selectedTab ? '#DBD9EC' : colors.primary,
+            }}
+          >
+            Manual Entry
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView>
-        {/* REQUEST TAB */}
-        {selectedTab === 'request' && (
+      <ScrollView style={{ paddingTop: 10 }}>
+        {/* SESSION CARD */}
+        {selectedTab ? (
+          <View>
+            <View style={styles.card}>
+              <Text style={styles.label}>Cardio Session</Text>
+
+              {!sessionStarted ? (
+                <TouchableOpacity style={styles.startBtn} onPress={handleStart}>
+                  <Text style={styles.btnText}>▶ Start Cardio</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={styles.stopBtn} onPress={handleStop}>
+                  <Text style={styles.btnText}>⏹ Stop Cardio</Text>
+                </TouchableOpacity>
+              )}
+
+              {startTime && (
+                <Text style={styles.value}>
+                  Start: {startTime.toLocaleTimeString()}
+                </Text>
+              )}
+
+              {endTime && (
+                <Text style={styles.value}>
+                  End: {endTime.toLocaleTimeString()}
+                </Text>
+              )}
+
+              {duration > 0 && (
+                <>
+                  <Text style={styles.value}>Duration: {duration} min</Text>
+
+                  <Text
+                    style={{
+                      ...styles.value,
+                      color:
+                        intensity === 'High'
+                          ? '#22c55e'
+                          : intensity === 'Low'
+                          ? '#f10505'
+                          : '#e4b005',
+                    }}
+                  >
+                    Intensity: {intensity}
+                  </Text>
+                </>
+              )}
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.label}>Proof Photos</Text>
+
+              <View style={styles.imageRow}>
+                {startPhoto && (
+                  <View>
+                    <Text style={styles.small}>Start</Text>
+                    <Image source={{ uri: startPhoto }} style={styles.image} />
+                  </View>
+                )}
+
+                {endPhoto && (
+                  <View>
+                    <Text style={styles.small}>End</Text>
+                    <Image source={{ uri: endPhoto }} style={styles.image} />
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+        ) : (
           <View style={styles.card}>
-            <Text style={styles.label}>Request Snack</Text>
+            <Text style={styles.label}>Manual Entry (Optional)</Text>
 
             <TextInput
-              placeholder="Snack Name"
-              value={snackName}
-              onChangeText={setSnackName}
-              style={styles.input}
-            />
-
-            <TextInput
-              placeholder="Quantity"
+              placeholder="Time (minutes)"
               keyboardType="numeric"
-              value={quantity}
-              onChangeText={setQuantity}
+              value={manualTime}
+              onChangeText={setManualTime}
               style={styles.input}
             />
 
-            <Button title="Submit Request" onPress={addSnack} />
+            <TextInput
+              placeholder="Intensity (Low / Medium / High)"
+              value={manualIntensity}
+              onChangeText={setManualIntensity}
+              style={styles.input}
+            />
+
+            <Button
+              title="Save Manual Entry"
+              onPress={() =>
+                alert(`Manual: ${manualTime} min, ${manualIntensity}`)
+              }
+              buttonStyle={{ marginTop: 10 }}
+            />
           </View>
         )}
 
@@ -214,25 +284,46 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     color: '#666',
-    fontFamily: fontFamily.montserratMedium,
+    fontFamily: fontFamily?.montserratMedium,
   },
-  title: {
+  value: {
     fontSize: 16,
-    fontFamily: fontFamily.montserratSemiBold,
+    marginTop: 6,
+    fontFamily: fontFamily?.montserratSemiBold,
+  },
+  startBtn: {
+    marginTop: 10,
+    backgroundColor: '#22c55e',
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  stopBtn: {
+    marginTop: 10,
+    backgroundColor: '#ef4444',
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  btnText: {
+    color: '#fff',
+    fontFamily: fontFamily?.montserratSemiBold,
+  },
+  imageRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  image: {
+    width: width / 2.5,
+    height: width / 2.5,
+    borderRadius: 10,
+    marginTop: 5,
   },
   small: {
     fontSize: 12,
     color: '#888',
-    marginTop: 4,
-  },
-  status: {
-    marginTop: 6,
-    fontFamily: fontFamily.montserratBold,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
+    fontFamily: fontFamily.montserratMedium,
   },
   input: {
     marginTop: 10,
@@ -241,22 +332,16 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 10,
     fontSize: 13,
+    fontFamily: fontFamily?.montserratMedium,
   },
-  uploadBtn: {
-    marginTop: 10,
-    backgroundColor: '#6366f1',
+  radioBtn: {
+    flex: 1,
+    backgroundColor: 'green',
     padding: 10,
-    borderRadius: 10,
-    alignItems: 'center',
+    borderRadius: 50,
   },
-  uploadText: {
-    color: '#fff',
-    fontFamily: fontFamily.montserratMedium,
-  },
-  image: {
-    width: width / 2.5,
-    height: width / 2.5,
-    borderRadius: 10,
-    marginTop: 10,
+  tabText: {
+    textAlign: 'center',
+    fontFamily: fontFamily.montserratBold,
   },
 });

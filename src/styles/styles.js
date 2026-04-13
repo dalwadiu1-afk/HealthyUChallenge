@@ -22,7 +22,7 @@ const globalStyle = StyleSheet.create({
   },
   disableIBTextInput: {
     color: colors.grey,
-    backgroundColor: colors.lightBackground,
+    // backgroundColor: colors.lightBackground,
   },
 });
 

@@ -16,7 +16,7 @@ import { fontFamily } from '../../constant';
 const { width, height } = Dimensions.get('window');
 export function Header({
   header = '',
-  disableLeft = true,
+  disableLeft = false,
   disableRight = true,
   textStyle = {},
   leftBtnStyle = {},
@@ -28,7 +28,7 @@ export function Header({
   leftImg = backBtn,
   rightImg = moreIcon,
 }) {
-  // const navController = useNavigation();
+  const navController = useNavigation();
   return (
     <View
       style={{
