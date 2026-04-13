@@ -68,6 +68,17 @@ export const upIcon = `<svg width="14" height="16" viewBox="0 0 14 16" fill="non
 </svg>
 `;
 
+export const rightIcon = `<svg width="12" height="19" viewBox="0 0 12 19" fill="none" xmlns="http://www.w3.org/2000/svg">
+<line x1="2.12132" y1="1.5" x2="9.8995" y2="9.27817" stroke="#D5D5D5" stroke-width="3" stroke-linecap="round"/>
+<line x1="1.5" y1="-1.5" x2="12.5" y2="-1.5" transform="matrix(0.707107 -0.707107 -0.707107 -0.707107 0 17.3995)" stroke="#D5D5D5" stroke-width="3" stroke-linecap="round"/>
+</svg>
+`;
+export const leftIcon = `<svg width="12" height="19" viewBox="0 0 12 19" fill="none" xmlns="http://www.w3.org/2000/svg">
+<line x1="1.5" y1="-1.5" x2="12.5" y2="-1.5" transform="matrix(-0.707107 0.707107 0.707107 0.707107 11.3995 1.5)" stroke="#B3B3B3" stroke-width="3" stroke-linecap="round"/>
+<line x1="9.27818" y1="17.3995" x2="1.5" y2="9.62136" stroke="#B3B3B3" stroke-width="3" stroke-linecap="round"/>
+</svg>
+`;
+
 export const badgeIcon = (color = 'gold') => {
   return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path opacity="0.6" fill-rule="evenodd" clip-rule="evenodd" d="M6.50386 4C6.11521 4 5.87516 4.42398 6.07511 4.75724L8.56275 8.90337C7.9735 9.23677 7.4374 9.65312 6.97028 10.1366L4.36012 5.78622C3.36034 4.11991 4.56064 2 6.50386 2H8.89591C9.93028 2 10.8917 2.53286 11.4399 3.41L12.0046 4.31352L12.5693 3.41C13.1175 2.53286 14.0789 2 15.1133 2H17.4955C19.4388 2 20.6391 4.11995 19.6393 5.78626L17.0328 10.1303C16.5652 9.6475 16.0286 9.23186 15.4391 8.89921L17.9243 4.75725C18.1242 4.42399 17.8842 4 17.4955 4H15.1133C14.7685 4 14.448 4.17762 14.2653 4.47L13.1838 6.20029L14.6256 8.50709C13.8161 8.18005 12.9315 8 12.0049 8L11.9503 8.00021L9.7439 4.47C9.56116 4.17762 9.2407 4 8.89591 4H6.50386Z" fill="${color}"/>
