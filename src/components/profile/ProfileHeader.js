@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { color, colors, fontFamily } from './../../constant/index';
-import { SearchBar, SvgImg, Wrapper } from '../../components';
+import { SearchBar, StreakCalendar, SvgImg, Wrapper } from '../../components';
 import { chatIcon } from '../../assets/images';
 
 export default function ProfileHeader({
@@ -18,31 +18,47 @@ export default function ProfileHeader({
     date: '',
   },
 }) {
+  const [showCalender, setShowCalender] = useState(false);
+  const [showInsight, setShowInsight] = useState(false);
   return (
     <View style={{ ...styles.container, ...containerStyle }}>
-      <TouchableOpacity onPress={onProfileClick} style={styles.leftPhoto} />
-      <View style={{ marginLeft: 12, justifyContent: 'center', flex: 1 }}>
-        <Text
-          style={{
-            fontSize: 14,
-            color: colors.white,
-            fontFamily: fontFamily.montserratMedium,
-          }}
-        >
-          {profile?.name}
-        </Text>
-        <Text
-          style={{
-            fontSize: 18,
-            fontFamily: fontFamily.montserratBold,
-            color: colors.white,
-          }}
-        >
-          {profile?.date}
-        </Text>
-      </View>
-      <View style={styles.chatBtn}>
-        <SvgImg iconName={chatIcon} height={35} width={35} />
+      <View style={{ flexDirection: 'column', flex: 1 }}>
+        <View style={{ flexDirection: 'row' }}>
+          <TouchableOpacity onPress={onProfileClick} style={styles.leftPhoto} />
+          <View style={{ marginLeft: 12, justifyContent: 'center', flex: 1 }}>
+            <Text
+              style={{
+                fontSize: 14,
+                color: colors.white,
+                fontFamily: fontFamily.montserratMedium,
+              }}
+            >
+              {profile?.name}
+            </Text>
+            <TouchableOpacity onPress={() => setShowCalender(!showCalender)}>
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontFamily: fontFamily.montserratBold,
+                  color: colors.white,
+                }}
+              >
+                {profile?.date}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.chatBtn}>
+            <SvgImg iconName={chatIcon} height={35} width={35} />
+          </View>
+        </View>
+        {showCalender ? (
+          <StreakCalendar
+            showInsight={showInsight}
+            setShowInsight={setShowInsight}
+          />
+        ) : (
+          <View />
+        )}
       </View>
     </View>
   );

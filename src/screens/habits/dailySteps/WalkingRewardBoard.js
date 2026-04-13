@@ -13,7 +13,7 @@ import { badgeIcon, chatIcon, rewardIcon } from '../../../assets/images';
 import { colors, fontFamily } from '../../../constant';
 
 const { height, width } = Dimensions.get('window');
-export default function WalkingRewardBoard() {
+export default function WalkingRewardBoard({ navigation }) {
   const weekWinners = [
     {
       rank: 1,
@@ -95,11 +95,7 @@ export default function WalkingRewardBoard() {
         >
           <SvgImg
             iconName={badgeIcon(
-              item?.rank == 1
-                ? 'gold'
-                : item?.rank == 2
-                ? colors.gray
-                : 'brown',
+              item?.rank == 1 ? 'gold' : item?.rank == 2 ? '#8a8a8a' : 'brown',
             )}
             height={30}
             width={20}
@@ -123,11 +119,11 @@ export default function WalkingRewardBoard() {
     <Wrapper>
       <ProfileHeader
         profile={{ date: 'Thursday, 08 July', name: 'Hello Linh!' }}
-        // onProfileClick={() =>
-        //   navigation.navigate('ProfileStack', {
-        //     screen: 'ProfileDetails',
-        //   })
-        // }
+        onProfileClick={() =>
+          navigation.navigate('ProfileStack', {
+            screen: 'ProfileDetails',
+          })
+        }
       />
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={{ flex: 1 }}>
@@ -173,7 +169,7 @@ export default function WalkingRewardBoard() {
             }}
           >
             <SvgImg
-              iconName={chatIcon}
+              iconName={badgeIcon('#000')}
               height={24}
               width={24}
               style={{ marginLeft: 17 }}

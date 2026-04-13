@@ -11,7 +11,13 @@ import HabitsStack from '../../navigation/HabitsStack';
 import ResourceStack from '../../navigation/ResourceStack';
 import ProfileStack from '../../navigation/ProfileStack';
 import { SvgImg } from '../../components/common/SvgImg';
-import { chatIcon } from '../../assets/images';
+import {
+  chatIcon,
+  habitIcon,
+  profileIcon,
+  resourceIcon,
+  socialIcon,
+} from '../../assets/images';
 import { colors } from '../../constant/colors';
 
 const { height, width } = Dimensions.get('window');
@@ -24,8 +30,7 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
       name: 'Habits',
       displayName: 'Habits',
       component: HabitsStack,
-      //   icon: rtmColorIcon(),
-      //   activeIcon: rtmColorIcon(colors.secondary),
+      icon: habitIcon,
     },
 
     {
@@ -33,24 +38,21 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
       name: 'SocialStack',
       displayName: 'Social',
       component: SocialStack,
-      //   icon: rtmFarmerColor(),
-      //   activeIcon: rtmFarmerColor(colors.secondary),
+      icon: socialIcon,
     },
     {
       key: 3,
       name: 'Resources',
       displayName: 'Resources',
       component: ResourceStack,
-      //   icon: rtmFarmColor(),
-      //   activeIcon: rtmFarmColor(colors.secondary),
+      icon: resourceIcon,
     },
     {
       key: 4,
       name: 'Profile',
       displayName: 'Profile',
       component: ProfileStack,
-      //   icon: rtmCropsColor(),
-      //   activeIcon: rtmCropsColor(colors.secondary),
+      icon: profileIcon(),
     },
   ];
   useEffect(() => {
@@ -67,7 +69,7 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
   return (
     <View
       style={{
-        backgroundColor: colors.white,
+        backgroundColor: '#DBD9EC',
         flexDirection: 'row',
         elevation: 10,
         height: height * 0.1,
@@ -91,8 +93,7 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
             >
               {tabIndex != index ? (
                 <SvgImg
-                  iconName={chatIcon}
-                  // iconName={tabIndex == index ? route?.activeIcon : route?.icon}
+                  iconName={route?.icon}
                   size={30}
                   style={{ alignSelf: 'center' }}
                 />
@@ -102,7 +103,7 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
                 >
                   <Text
                     style={{
-                      color: tabIndex == index ? colors.secondary : colors.dark,
+                      color: tabIndex == index ? colors.primary : colors.dark,
                       ...styles.activeTabText,
                     }}
                   >
@@ -112,7 +113,7 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
                     style={{
                       height: height * 0.01,
                       width: height * 0.01,
-                      backgroundColor: colors.secondary,
+                      backgroundColor: colors.primary,
                       borderRadius: 100,
                     }}
                   />

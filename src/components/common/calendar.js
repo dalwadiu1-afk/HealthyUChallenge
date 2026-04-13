@@ -1,8 +1,18 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  Dimensions,
+} from 'react-native';
+import { SvgImg } from '../../components/common/SvgImg';
+import { leftIcon, rightIcon } from '../../assets/images';
+import { fontFamily, colors } from '../../constant';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
+const { height } = Dimensions.get('window');
 // ===== HELPERS =====
 
 // Fix timezone
@@ -66,7 +76,11 @@ const get30DaysData = (startDate, cycle) => {
   return arr;
 };
 
-export default function StreakCalendar({ startDate = '2026-04-10' }) {
+export function StreakCalendar({
+  startDate = '2026-04-10',
+  showInsight = false,
+  setShowInsight,
+}) {
   const [cycle, setCycle] = useState(0);
 
   const [completedDates, setCompletedDates] = useState([
@@ -143,16 +157,24 @@ export default function StreakCalendar({ startDate = '2026-04-10' }) {
           todayMatch && styles.activeBox,
         ]}
       >
-        <Text
-          style={[
-            styles.dayText,
-            current ? styles.currentText : styles.outsideText,
-            completed && styles.completedText,
-            todayMatch && styles.activeText,
-          ]}
+        <TouchableOpacity
+        // onPress={() => setShowInsight(!showInsight)}
         >
-          {date.getDate()}
-        </Text>
+          {/* {!showInsight ? ( */}
+          <Text
+            style={[
+              styles.dayText,
+              current ? styles.currentText : styles.outsideText,
+              completed && styles.completedText,
+              todayMatch && styles.activeText,
+            ]}
+          >
+            {date.getDate()}
+          </Text>
+          {/* ) : (
+            <View />
+          )} */}
+        </TouchableOpacity>
       </View>
     );
   };
@@ -161,19 +183,30 @@ export default function StreakCalendar({ startDate = '2026-04-10' }) {
     <View style={styles.container}>
       {/* NAV */}
       <View style={styles.navRow}>
-        <Text
-          style={styles.navBtn}
+        <TouchableOpacity
           onPress={() => setCycle(c => Math.max(0, c - 1))}
+          style={{ padding: 12, backgroundColor: '#DBD9EC', borderRadius: 5 }}
         >
-          ◀
-        </Text>
+          <SvgImg iconName={leftIcon} height={15} width={15} />
+        </TouchableOpacity>
 
         <Text style={styles.navTitle}>{getMonthLabel(startDate, cycle)}</Text>
 
-        <Text style={styles.navBtn} onPress={() => setCycle(c => c + 1)}>
-          ▶
-        </Text>
+        <TouchableOpacity
+          onPress={() => setCycle(c => Math.max(0, c + 1))}
+          style={{ padding: 12, backgroundColor: '#DBD9EC', borderRadius: 5 }}
+        >
+          <SvgImg iconName={rightIcon} height={15} width={15} />
+        </TouchableOpacity>
       </View>
+
+      <View
+        style={{
+          marginTop: 10,
+          borderBottomWidth: 1,
+          borderColor: colors.primary,
+        }}
+      />
 
       {/* WEEK HEADER */}
       <View style={styles.weekRow}>
@@ -183,6 +216,13 @@ export default function StreakCalendar({ startDate = '2026-04-10' }) {
           </Text>
         ))}
       </View>
+
+      <View
+        style={{
+          borderBottomWidth: 1,
+          borderColor: colors.primary,
+        }}
+      />
 
       {/* GRID */}
       <FlatList
@@ -200,14 +240,21 @@ export default function StreakCalendar({ startDate = '2026-04-10' }) {
 const styles = StyleSheet.create({
   container: {
     padding: 10,
-    marginTop: 40,
+    top: height * 0.085,
+    backgroundColor: '#DBD9EC',
+    borderRadius: 10,
+    position: 'absolute',
+    zIndex: 1,
+    width: '100%',
+    elevation: 100,
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
 
   navRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
     paddingHorizontal: 10,
   },
 
@@ -220,19 +267,19 @@ const styles = StyleSheet.create({
   navTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: '#262135',
   },
 
   weekRow: {
     flexDirection: 'row',
-    marginBottom: 10,
+    marginVertical: 10,
   },
 
   weekText: {
     flex: 1,
     textAlign: 'center',
-    color: '#888',
-    fontWeight: '600',
+    color: colors.primary,
+    fontFamily: fontFamily.CircularRegular,
   },
 
   dayBox: {
@@ -246,10 +293,12 @@ const styles = StyleSheet.create({
 
   dayText: {
     fontSize: 14,
+    fontFamily: fontFamily.montserratBold,
   },
 
   outsideText: {
-    color: '#ccc',
+    color: '#727179',
+    fontFamily: fontFamily.montserratMedium,
   },
 
   currentText: {
@@ -263,7 +312,7 @@ const styles = StyleSheet.create({
 
   activeText: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontFamily: fontFamily.montserratSemiBold,
   },
 
   completedBox: {

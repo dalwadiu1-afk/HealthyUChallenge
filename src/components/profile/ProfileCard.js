@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { backBtn } from '../../assets/images';
+import { backBtn, rightIcon } from '../../assets/images';
 import { SvgImg } from '../common/SvgImg';
 import { colors, fontFamily } from '../../constant';
 
@@ -18,6 +18,7 @@ export default function ProfileCard({
           ...styles.tutorialView,
           ...tutorialView,
           marginTop: index == 0 ? 10 : 0,
+          borderRadius: 10,
         }}
       >
         <View
@@ -56,8 +57,8 @@ export default function ProfileCard({
             </View>
           )}
         </View>
-        <View style={{ backgroundColor: 'blue' }}>
-          <SvgImg iconName={backBtn} height={15} width={15} />
+        <View style={{}}>
+          <SvgImg iconName={rightIcon} height={15} width={15} />
         </View>
       </TouchableOpacity>
     );
