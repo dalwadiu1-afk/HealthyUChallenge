@@ -24,7 +24,6 @@ export default function ChatCard({
       onPress={onCardPress}
       style={{
         ...styles.chatContainer,
-        marginTop: index === 0 ? 75 : 0,
         ...chatContainer,
       }}
     >

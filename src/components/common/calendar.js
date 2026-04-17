@@ -80,6 +80,7 @@ export function StreakCalendar({
   startDate = '2026-04-10',
   showInsight = false,
   setShowInsight,
+  container,
 }) {
   const [cycle, setCycle] = useState(0);
 
@@ -180,7 +181,7 @@ export function StreakCalendar({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={{ ...styles.container, ...container }}>
       {/* NAV */}
       <View style={styles.navRow}>
         <TouchableOpacity
@@ -240,12 +241,14 @@ export function StreakCalendar({
 const styles = StyleSheet.create({
   container: {
     padding: 10,
-    top: height * 0.085,
+    top: height * 0.12,
+    alignSelf: 'center',
+    // marginHorizontal: 10,
     backgroundColor: '#DBD9EC',
     borderRadius: 10,
     position: 'absolute',
-    zIndex: 1,
-    width: '100%',
+    zIndex: 2,
+    width: '90%',
     elevation: 100,
     borderWidth: 2,
     borderColor: colors.primary,

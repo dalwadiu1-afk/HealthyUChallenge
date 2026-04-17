@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Header, Wrapper, Button } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
+import { AuthBtn } from '../../../components/common/authBtn';
 
 const BodyFatGoalScreen = () => {
   const [goalType, setGoalType] = useState('decrease');
@@ -93,7 +94,7 @@ const BodyFatGoalScreen = () => {
         </View>
 
         {/* CTA */}
-        <Button
+        <AuthBtn
           title="Save Goal"
           onPress={() => {}}
           disabled={!!validationMsg}
@@ -106,7 +107,6 @@ const BodyFatGoalScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
   },
 
   title: {
@@ -132,12 +132,12 @@ const styles = StyleSheet.create({
   },
 
   activeOption: {
-    backgroundColor: '#6a4c93',
+    backgroundColor: 'rgba(143, 175, 120)',
   },
 
   optionText: {
-    fontWeight: '600',
     color: '#000',
+    fontFamily: fontFamily.montserratSemiBold,
   },
 
   card: {
@@ -149,27 +149,28 @@ const styles = StyleSheet.create({
 
   cardTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
     marginBottom: 10,
+    fontFamily: fontFamily.montserratBold,
   },
 
   label: {
     marginTop: 10,
-    fontWeight: '600',
+    fontFamily: fontFamily.montserratSemiBold,
   },
 
   result: {
     marginTop: 14,
     fontSize: 16,
-    fontWeight: 'bold',
     textAlign: 'center',
     color: '#2d6a4f',
+    fontFamily: fontFamily.montserratSemiBold,
   },
 
   warning: {
     marginTop: 8,
     color: 'red',
     textAlign: 'center',
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });
 

@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { fontFamily } from '../../constant';
 
 export function Button({
-  backgroundColor = '#494358',
+  backgroundColor = 'rgba(143, 175, 120)',
   buttonStyle = {},
   textStyle = {},
   title = '',

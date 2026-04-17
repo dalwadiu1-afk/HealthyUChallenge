@@ -44,7 +44,7 @@ export default function SessionConfirmation({ navigation }) {
       <View style={styles.floatingContainer}>
         <Text
           style={{
-            fontFamily: fontFamily.montserratSemiBold,
+            fontFamily: fontFamily.poppinsSemiBold,
             color: 'white',
             fontSize: 24,
             marginTop: 0,
@@ -186,12 +186,12 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 16,
     marginTop: 12,
-    fontFamily: fontFamily.montserratSemiBold,
+    fontFamily: fontFamily.poppinsSemiBold,
   },
   specialty: {
     fontSize: 14,
     color: colors.grey,
-    fontFamily: fontFamily.montserratMedium,
+    fontFamily: fontFamily.poppinsMedium,
   },
   menuContainer: {
     marginTop: 20,
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   profileDetailsContainer: {
-    backgroundColor: '#DBD9EC',
+    backgroundColor: colors.accent,
     paddingHorizontal: 15,
     borderTopLeftRadius: 42,
     borderTopRightRadius: 42,
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
     marginTop: 10,
     paddingVertical: 13,
-    backgroundColor: '#9795aa',
+    backgroundColor: colors.secondary,
     borderRadius: 24,
     elevation: 10,
   },
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.primary,
     textAlignVertical: 'center',
-    fontFamily: fontFamily.montserratSemiBold,
+    fontFamily: fontFamily.poppinsSemiBold,
   },
   timeSlider: {
     paddingHorizontal: 20,

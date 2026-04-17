@@ -1,7 +1,10 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
+import { View, Text, Image, StyleSheet, Dimensions } from 'react-native';
 import { Button, Header, Wrapper } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
+import { AuthBtn } from '../../../components/common/authBtn';
+
+const { height, width } = Dimensions.get('window');
 
 export default function BookAnAppointment({ navigation }) {
   const menus = [
@@ -23,14 +26,14 @@ export default function BookAnAppointment({ navigation }) {
     },
   ];
   return (
-    <Wrapper containerStyle={{ paddingHorizontal: 0 }}>
+    <Wrapper onlyTop containerStyle={{ paddingHorizontal: 0, flex: 1 }}>
       <Header
         header="Book A Session"
         headerContainer={{ paddingHorizontal: 23 }}
       />
 
       <View style={{ flex: 1 }}>
-        <View style={{ flex: 0.4, paddingHorizontal: 15 }}>
+        <View style={{ flex: 1, paddingHorizontal: 15 }}>
           <Image
             source={{
               uri: 'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
@@ -41,8 +44,8 @@ export default function BookAnAppointment({ navigation }) {
         </View>
         <View
           style={{
-            flex: 0.7,
-            backgroundColor: '#DBD9EC',
+            flex: 0.6,
+            backgroundColor: colors.accent,
             paddingHorizontal: 15,
           }}
         >
@@ -75,16 +78,16 @@ export default function BookAnAppointment({ navigation }) {
               Hospital in London, UK. He achived several awards for her
               wonderful contribution
               {/* <Pressable style={{ alignSelf: 'center' }} onPress={() => {}}> */}
-              <Text style={{ color: 'blue' }}> Read More...</Text>
+              <Text style={{ color: colors.secondary }}> Read More...</Text>
               {/* </Pressable> */}
             </Text>
           </View>
 
           <View style={styles.btnContainer}>
-            <Button
+            <AuthBtn
               onPress={() => navigation.navigate('SessionConfirmation')}
               title="Book An Appointment"
-              containerStyle={{ marginTop: 20 }}
+              btnStyle={{ marginTop: 20, backgroundColor: colors.primary }}
             />
           </View>
         </View>
@@ -95,7 +98,6 @@ export default function BookAnAppointment({ navigation }) {
 
 const styles = StyleSheet.create({
   profile: {
-    width: '100%',
     height: '100%',
     borderTopLeftRadius: 42,
     borderTopRightRadius: 42,

@@ -5,11 +5,10 @@ import CustomTabBar from '../components/common/customTabBar';
 import HabitsStack from './HabitsStack';
 import ResourceStack from './ResourceStack';
 import ProfileStack from './ProfileStack';
-import Profile from '../screens/profile/profile';
 
 const Tab = createBottomTabNavigator();
 
-export default function BottomNavigation({ route }) {
+export default function BottomNavigation() {
   return (
     <Tab.Navigator
       initialRouteName="Habits"
@@ -19,7 +18,7 @@ export default function BottomNavigation({ route }) {
       <Tab.Screen name="Habits" component={HabitsStack} />
       <Tab.Screen name="SocialStack" component={SocialStack} />
       <Tab.Screen name="Resources" component={ResourceStack} />
-      <Tab.Screen name="Profile" component={Profile} />
+      <Tab.Screen name="Profile" component={ProfileStack} />
     </Tab.Navigator>
   );
 }

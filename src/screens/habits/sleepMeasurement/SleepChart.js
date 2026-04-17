@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
+
 import { View, FlatList, Text, StyleSheet } from 'react-native';
 import Svg, { Rect, Text as SvgText, G } from 'react-native-svg';
 import { Button, Header, Wrapper } from '../../../components';
-import { fontFamily } from '../../../constant';
+import { colors, fontFamily } from '../../../constant';
 
 export default function SleepChart30Days() {
   const chartHeight = 220;
@@ -93,7 +94,7 @@ export default function SleepChart30Days() {
               y={chartHeight - padding - barHeight}
               width={barWidth}
               height={barHeight}
-              fill={selected === index ? '#7B83FF' : '#222'}
+              fill={selected === index ? colors.primary : colors.textPrimary}
               rx={6}
             />
 
@@ -102,9 +103,9 @@ export default function SleepChart30Days() {
               x={itemWidth / 2}
               y={chartHeight - 5}
               fontSize="12"
-              fill="#888"
+              fill={colors.textSecondary}
               textAnchor="middle"
-              fontFamily={fontFamily.montserratBold}
+              fontFamily={fontFamily.interRegular}
             >
               {formatDate(item.date)}
             </SvgText>
@@ -115,8 +116,8 @@ export default function SleepChart30Days() {
                 x={itemWidth / 3}
                 y={chartHeight - padding - barHeight - 8}
                 fontSize="10"
-                fill="#000"
-                fontFamily={fontFamily.montserratBold}
+                fill={colors.textPrimary}
+                fontFamily={fontFamily.poppinsBold}
                 textAnchor="middle"
               >
                 {item.sleep}h
@@ -176,14 +177,14 @@ export default function SleepChart30Days() {
 
 const styles = StyleSheet.create({
   chartContainer: {
-    backgroundColor: '#DBD9EC',
+    backgroundColor: colors.accent,
     borderRadius: 24,
     marginTop: 20,
     paddingHorizontal: 10,
   },
   card: {
     padding: 14,
-    backgroundColor: '#fff',
+    backgroundColor: colors.white,
     borderRadius: 14,
     marginTop: 25,
   },
@@ -194,16 +195,16 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    color: '#666',
-    fontFamily: fontFamily.montserratMedium,
+    color: colors.textSecondary,
+    fontFamily: fontFamily.poppinsMedium,
   },
   value: {
     fontSize: 14,
-    color: '#111',
-    fontFamily: fontFamily.montserratSemiBold,
+    color: colors.textPrimary,
+    fontFamily: fontFamily.poppinsSemiBold,
   },
   divider: {
     height: 1,
-    backgroundColor: '#eee',
+    backgroundColor: colors.outline,
   },
 });

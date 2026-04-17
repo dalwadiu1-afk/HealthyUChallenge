@@ -14,7 +14,7 @@ import { launchCamera } from 'react-native-image-picker';
 import Share from 'react-native-share';
 
 import { Button, Header, Wrapper } from '../../../components';
-import { fontFamily } from '../../../constant';
+import { colors, fontFamily } from '../../../constant';
 
 export default function FriendWorkoutChallenge() {
   const [entries, setEntries] = useState([
@@ -119,6 +119,7 @@ export default function FriendWorkoutChallenge() {
               value={item.friend}
               onChangeText={text => handleFriendChange(index, text)}
               style={styles.input}
+              placeholderTextColor={colors.white}
             />
 
             {/* 🚀 SHARE BUTTON */}
@@ -146,7 +147,7 @@ export default function FriendWorkoutChallenge() {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     marginTop: 15,
     padding: 14,
     borderRadius: 14,
@@ -156,28 +157,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 10,
     fontFamily: fontFamily?.montserratSemiBold,
+    color: colors.white,
   },
-
   imageBox: {
     height: 140,
     borderRadius: 12,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-
   image: {
     width: '100%',
     height: '100%',
     borderRadius: 12,
   },
-
   timestamp: {
     marginTop: 8,
     fontSize: 12,
-    color: '#666',
+    color: colors.white,
   },
-
   input: {
     marginTop: 10,
     borderWidth: 1,
@@ -185,24 +183,22 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 10,
     fontSize: 13,
+    color: colors.white,
   },
-
   shareBtn: {
     marginTop: 10,
-    backgroundColor: '#e0f2fe',
+    backgroundColor: 'rgba(143, 175, 120)',
     padding: 10,
     borderRadius: 10,
     alignItems: 'center',
   },
-
   shareText: {
     color: '#0284c7',
     fontFamily: fontFamily?.montserratMedium,
   },
-
   hint: {
     marginTop: 6,
     fontSize: 11,
-    color: '#888',
+    color: colors.white,
   },
 });

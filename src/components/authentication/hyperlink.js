@@ -21,8 +21,8 @@ export function Hyperlink({
           color: 'white',
           // alignSelf: 'center',
           textDecorationLine: 'underline',
-          fontFamily: fontFamily.montserratBold,
           ...textStyle,
+          fontFamily: fontFamily.montserratSemiBold,
         }}
       >
         {title}

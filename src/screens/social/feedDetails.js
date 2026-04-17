@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Header, SvgImg, Wrapper } from '../../components';
 import ChatCard from '../../components/social/chatCard';
-import { colors } from '../../constant/colors';
+import { colors, fontFamily } from '../../constant';
 import { chatIcon, heartIcon } from '../../assets/images';
 
 const { height } = Dimensions.get('window');
@@ -113,7 +113,13 @@ export default function FeedDetails({ navigation }) {
           >
             <View style={styles.icon} />
             <View style={{ marginLeft: 17, justifyContent: 'center' }}>
-              <Text style={{ fontSize: 16, fontWeight: 'bold' }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontFamily: fontFamily.montserratSemiBold,
+                  color: colors.white,
+                }}
+              >
                 {item?.name}
               </Text>
               <Text style={styles.time}>{item?.time}</Text>
@@ -136,19 +142,17 @@ export default function FeedDetails({ navigation }) {
   };
 
   return (
-    <Wrapper>
-      <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.dark }}>
+      <Wrapper>
         <Header
           header={`Linh's Post`}
           showRightBtn={true}
           textStyle={styles.textStyle}
-          onLeftPress={() =>
-            navigation.navigate('BottomNavigation', { screen: 'SocialStack' })
-          }
+          onLeftPress={() => navigation.goBack()}
           disableLeft={false}
         />
         <ScrollView showsVerticalScrollIndicator={false}>
-          <View style={{ marginTop: 24 }}>
+          <View style={{}}>
             <ChatCard item={feed} />
           </View>
 
@@ -168,40 +172,39 @@ export default function FeedDetails({ navigation }) {
           </View>
         </ScrollView>
 
-        <View style={styles.chatBtn}>
-          <SvgImg iconName={chatIcon} height={35} width={35} />
-        </View>
         {/* </View> */}
+      </Wrapper>
+      <View style={styles.chatBtn}>
+        <SvgImg iconName={chatIcon} height={35} width={35} />
       </View>
-    </Wrapper>
+    </View>
   );
 }
 const styles = StyleSheet.create({
   textStyle: {
-    fontWeight: 700,
+    fontFamily: fontFamily.poppinsBold,
     fontSize: 16,
     lineHeight: 26,
     letterSpacing: 0,
     textAlign: 'center',
+    color: colors.white,
   },
   icon: {
     width: 44,
     height: 44,
     borderRadius: 100,
-    backgroundColor: 'green',
+    backgroundColor: colors.primary,
   },
   time: {
-    fontWeight: 400,
-    fontSize: 14,
-    lineHeight: 24,
-    letterSpacing: 0,
-    color: colors.white,
+    fontFamily: fontFamily.montserratMedium,
+    fontSize: 13,
+    lineHeight: 20,
+    color: colors.textSecondary,
   },
   message: {
-    fontWeight: 400,
-    fontSize: 16,
-    lineHeight: 26,
-    letterSpacing: 0,
+    fontFamily: fontFamily.montserratMedium,
+    fontSize: 15,
+    lineHeight: 24,
     color: colors.white,
   },
   commentContainer: {
@@ -218,8 +221,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'absolute',
-    bottom: 50,
-    right: 0,
+    bottom: 20,
+    right: 20,
     backgroundColor: colors.white,
   },
 });

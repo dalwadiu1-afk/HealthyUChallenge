@@ -5,11 +5,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   StatusBar,
+  Dimensions,
 } from 'react-native';
 import { color, colors, fontFamily } from './../../constant/index';
 import { SearchBar, StreakCalendar, SvgImg, Wrapper } from '../../components';
 import { chatIcon } from '../../assets/images';
 
+const { height } = Dimensions.get('window');
 export default function ProfileHeader({
   containerStyle = {},
   onProfileClick = () => {},
@@ -51,14 +53,17 @@ export default function ProfileHeader({
             <SvgImg iconName={chatIcon} height={35} width={35} />
           </View>
         </View>
-        {showCalender ? (
-          <StreakCalendar
-            showInsight={showInsight}
-            setShowInsight={setShowInsight}
-          />
-        ) : (
-          <View />
-        )}
+        <View>
+          {showCalender ? (
+            <StreakCalendar
+              container={{ top: height * 0.012, width: '100%' }}
+              showInsight={showInsight}
+              setShowInsight={setShowInsight}
+            />
+          ) : (
+            <View />
+          )}
+        </View>
       </View>
     </View>
   );

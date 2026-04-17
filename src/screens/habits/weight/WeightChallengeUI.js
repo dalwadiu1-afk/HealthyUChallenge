@@ -104,8 +104,8 @@ export default function WeightChallengeUI() {
         <Text
           style={{
             fontSize: 22,
-            fontFamily: fontFamily.montserratSemiBold,
-            marginVertical: 20,
+            fontFamily: fontFamily.montserratBold,
+            marginTop: 20,
             color: colors.white,
           }}
         >
@@ -126,7 +126,7 @@ export default function WeightChallengeUI() {
         <View
           style={{
             paddingTop: 20,
-            backgroundColor: '#fff',
+            backgroundColor: colors.white,
             borderRadius: 15,
           }}
         >
@@ -135,12 +135,12 @@ export default function WeightChallengeUI() {
             width={screenWidth - 40}
             height={200}
             chartConfig={{
-              backgroundColor: '#fff',
-              backgroundGradientFrom: '#fff',
-              backgroundGradientTo: '#fff',
+              backgroundColor: colors.white,
+              backgroundGradientFrom: colors.white,
+              backgroundGradientTo: colors.white,
               decimalPlaces: 0,
-              color: () => '#000',
-              labelColor: () => '#555',
+              color: () => colors.primary,
+              labelColor: () => colors.textSecondary,
             }}
             style={{
               borderRadius: 12,
@@ -179,7 +179,7 @@ export default function WeightChallengeUI() {
           style={{
             marginTop: 10,
             padding: 20,
-            backgroundColor: '#fff',
+            backgroundColor: colors.white,
             borderRadius: 15,
           }}
         >
@@ -222,7 +222,7 @@ export default function WeightChallengeUI() {
 const styles = {
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: colors.outline,
     padding: 12,
     borderRadius: 10,
     marginBottom: 15,
@@ -231,7 +231,7 @@ const styles = {
 
   button: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.textPrimary,
     padding: 14,
     borderRadius: 10,
     alignItems: 'center',
@@ -239,7 +239,7 @@ const styles = {
 
   backBtn: {
     flex: 1,
-    backgroundColor: '#888',
+    backgroundColor: colors.textSecondary,
     padding: 14,
     borderRadius: 10,
     alignItems: 'center',
@@ -251,7 +251,7 @@ const styles = {
   },
 
   card: {
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.background,
     borderRadius: 15,
     padding: 15,
     marginTop: 10,
@@ -263,8 +263,8 @@ const styles = {
   },
 
   label: {
-    color: '#555',
-    fontFamily: fontFamily.montserratSemiBold,
+    color: colors.textSecondary,
+    fontFamily: fontFamily.montserratMedium,
   },
 
   value: {
@@ -275,7 +275,7 @@ const styles = {
 
   divider: {
     height: 1,
-    backgroundColor: '#ddd',
+    backgroundColor: colors.outline,
     marginVertical: 10,
   },
 };

@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Image,
   ScrollView,
+  TouchableOpacity,
 } from 'react-native';
 import { SvgImg, Wrapper } from '../../../components';
 import ProfileHeader from '../../../components/profile/ProfileHeader';
@@ -128,7 +129,10 @@ export default function WalkingRewardBoard({ navigation }) {
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={{ flex: 1 }}>
           <View style={styles.walkingTileContainer}>
-            <View style={{ flexDirection: 'row' }}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('AvgSteps')}
+              style={{ flexDirection: 'row' }}
+            >
               <SvgImg iconName={chatIcon} height={56} width={56} />
               <Text style={styles.stepsText}>
                 Steps{'  '}
@@ -136,7 +140,7 @@ export default function WalkingRewardBoard({ navigation }) {
                   2000 +
                 </Text>
               </Text>
-            </View>
+            </TouchableOpacity>
 
             <View style={{ marginTop: 16 }}>
               <Text

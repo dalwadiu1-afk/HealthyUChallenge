@@ -6,10 +6,13 @@ import {
   TouchableOpacity,
   Image,
   ScrollView,
+  Dimensions,
 } from 'react-native';
 import { Button, Header, Wrapper } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
+import { AuthBtn } from '../../../components/common/authBtn';
 
+const { height } = Dimensions.get('window');
 export default function FitnessClassUI() {
   const [photos, setPhotos] = useState([null, null, null, null]);
 
@@ -24,7 +27,7 @@ export default function FitnessClassUI() {
   };
 
   return (
-    <Wrapper containerStyle={{ paddingHorizontal: 0 }}>
+    <Wrapper containerStyle={{}}>
       <Header header="WorkOut Session" />
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>🏋️ Weekly Fitness Class</Text>
@@ -53,7 +56,7 @@ export default function FitnessClassUI() {
           </View>
         ))}
 
-        <Button title="Join Weekly Fitness Class" />
+        <AuthBtn title="Join Weekly Fitness Class" />
       </ScrollView>
     </Wrapper>
   );
@@ -61,8 +64,7 @@ export default function FitnessClassUI() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
-    backgroundColor: colors.primary,
+    paddingTop: 20,
   },
 
   title: {
@@ -77,15 +79,15 @@ const styles = StyleSheet.create({
     color: '#777',
     marginBottom: 20,
     color: colors.white,
-    fontFamily: fontFamily.montserratBold,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(143, 175, 120, 0.16)',
     borderRadius: 16,
     padding: 16,
     marginBottom: 15,
-    shadowColor: '#000',
+    shadowColor: colors.textPrimary,
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 3,
@@ -95,22 +97,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 10,
+    color: colors.white,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 
   uploadBox: {
-    height: 140,
+    height: height * 0.15,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#ddd',
+    borderColor: colors.outline,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: 'rgba(143, 175, 120, 0.16)',
   },
 
   uploadText: {
-    color: '#999',
+    color: colors.textSecondary,
     fontSize: 13,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 
   image: {
@@ -121,7 +126,7 @@ const styles = StyleSheet.create({
 
   button: {
     marginTop: 20,
-    backgroundColor: '#6C63FF',
+    backgroundColor: colors.secondary,
     paddingVertical: 14,
     borderRadius: 30,
     alignItems: 'center',

@@ -135,7 +135,7 @@ export default function FruitTrackerUI() {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     padding: 15,
     borderRadius: 12,
     marginBottom: 15,
@@ -145,6 +145,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: fontFamily.montserratBold,
     marginBottom: 10,
+    color: colors.white,
   },
 
   dropdown: {
@@ -156,6 +157,7 @@ const styles = StyleSheet.create({
 
   dropdownText: {
     fontFamily: fontFamily.montserratMedium,
+    color: colors.white,
   },
 
   dropdownList: {
@@ -176,7 +178,7 @@ const styles = StyleSheet.create({
 
   serving: {
     marginTop: 10,
-    color: colors.primary,
+    color: colors.white,
     fontFamily: fontFamily.montserratSemiBold,
   },
 

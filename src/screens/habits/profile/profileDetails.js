@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -6,9 +6,9 @@ import {
   Dimensions,
   TouchableOpacity,
   FlatList,
-} from 'react-native';
-import { Header, Wrapper } from '../../components';
-import { colors, fontFamily } from '../../constant';
+} from "react-native";
+import { Header, Wrapper } from "../../components";
+import { colors, fontFamily } from "../../constant";
 
 import Animated, {
   useSharedValue,
@@ -16,24 +16,24 @@ import Animated, {
   interpolate,
   Extrapolate,
   withSpring,
-} from 'react-native-reanimated';
+} from "react-native-reanimated";
 
 import {
   Gesture,
   GestureDetector,
   GestureHandlerRootView,
-} from 'react-native-gesture-handler';
+} from "react-native-gesture-handler";
 
-import ChatCard from '../../components/social/chatCard';
+import ChatCard from "../../components/social/chatCard";
 
-const { height, width } = Dimensions.get('window');
+const { height, width } = Dimensions.get("window");
 
 export default function ProfileDetails({ navigation }) {
   const [currentTabIndex, setCurrentTabIndex] = useState(0);
   const options = [
-    { label: 'Feeds' },
-    { label: 'Stats' },
-    { label: 'Progress' },
+    { label: "Feeds" },
+    { label: "Stats" },
+    { label: "Progress" },
   ];
 
   const translateY = useSharedValue(0);
@@ -43,7 +43,7 @@ export default function ProfileDetails({ navigation }) {
     .onStart(() => {
       // ctx equivalent: capture start value via closure
     })
-    .onChange(event => {
+    .onChange((event) => {
       let value = translateY.value + event.changeY;
       if (value < -300) value = -300;
       if (value > 0) value = 0;
@@ -116,34 +116,34 @@ export default function ProfileDetails({ navigation }) {
   const chats = [
     {
       id: 1,
-      name: 'Linh Nguyen',
+      name: "Linh Nguyen",
       message:
-        'I am very happy to be with Cafit in training sessions and how about you?',
-      time: '10:30 AM · 2 min ago',
+        "I am very happy to be with Cafit in training sessions and how about you?",
+      time: "10:30 AM · 2 min ago",
       picture:
-        'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
+        "https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=",
       likes: 20,
       comments: 10,
     },
     {
       id: 2,
-      name: 'Linh Nguyen',
+      name: "Linh Nguyen",
       message:
-        'I am very happy to be with Cafit in training sessions and how about you?',
-      time: '10:30 AM · 2 min ago',
+        "I am very happy to be with Cafit in training sessions and how about you?",
+      time: "10:30 AM · 2 min ago",
       picture:
-        'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
+        "https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=",
       likes: 14,
       comments: 6,
     },
     {
       id: 3,
-      name: 'Linh Nguyen',
+      name: "Linh Nguyen",
       message:
-        'I am very happy to be with Cafit in training sessions and how about you?',
-      time: 'Yesterday',
+        "I am very happy to be with Cafit in training sessions and how about you?",
+      time: "Yesterday",
       picture:
-        'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
+        "https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=",
       likes: 9,
       comments: 3,
     },
@@ -154,9 +154,9 @@ export default function ProfileDetails({ navigation }) {
       onPress={() => setCurrentTabIndex(index)}
       style={{
         flex: 1,
-        alignItems: 'center',
+        alignItems: "center",
         backgroundColor:
-          index !== currentTabIndex ? 'transparent' : colors.accent,
+          index !== currentTabIndex ? "transparent" : colors.accent,
         padding: 5,
         borderRadius: 100,
       }}
@@ -175,7 +175,12 @@ export default function ProfileDetails({ navigation }) {
   );
 
   const renderChats = ({ item, index }) => (
-    <ChatCard key={index} item={item} index={index} onCardPress={() => {}} />
+    <ChatCard
+      key={index}
+      item={item}
+      index={index}
+      onCardPress={() => {}}
+    />
   );
 
   return (
@@ -194,9 +199,9 @@ export default function ProfileDetails({ navigation }) {
           <Animated.View style={[styles.profileContainer, imageStyle]}>
             <Animated.Image
               source={{
-                uri: 'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
+                uri: "https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg",
               }}
-              style={{ width: '100%', height: '100%', borderRadius: 100 }}
+              style={{ width: "100%", height: "100%", borderRadius: 100 }}
             />
           </Animated.View>
 
@@ -236,25 +241,25 @@ const styles = StyleSheet.create({
   textStyle: {
     fontSize: 16,
     lineHeight: 26,
-    textAlign: 'center',
+    textAlign: "center",
     fontFamily: fontFamily.poppinsSemiBold,
   },
   profileContainer: {
-    position: 'absolute',
+    position: "absolute",
     top: height * 0.02,
-    alignSelf: 'center',
+    alignSelf: "center",
     height: height * 0.08,
     width: height * 0.08,
   },
   nameTag: {
-    position: 'absolute',
+    position: "absolute",
     top: height * 0.16,
-    alignSelf: 'center',
+    alignSelf: "center",
     fontFamily: fontFamily.poppinsBold,
     color: colors.white,
   },
   sheet: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
@@ -266,7 +271,7 @@ const styles = StyleSheet.create({
     height: 6,
     width: width * 0.15,
     backgroundColor: colors.grey,
-    alignSelf: 'center',
+    alignSelf: "center",
     borderRadius: 10,
     marginTop: 10,
     marginBottom: 4,
@@ -274,9 +279,9 @@ const styles = StyleSheet.create({
   tabContainer: {
     backgroundColor: colors.accent,
     padding: 5,
-    width: '100%',
+    width: "100%",
     borderRadius: 100,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexDirection: "row",
+    justifyContent: "space-around",
   },
 });

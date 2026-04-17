@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TextInput } from 'react-native';
 import { Header, SvgImg, Wrapper } from '../../components';
 import ChatCard from '../../components/social/chatCard';
-import { colors } from '../../constant/colors';
+import { colors, fontFamily } from '../../constant';
 import { attachIcon, chatIcon, uploadIcon } from '../../assets/images';
 
 export default function AddPost() {
@@ -27,8 +27,8 @@ export default function AddPost() {
     // },
   ];
   return (
-    <Wrapper>
-      <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.dark }}>
+      <Wrapper>
         <Header
           header={`Linh's Post`}
           showRightBtn={true}
@@ -39,6 +39,7 @@ export default function AddPost() {
             <ChatCard key={index} item={item} />
           ))}
         </View>
+
         <View style={styles.commentContainer}>
           <View style={styles.attachBtn}>
             <SvgImg iconName={attachIcon} height={24} width={24} />
@@ -57,18 +58,18 @@ export default function AddPost() {
             <SvgImg iconName={uploadIcon} height={24} width={24} />
           </View>
         </View>
-      </View>
-    </Wrapper>
+      </Wrapper>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   textStyle: {
-    fontWeight: 700,
+    fontFamily: fontFamily.poppinsBold,
     fontSize: 16,
     lineHeight: 26,
-    letterSpacing: 0,
     textAlign: 'center',
+    color: colors.white,
   },
   attachBtn: {
     width: 45,
@@ -87,11 +88,11 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderRadius: 50,
     paddingHorizontal: 20,
+    fontFamily: fontFamily.montserratMedium,
   },
   commentContainer: {
     paddingVertical: 15,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
   },
 });

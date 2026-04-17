@@ -52,6 +52,7 @@ export default function FutureIdeasUI() {
           onChangeText={setIdea}
           style={styles.input}
           multiline
+          placeholderTextColor={colors.white}
         />
 
         {/* IMAGE UPLOAD */}
@@ -97,7 +98,7 @@ export default function FutureIdeasUI() {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     padding: 16,
     borderRadius: 12,
     marginBottom: 15,
@@ -107,6 +108,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: fontFamily.montserratBold,
     marginBottom: 10,
+    color: colors.white,
   },
 
   input: {

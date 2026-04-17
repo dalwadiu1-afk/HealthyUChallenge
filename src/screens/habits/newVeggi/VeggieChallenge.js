@@ -222,7 +222,13 @@ const VeggieChallenge = () => {
                             },
                           ]}
                         >
-                          <Text>{unlocked ? 'Upload' : 'Locked (7 days)'}</Text>
+                          <Text
+                            style={{
+                              fontFamily: fontFamily.montserratSemiBold,
+                            }}
+                          >
+                            {unlocked ? 'Upload' : 'Locked (7 days)'}
+                          </Text>
                         </TouchableOpacity>
                       )}
                     </View>
@@ -255,7 +261,7 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: '#f0fff4',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     marginBottom: 16,
     padding: 12,
     borderRadius: 12,
@@ -265,12 +271,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 10,
     fontFamily: fontFamily.montserratSemiBold,
+    color: colors.white,
   },
 
   dayBox: {
     marginBottom: 14,
     padding: 10,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     borderRadius: 10,
   },
 
@@ -278,6 +285,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 6,
     fontFamily: fontFamily.montserratMedium,
+    color: colors.white,
   },
 
   uploadBtn: {
@@ -304,7 +312,7 @@ const styles = StyleSheet.create({
   time: {
     fontSize: 12,
     marginTop: 6,
-    color: '#555',
+    color: colors.white,
     fontFamily: fontFamily.montserratMedium,
   },
 

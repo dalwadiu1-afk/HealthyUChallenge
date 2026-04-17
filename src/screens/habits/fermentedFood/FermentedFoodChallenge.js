@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: '#f0f8ff',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     margin: 10,
     padding: 12,
     borderRadius: 12,
@@ -195,8 +195,9 @@ const styles = StyleSheet.create({
 
   dayLabel: {
     fontSize: 16,
-    fontWeight: 'bold',
     marginBottom: 8,
+    color: colors.white,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 
   uploadBtn: {
@@ -209,7 +210,7 @@ const styles = StyleSheet.create({
 
   uploadText: {
     color: '#2d6a4f',
-    fontWeight: 'bold',
+    fontFamily: fontFamily.montserratSemiBold,
   },
 
   photo: {

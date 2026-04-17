@@ -6,9 +6,13 @@ import {
   TouchableOpacity,
   Image,
   ScrollView,
+  Dimensions,
 } from 'react-native';
 import { Button, Header, Wrapper } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
+import { AuthBtn } from '../../../components/common/authBtn';
+
+const { height } = Dimensions.get('window');
 
 export default function WeightTrainingUI() {
   const [photos, setPhotos] = useState(Array(8).fill(null));
@@ -59,17 +63,14 @@ export default function WeightTrainingUI() {
           </View>
         ))}
 
-        <Button title="Start Training" />
+        <AuthBtn title="Start Training" />
       </ScrollView>
     </Wrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingBottom: 30,
-    backgroundColor: colors.primary,
-  },
+  container: {},
 
   title: {
     fontSize: 22,
@@ -82,15 +83,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 20,
     color: colors.white,
-    fontFamily: fontFamily.montserratBold,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     borderRadius: 16,
     padding: 16,
     marginBottom: 15,
-    shadowColor: '#000',
+    shadowColor: colors.textPrimary,
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 3,
@@ -99,24 +100,25 @@ const styles = StyleSheet.create({
   workoutTitle: {
     fontSize: 14,
     marginBottom: 10,
-    fontFamily: fontFamily.montserratBold,
+    fontFamily: fontFamily.montserratSemiBold,
+    color: colors.white,
   },
 
   uploadBox: {
-    height: 140,
+    height: height * 0.15,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#ddd',
+    borderColor: colors.outline,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
   },
 
   uploadText: {
-    color: '#999',
+    color: colors.textSecondary,
     fontSize: 13,
-    fontFamily: fontFamily.montserratBold,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 
   image: {
@@ -128,13 +130,13 @@ const styles = StyleSheet.create({
   timestamp: {
     marginTop: 6,
     fontSize: 12,
-    color: '#555',
-    fontFamily: fontFamily.montserratBold,
+    color: colors.textSecondary,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 
   button: {
     marginTop: 20,
-    backgroundColor: '#6C63FF',
+    backgroundColor: colors.secondary,
     paddingVertical: 14,
     borderRadius: 30,
     alignItems: 'center',
@@ -143,6 +145,6 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#fff',
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });

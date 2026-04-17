@@ -11,8 +11,9 @@ import {
 } from 'react-native';
 import { launchCamera } from 'react-native-image-picker';
 import { Button, Header, Wrapper } from '../../../components';
-import { fontFamily } from '../../../constant';
+import { colors, fontFamily } from '../../../constant';
 import InputBox from '../../../components/common/InputBox';
+import { AuthBtn } from '../../../components/common/authBtn';
 
 export default function BeverageChallengeUI() {
   const [photo, setPhoto] = useState(null);
@@ -70,7 +71,7 @@ export default function BeverageChallengeUI() {
             ) : (
               <Text
                 style={{
-                  color: '#666',
+                  color: colors.white,
                   fontFamily: fontFamily.montserratMedium,
                 }}
               >
@@ -103,8 +104,8 @@ export default function BeverageChallengeUI() {
           ) : null}
 
           {/* 🚀 POST */}
-          <Button
-            buttonStyle={{ marginTop: 10 }}
+          <AuthBtn
+            btnStyle={{ marginTop: 10 }}
             title="Post to Social Tab"
             onPress={handlePost}
           />
@@ -118,7 +119,7 @@ export default function BeverageChallengeUI() {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     marginTop: 20,
     padding: 16,
     borderRadius: 14,
@@ -128,7 +129,7 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 12,
     marginBottom: 10,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -142,7 +143,7 @@ const styles = StyleSheet.create({
   timestamp: {
     marginTop: 8,
     fontSize: 12,
-    color: '#666',
+    color: colors.white,
   },
 
   input: {
@@ -167,7 +168,7 @@ const styles = StyleSheet.create({
 
   previewText: {
     fontSize: 12,
-    color: '#333',
+    color: colors.white,
   },
 
   previewHash: {

@@ -5,6 +5,7 @@ import Svg, { Rect, Text as SvgText, G, Polyline } from 'react-native-svg';
 import { Button, Header, Wrapper } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
 import InputBox from '../../../components/common/InputBox';
+import { AuthBtn } from '../../../components/common/authBtn';
 
 export default function SugarChart30Days() {
   const [product, setProduct] = useState('');
@@ -242,12 +243,24 @@ export default function SugarChart30Days() {
 
         {/* 🧾 ITEMS LIST */}
         <View style={styles.card}>
-          <Text style={{ fontWeight: 'bold', marginBottom: 10 }}>
+          <Text
+            style={{
+              fontFamily: fontFamily.montserratSemiBold,
+              marginBottom: 10,
+            }}
+          >
             🍽️ Items for Selected Day
           </Text>
 
           {data[selected]?.items.length === 0 ? (
-            <Text style={{ color: '#666' }}>No items added</Text>
+            <Text
+              style={{
+                color: '#666',
+                fontFamily: fontFamily.montserratMedium,
+              }}
+            >
+              No items added
+            </Text>
           ) : (
             data[selected].items.map((item, idx) => (
               <View key={idx} style={styles.row}>
@@ -260,24 +273,35 @@ export default function SugarChart30Days() {
 
         {/* INPUT */}
         <View style={styles.inputBox}>
-          <Text>🍬 Add Sugar</Text>
+          <Text style={{ fontFamily: fontFamily.montserratSemiBold }}>
+            🍬 Add Sugar
+          </Text>
 
-          <InputBox
+          {/* <InputBox
             value={product}
             onChangeText={setProduct}
             placeholder="Product name (e.g. Coke)"
             mainContainer={{ marginVertical: 10 }}
-          />
+            inputContainerStyle={styles.textInput}
+          /> */}
 
           <InputBox
+            textInputView={{ ...styles.textInput, marginTop: 10 }}
+            value={product}
+            onChangeText={setProduct}
+            placeholder="Product name (e.g. Coke)"
+            autoCapitalize="none"
+            returnKeyType="next"
+          />
+          <InputBox
+            textInputView={styles.textInput}
             value={sugarInput}
             onChangeText={setSugarInput}
             keyboardType="numeric"
             placeholder="Sugar (g)"
-            mainContainer={{ marginBottom: 10 }}
           />
 
-          <Button title="Add" onPress={handleAddSugar} />
+          <AuthBtn title="Add" onPress={handleAddSugar} />
         </View>
       </ScrollView>
     </Wrapper>
@@ -304,7 +328,12 @@ const styles = StyleSheet.create({
     marginTop: 20,
     overflow: 'hidden',
   },
-
+  textInput: {
+    marginBottom: 10,
+    fontSize: 14,
+    fontFamily: fontFamily.interRegular,
+    backgroundColor: 'rgba(143, 175, 120)',
+  },
   card: {
     marginTop: 20,
     backgroundColor: '#fff',

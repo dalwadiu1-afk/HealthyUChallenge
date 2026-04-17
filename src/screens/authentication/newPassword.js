@@ -1,64 +1,82 @@
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
-import { colors } from '../../constant/colors';
+import { colors, fontFamily } from '../../constant';
 import { Button, Header, Wrapper } from '../../components';
 import InputBox from '../../components/common/InputBox';
-import { fontFamily } from '../../constant';
+import { AuthBtn } from '../../components/common/authBtn';
+import { eyeIcon } from '../../assets/images';
 
-const { height, width } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
+
 export default function NewPassword({ navigation }) {
+  const [newPassword, setNewPassword] = useState('');
+  const [secureNewPass, setSecureNewPass] = useState(true);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [secureConfirmPass, setConfirmSecurePass] = useState(true);
   return (
-    <Wrapper>
-      <Header disableLeft={false} leftBtnStyle={styles.leftBtnStyle} />
-      <View style={{ marginTop: height * 0.05, flex: 0.9 }}>
-        <Text style={styles.forgotPassword}>Create new {`\n`}password</Text>
-        <Text style={styles.forgotDesc}>
-          Your new password must be unique from those previously used.
-        </Text>
-        <>
-          <InputBox
-            mainContainer={{ marginTop: height * 0.03 }}
-            placeHolder="New Password"
-            placeholderTextColor={'white'}
+    <View style={styles.container}>
+      <Wrapper>
+        <Header disableLeft={false} />
+        <View style={{ marginTop: height * 0.05, flex: 0.9 }}>
+          <Text style={styles.title}>Create new {`\n`}password</Text>
+          <Text style={styles.desc}>
+            Your new password must be unique from those previously used.
+          </Text>
+          <View>
+            <InputBox
+              mainContainer={styles.inputWrapper}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              label="New Password"
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              returnKeyType="done"
+              textIcon={eyeIcon}
+              secureTextEntry={secureNewPass}
+              onRightIconPress={() => setSecureNewPass(!secureNewPass)}
+            />
+            <InputBox
+              mainContainer={styles.inputWrapper}
+              value={confirmPassword}
+              label="Confirm Password"
+              onChangeText={setConfirmPassword}
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              returnKeyType="done"
+              textIcon={eyeIcon}
+              secureTextEntry={secureConfirmPass}
+              onRightIconPress={() => setConfirmSecurePass(!secureConfirmPass)}
+            />
+          </View>
+          <AuthBtn
+            btnStyle={{ marginTop: 20 }}
+            isComplete
+            onPress={() => navigation.navigate('success')}
+            title="Reset Password"
           />
-          <InputBox
-            mainContainer={{ marginTop: height * 0.018 }}
-            placeHolder="Confirm Password"
-            placeholderTextColor={'white'}
-          />
-        </>
-        <Button
-          title="Reset Password"
-          buttonStyle={styles.buttonStyle}
-          textStyle={{ color: colors.black }}
-          onPress={() => navigation.navigate('success')}
-        />
-      </View>
-    </Wrapper>
+        </View>
+      </Wrapper>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  icon: {
-    height: height * 0.07,
-    width: height * 0.07,
-    backgroundColor: 'white',
-    borderRadius: 100,
+  container: {
+    flex: 1,
+    backgroundColor: colors.dark,
+    overflow: 'hidden',
   },
-  forgotPassword: {
-    color: 'white',
+  title: {
+    color: colors.white,
     fontSize: 30,
     marginTop: height * 0.03,
-    fontFamily: fontFamily.montserratBold,
+    fontFamily: fontFamily.montserratSemiBold,
   },
-  forgotDesc: {
+  desc: {
     marginTop: height * 0.01,
-    color: 'white',
+    color: colors.white,
     fontSize: 14,
     fontFamily: fontFamily.montserratMedium,
   },
-  buttonStyle: {
-    backgroundColor: colors.white,
-    marginTop: height * 0.05,
-    borderRadius: 27.5,
+  inputWrapper: {
+    marginTop: 20,
   },
 });

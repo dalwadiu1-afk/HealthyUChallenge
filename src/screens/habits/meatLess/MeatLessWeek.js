@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
   },
 
   weekCard: {
-    backgroundColor: '#f0f8ff',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     margin: 10,
     padding: 12,
     borderRadius: 12,
@@ -217,11 +217,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginBottom: 10,
     fontFamily: fontFamily.montserratSemiBold,
+    color: colors.white,
   },
 
   uploadBtn: {
     height: 100,
-    backgroundColor: '#d3f4d1',
+    backgroundColor: 'rgba(143, 175, 120)',
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 10,
@@ -245,7 +246,7 @@ const styles = StyleSheet.create({
 
   mealCard: {
     marginBottom: 10,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     padding: 8,
     borderRadius: 10,
   },
@@ -288,7 +289,7 @@ const styles = StyleSheet.create({
 
   lockedBox: {
     height: height * 0.15,
-    backgroundColor: '#ddd',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 10,
@@ -296,7 +297,7 @@ const styles = StyleSheet.create({
 
   lockText: {
     fontFamily: fontFamily.montserratMedium,
-    color: '#555',
+    color: 'rgba(143, 175, 122)',
   },
 });
 

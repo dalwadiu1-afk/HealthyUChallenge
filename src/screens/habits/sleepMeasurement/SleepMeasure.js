@@ -1,14 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  StatusBar,
+  Dimensions,
+} from 'react-native';
 
-import Svg, { Circle, G, Path } from 'react-native-svg';
+import Svg, { Circle, G, Path, Text as SvgText } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { fontFamily } from '../../../constant';
+import { colors, fontFamily } from '../../../constant';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withRepeat,
+  withSequence,
+  withDelay,
+  withSpring,
+  Easing,
+} from 'react-native-reanimated';
 import { Button, Header, Wrapper } from '../../../components';
 import InputBox from '../../../components/common/InputBox';
+import { AuthBtn } from '../../../components/common/authBtn';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-const SIZE = 280;
+const { height, width } = Dimensions.get('window');
+
+const SIZE = height * 0.35;
 const STROKE = 22;
 const RADIUS = (SIZE - STROKE) / 2;
 const CENTER = SIZE / 2;
@@ -18,11 +39,20 @@ const SLEEP_HISTORY_KEY = 'SLEEP_HISTORY';
 
 const toRad = deg => (deg * Math.PI) / 180;
 
+/* ================= HELPERS ================= */
 const polarToCartesian = angle => {
   const a = toRad(angle - 90);
   return {
     x: CENTER + RADIUS * Math.cos(a),
     y: CENTER + RADIUS * Math.sin(a),
+  };
+};
+
+const getClockPoint = (angle, offset = 0) => {
+  const a = toRad(angle - 90);
+  return {
+    x: CENTER + (RADIUS + offset) * Math.cos(a),
+    y: CENTER + (RADIUS + offset) * Math.sin(a),
   };
 };
 
@@ -35,10 +65,8 @@ const describeArc = (startAngle, endAngle) => {
   const start = polarToCartesian(startAngle);
   const end = polarToCartesian(startAngle + sweep);
 
-  return `
-    M ${start.x} ${start.y}
-    A ${RADIUS} ${RADIUS} 0 ${largeArcFlag} 1 ${end.x} ${end.y}
-  `;
+  return `M ${start.x} ${start.y}
+          A ${RADIUS} ${RADIUS} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`;
 };
 
 const timeToMinutes = time => {
@@ -46,14 +74,63 @@ const timeToMinutes = time => {
   return h * 60 + m;
 };
 
+/* 🔥 12H CLOCK */
 const minutesToAngle = min => {
-  return (min / (24 * 60)) * 360;
+  const minutes12h = min % (12 * 60);
+  return (minutes12h / (12 * 60)) * 360;
 };
 
 const getNowTime = () => {
   const d = new Date();
   return d.toTimeString().slice(0, 5);
 };
+
+/* 🔥 AM / PM DETECTOR */
+const isAM = time => {
+  const [h] = time.split(':').map(Number);
+  return h < 12;
+};
+
+function FloatingOrb({ size, color, style, delay = 0 }) {
+  const translateY = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    opacity.value = withDelay(delay, withTiming(1, { duration: 1200 }));
+    translateY.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(-18, { duration: 3200, easing: Easing.inOut(Easing.sin) }),
+          withTiming(18, { duration: 3200, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        false,
+      ),
+    );
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: color,
+          position: 'absolute',
+        },
+        style,
+        animStyle,
+      ]}
+    />
+  );
+}
 
 export default function SleepClock() {
   const [bedTime, setBedTime] = useState('22:00');
@@ -69,14 +146,12 @@ export default function SleepClock() {
   );
 
   const [startTime, setStartTime] = useState(null);
-
   const [liveSeconds, setLiveSeconds] = useState(0);
   const [avgSleep, setAvgSleep] = useState({ h: 0, m: 0 });
 
-  // 🔥 LIVE WAKE TIME
   const [liveWakeTime, setLiveWakeTime] = useState(getNowTime());
 
-  // ================= INIT =================
+  /* ================= INIT ================= */
   useEffect(() => {
     const init = async () => {
       const saved = await AsyncStorage.getItem(SLEEP_START_KEY);
@@ -110,7 +185,7 @@ export default function SleepClock() {
     });
   };
 
-  // ================= LIVE TIMER =================
+  /* ================= LIVE TIMER ================= */
   useEffect(() => {
     let interval;
 
@@ -120,17 +195,21 @@ export default function SleepClock() {
 
         setLiveSeconds(Math.floor((now - startTime) / 1000));
 
-        // 🔥 LIVE WAKE TIME UPDATE (24h format)
         const t = now.toTimeString().slice(0, 5);
         setLiveWakeTime(t);
         setWakeTime(t);
       }, 1000);
     }
+    headerOpacity.value = withTiming(1, { duration: 500 });
+    headerY.value = withTiming(0, {
+      duration: 500,
+      easing: Easing.out(Easing.cubic),
+    });
 
     return () => clearInterval(interval);
   }, [sleepTime, startTime]);
 
-  // ================= START / STOP =================
+  /* ================= START / STOP ================= */
   const handleSleepToggle = async () => {
     const now = new Date();
 
@@ -145,7 +224,6 @@ export default function SleepClock() {
 
       const m = timeToMinutes(t);
       setBedAngle(minutesToAngle(m));
-
       return;
     }
 
@@ -167,10 +245,7 @@ export default function SleepClock() {
     const historyRaw = await AsyncStorage.getItem(SLEEP_HISTORY_KEY);
     let history = historyRaw ? JSON.parse(historyRaw) : [];
 
-    history.push({
-      totalMinutes,
-      date: end,
-    });
+    history.push({ totalMinutes, date: end });
 
     await AsyncStorage.setItem(SLEEP_HISTORY_KEY, JSON.stringify(history));
     await AsyncStorage.removeItem(SLEEP_START_KEY);
@@ -180,8 +255,11 @@ export default function SleepClock() {
     setLiveSeconds(0);
   };
 
-  // ================= PROGRESS =================
+  /* ================= PROGRESS ================= */
   const liveMinutes = Math.floor(liveSeconds / 60);
+  // Entrance animations
+  const headerOpacity = useSharedValue(0);
+  const headerY = useSharedValue(-20);
 
   const progressAngle = sleepTime
     ? wakeAngle
@@ -190,93 +268,200 @@ export default function SleepClock() {
   const bedPos = polarToCartesian(bedAngle);
   const wakePos = polarToCartesian(progressAngle);
 
+  /* 🔥 CURRENT TIME FOR AM/PM */
+  const currentTime = sleepTime ? bedTime : liveWakeTime;
+  const amActive = isAM(currentTime);
+
   return (
-    <Wrapper>
-      <Header header="Sleep" />
+    <View style={styles.container}>
+      <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle="light-content"
+      />
 
-      {/* INPUTS */}
-      <View style={styles.row}>
-        <InputBox
-          value={bedTime}
-          onChangeText={text => {
-            setBedTime(text);
-            if (/^\d{2}:\d{2}$/.test(text)) {
-              setBedAngle(minutesToAngle(timeToMinutes(text)));
-            }
-          }}
-          mainContainer={styles.input}
-          placeholder="Bed HH:mm"
-          editable={false}
-        />
+      {/* Background orbs */}
+      <FloatingOrb
+        size={width * 0.62}
+        color="rgba(77, 102, 68, 0.24)"
+        style={{ top: -width * 0.16, right: -width * 0.2 }}
+        delay={0}
+      />
+      <FloatingOrb
+        size={width * 0.42}
+        color="rgba(45, 70, 38, 0.18)"
+        style={{ bottom: height * 0.22, left: -width * 0.16 }}
+        delay={800}
+      />
+      <FloatingOrb
+        size={width * 0.2}
+        color="rgba(143, 175, 120, 0.15)"
+        style={{ top: height * 0.38, right: width * 0.06 }}
+        delay={500}
+      />
 
-        <InputBox
-          value={sleepTime ? wakeTime : liveWakeTime}
-          mainContainer={styles.input}
-          placeholder="Wake HH:mm"
-          editable={false}
-        />
-      </View>
+      <SafeAreaProvider style={styles.inner}>
+        <View style={{ flex: 1 }}>
+          <Header header="Sleep" />
 
-      {/* CLOCK */}
-      <View style={{ alignSelf: 'center', marginTop: 20 }}>
-        <Svg width={SIZE} height={SIZE}>
-          <Circle
-            cx={CENTER}
-            cy={CENTER}
-            r={RADIUS}
-            stroke="#3D4166"
-            strokeWidth={STROKE}
-            fill="none"
-          />
+          {/* INPUTS */}
+          <View style={styles.row}>
+            <InputBox
+              value={bedTime}
+              inputContainerStyle={styles.input}
+              editable={false}
+            />
+            <InputBox
+              value={sleepTime ? wakeTime : liveWakeTime}
+              inputContainerStyle={styles.input}
+              editable={false}
+            />
+          </View>
 
-          <Path
-            d={describeArc(bedAngle, progressAngle)}
-            stroke="#7B83FF"
-            strokeWidth={STROKE}
-            fill="none"
-            strokeLinecap="round"
-          />
+          {/* CLOCK */}
+          <View style={{ alignSelf: 'center', marginTop: 20 }}>
+            <Svg width={SIZE} height={SIZE}>
+              {/* Background */}
+              <Circle
+                cx={CENTER}
+                cy={CENTER}
+                r={RADIUS}
+                stroke="rgba(143, 175, 120, 0.5)"
+                strokeWidth={STROKE}
+                fill="none"
+              />
 
-          <G x={bedPos.x} y={bedPos.y}>
-            <Circle r={10} fill="#fff" />
-          </G>
+              {/* TICKS */}
+              {[0, 90, 180, 270].map(angle => {
+                const start = getClockPoint(angle, -10);
+                const end = getClockPoint(angle, 10);
+                return (
+                  <Path
+                    key={angle}
+                    d={`M ${start.x} ${start.y} L ${end.x} ${end.y}`}
+                    stroke="#AAB3FF"
+                    strokeWidth={3}
+                  />
+                );
+              })}
 
-          <G x={wakePos.x} y={wakePos.y}>
-            <Circle r={10} fill="#fff" />
-          </G>
-        </Svg>
+              {/* NUMBERS */}
+              {[0, 90, 180, 270].map((angle, i) => {
+                const labels = ['12', '3', '6', '9'];
+                const pos = getClockPoint(angle, -30);
 
-        <View style={styles.center}>
-          <Text style={styles.duration}>
-            {sleepTime
-              ? bedTime
-              : `${Math.floor(liveMinutes / 60)}h ${liveMinutes % 60}m`}
-          </Text>
+                return (
+                  <SvgText
+                    key={i}
+                    x={pos.x}
+                    y={pos.y}
+                    fill="#fff"
+                    fontSize="14"
+                    textAnchor="middle"
+                    dy="4"
+                  >
+                    {labels[i]}
+                  </SvgText>
+                );
+              })}
 
-          <Text style={styles.subtitle}>Sleep duration</Text>
+              {/* AM / PM */}
+              {(() => {
+                const am = getClockPoint(300, -35);
+                const pm = getClockPoint(120, -35);
 
-          <Text style={[styles.subtitle, { marginTop: 6 }]}>
-            Avg: {avgSleep.h}h {avgSleep.m}m
-          </Text>
+                return (
+                  <>
+                    <SvgText
+                      x={am.x}
+                      y={am.y}
+                      fill={amActive ? '#fff' : '#8FA3B0'}
+                      fontSize={amActive ? '14' : '12'}
+                      fontWeight={amActive ? 'bold' : 'normal'}
+                      textAnchor="middle"
+                      dy="4"
+                    >
+                      AM
+                    </SvgText>
+
+                    <SvgText
+                      x={pm.x}
+                      y={pm.y}
+                      fill={!amActive ? '#fff' : '#8FA3B0'}
+                      fontSize={!amActive ? '14' : '12'}
+                      fontWeight={!amActive ? 'bold' : 'normal'}
+                      textAnchor="middle"
+                      dy="4"
+                    >
+                      PM
+                    </SvgText>
+                  </>
+                );
+              })()}
+
+              {/* ARC */}
+              <Path
+                d={describeArc(bedAngle, progressAngle)}
+                stroke="#7B83FF"
+                strokeWidth={STROKE}
+                fill="none"
+                strokeLinecap="round"
+              />
+
+              {/* DOTS */}
+              <G x={bedPos.x} y={bedPos.y}>
+                <Circle r={10} fill="#fff" />
+              </G>
+
+              <G x={wakePos.x} y={wakePos.y}>
+                <Circle r={10} fill="#fff" />
+              </G>
+            </Svg>
+
+            <View style={styles.center}>
+              <Text style={styles.duration}>
+                {sleepTime
+                  ? `${avgSleep.h}h ${avgSleep.m}m`
+                  : `${Math.floor(liveMinutes / 60)}h ${liveMinutes % 60}m`}
+              </Text>
+
+              <Text style={styles.subtitle}>Sleep duration</Text>
+
+              <Text style={[styles.subtitle, { marginTop: 6 }]}>
+                Avg: {avgSleep.h}h {avgSleep.m}m
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity onPress={handleSleepToggle} style={styles.timerBtn}>
+            <Text style={styles.timerText}>
+              {sleepTime ? 'Start' : 'Stop'} Sleeptime
+            </Text>
+          </TouchableOpacity>
+
+          <View style={{ marginTop: 20, flex: 1 }}>
+            <InputBox placeholder="Your Monthly Goal" />
+          </View>
+
+          <AuthBtn title="Set Goal" />
         </View>
-      </View>
-
-      <TouchableOpacity onPress={handleSleepToggle} style={styles.timerBtn}>
-        <Text style={styles.timerText}>
-          {sleepTime ? 'Start' : 'Stop'} Sleeptime
-        </Text>
-      </TouchableOpacity>
-
-      <View style={{ marginTop: 20, flex: 1 }}>
-        <InputBox placeholder="Your Monthly Goal" />
-      </View>
-
-      <Button title="Set Goal" buttonStyle={{ marginBottom: 30 }} />
-    </Wrapper>
+      </SafeAreaProvider>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.dark,
+    overflow: 'hidden',
+  },
+  inner: {
+    flex: 1,
+    paddingHorizontal: 26,
+    marginTop: StatusBar.currentHeight,
+    paddingBottom: 32,
+  },
   row: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -284,8 +469,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#555',
     color: '#fff',
     borderRadius: 8,
     textAlign: 'center',

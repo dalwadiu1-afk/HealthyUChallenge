@@ -5,6 +5,7 @@ import Svg, { Rect, Text as SvgText, G, Polyline } from 'react-native-svg';
 import { Button, Header, Wrapper } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
 import InputBox from '../../../components/common/InputBox';
+import { AuthBtn } from '../../../components/common/authBtn';
 
 export default function FiberChart30Days() {
   const [input, setInput] = useState('');
@@ -127,8 +128,8 @@ export default function FiberChart30Days() {
                 selected === index
                   ? colors.secondary
                   : inRange
-                  ? '#16a34a'
-                  : '#94a3b8'
+                  ? colors.primary
+                  : colors.textSecondary
               }
               rx={6}
             />
@@ -149,9 +150,9 @@ export default function FiberChart30Days() {
                 x={itemWidth / 2}
                 y={chartHeight - padding - barHeight - 8}
                 fontSize="10"
-                fill="#000"
+                fill={colors.textPrimary}
                 textAnchor="middle"
-                fontFamily={fontFamily.montserratSemiBold}
+                fontFamily={fontFamily.poppinsSemiBold}
               >
                 {item.fiber}g
               </SvgText>
@@ -162,9 +163,9 @@ export default function FiberChart30Days() {
               x={itemWidth / 2}
               y={chartHeight - 5}
               fontSize="10"
-              fill="#666"
+              fill={colors.textSecondary}
               textAnchor="middle"
-              fontFamily={fontFamily.montserratSemiBold}
+              fontFamily={fontFamily.interRegular}
             >
               {formatDate(item.date)}
             </SvgText>
@@ -175,80 +176,89 @@ export default function FiberChart30Days() {
   };
 
   return (
-    <Wrapper>
-      <Header header="Fiber Tracker" />
+    <View style={{ backgroundColor: colors.dark, flex: 1 }}>
+      <Wrapper>
+        <Header header="Fiber Tracker" />
 
-      <ScrollView style={{ flexGrow: 1 }}>
-        {/* CHART */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.chartBox}>
-            <FlatList
-              data={data}
-              horizontal
-              keyExtractor={i => i.dayIndex.toString()}
-              renderItem={renderItem}
-              showsHorizontalScrollIndicator={false}
-            />
-
-            {/* TREND LINE */}
-            <Svg
-              pointerEvents="none"
-              height={chartHeight}
-              width={itemWidth * 30}
-              style={{
-                position: 'absolute',
-              }}
-            >
-              <Polyline
-                pointerEvents="none"
-                points={trendPoints}
-                fill="none"
-                stroke="#2563eb"
-                strokeWidth="2"
+        <ScrollView style={{ flexGrow: 1 }}>
+          {/* CHART */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.chartBox}>
+              <FlatList
+                data={data}
+                horizontal
+                keyExtractor={i => i.dayIndex.toString()}
+                renderItem={renderItem}
+                showsHorizontalScrollIndicator={false}
               />
-            </Svg>
+
+              {/* TREND LINE */}
+              <Svg
+                pointerEvents="none"
+                height={chartHeight}
+                width={itemWidth * 30}
+                style={{
+                  position: 'absolute',
+                }}
+              >
+                <Polyline
+                  pointerEvents="none"
+                  points={trendPoints}
+                  fill="none"
+                  stroke={colors.secondary}
+                  strokeWidth="2"
+                />
+              </Svg>
+            </View>
+          </ScrollView>
+
+          {/* STATS */}
+          <View style={styles.card}>
+            <Row label="📊 Avg Fiber" value={`${avg.toFixed(1)}g`} />
+            <Divider />
+            <Row label="🎯 Target Range" value="25g – 38g" />
+            <Divider />
+            <Row
+              label="🔮 Required Avg"
+              value={`${requiredAvg.toFixed(1)}g/day`}
+            />
           </View>
+
+          {/* TIPS */}
+          <View style={styles.tipBox}>
+            <Text style={styles.tipTitle}>💡 Fiber Tips</Text>
+            {tips.map((t, i) => (
+              <Text key={i} style={styles.tipText}>
+                • {t}
+              </Text>
+            ))}
+          </View>
+
+          {/* INPUT */}
+          <View style={styles.inputBox}>
+            <Text>🍽 Add Fiber (g)</Text>
+
+            <InputBox
+              value={input}
+              onChangeText={setInput}
+              keyboardType="numeric"
+              placeholder="e.g. 10"
+              textInputView={styles.textInput}
+            />
+            <AuthBtn
+              title="Add"
+              onPress={addFiber}
+              btnStyle={{ backgroundColor: colors.primary }}
+            />
+          </View>
+
+          <AuthBtn
+            title="Share Progress"
+            btnStyle={{ marginVertical: 20, backgroundColor: colors.primary }}
+          />
         </ScrollView>
-
-        {/* STATS */}
-        <View style={styles.card}>
-          <Row label="📊 Avg Fiber" value={`${avg.toFixed(1)}g`} />
-          <Divider />
-          <Row label="🎯 Target Range" value="25g – 38g" />
-          <Divider />
-          <Row
-            label="🔮 Required Avg"
-            value={`${requiredAvg.toFixed(1)}g/day`}
-          />
-        </View>
-
-        {/* TIPS */}
-        <View style={styles.tipBox}>
-          <Text style={styles.tipTitle}>💡 Fiber Tips</Text>
-          {tips.map((t, i) => (
-            <Text key={i} style={styles.tipText}>
-              • {t}
-            </Text>
-          ))}
-        </View>
-
-        {/* INPUT */}
-        <View style={styles.inputBox}>
-          <Text>🍽 Add Fiber (g)</Text>
-
-          <InputBox
-            value={input}
-            onChangeText={setInput}
-            keyboardType="numeric"
-            placeholder="e.g. 10"
-            mainContainer={{ marginVertical: 10 }}
-          />
-          <Button title="Add" onPress={addFiber} />
-        </View>
-
-        <Button title="Share Progress" buttonStyle={{ marginVertical: 20 }} />
-      </ScrollView>
-    </Wrapper>
+      </Wrapper>
+    </View>
   );
 }
 
@@ -267,27 +277,36 @@ const Divider = () => <View style={styles.divider} />;
 
 const styles = StyleSheet.create({
   chartBox: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.background,
     borderRadius: 20,
     marginTop: 20,
     overflow: 'hidden',
   },
+  textInput: {
+    marginVertical: 10,
+    flex: 1,
+    color: colors.white,
+    fontSize: 14,
+    fontFamily: fontFamily.interRegular,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(143,175,120,0.9)',
+  },
   warning: {
     marginTop: 10,
     padding: 10,
-    backgroundColor: '#fee2e2',
+    backgroundColor: '#FDECEA',
     borderRadius: 10,
   },
   card: {
     marginTop: 20,
-    backgroundColor: '#fff',
+    backgroundColor: colors.white,
     padding: 14,
     borderRadius: 14,
   },
   inputBox: {
     marginTop: 20,
     padding: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.white,
     borderRadius: 12,
   },
   row: {
@@ -297,23 +316,23 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    color: '#666',
+    color: colors.textSecondary,
     fontFamily: fontFamily.montserratMedium,
   },
   value: {
     fontSize: 14,
-    color: '#111',
+    color: colors.textPrimary,
     fontFamily: fontFamily.montserratSemiBold,
   },
   divider: {
     height: 1,
-    backgroundColor: '#eee',
+    backgroundColor: colors.outline,
   },
 
   tipBox: {
     marginTop: 10,
     padding: 14,
-    backgroundColor: '#ecfdf5',
+    backgroundColor: colors.accent,
     borderRadius: 14,
   },
 
@@ -324,7 +343,8 @@ const styles = StyleSheet.create({
   },
   tipText: {
     fontSize: 12,
-    color: '#065f46',
+    color: colors.secondary,
     marginVertical: 2,
+    fontFamily: fontFamily.montserratBold,
   },
 });

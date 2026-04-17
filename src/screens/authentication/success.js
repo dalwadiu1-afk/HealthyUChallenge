@@ -1,73 +1,62 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
-import { colors } from '../../constant/colors';
-import { Button, Header, SvgImg } from '../../components';
+import { colors, fontFamily } from '../../constant';
+import { Button, Header, SvgImg, Wrapper } from '../../components';
 import { success } from '../../assets/images';
-import { fontFamily } from '../../constant';
+import { AuthBtn } from '../../components/common/authBtn';
 
 const { height, width } = Dimensions.get('window');
+
 export default function Success({ navigation }) {
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: colors.primary,
-        paddingHorizontal: 23,
-      }}
-    >
-      <Header disableLeft={false} leftBtnStyle={styles.leftBtnStyle} />
-
-      <View
-        style={{
-          justifyContent: 'center',
-          flex: 0.8,
-        }}
-      >
-        <View
-          style={{
-            justifyContent: 'center',
-            flex: 1,
-          }}
-        >
-          <SvgImg
-            iconName={success}
-            height={height * 0.15}
-            width={width * 0.3}
-            style={{ alignSelf: 'center' }}
-          />
-          <Text style={styles.forgotPassword}>Password Changed!</Text>
-          <Text style={styles.forgotDesc}>
-            Your password has been changed {`\n`}successfully.
-          </Text>
-
-          <Button
-            title="Back to Login"
-            buttonStyle={{
-              marginTop: height * 0.06,
-              backgroundColor: colors.white,
-            }}
-            textStyle={{ color: colors.black }}
-            onPress={() => navigation.navigate('login')}
-          />
+    <View style={styles.container}>
+      <Wrapper>
+        <View style={{ justifyContent: 'center', flex: 0.8 }}>
+          <View style={{ justifyContent: 'center', flex: 1 }}>
+            <SvgImg
+              iconName={success}
+              height={height * 0.15}
+              width={width * 0.3}
+              style={{ alignSelf: 'center' }}
+            />
+            <Text style={styles.title}>Password Changed!</Text>
+            <Text style={styles.desc}>
+              Your password has been changed {`\n`}successfully.
+            </Text>
+            <AuthBtn
+              title="Back to Login"
+              btnStyle={{
+                marginTop: height * 0.06,
+                backgroundColor: colors.primary,
+              }}
+              textStyle={{ color: colors.textPrimary }}
+              onPress={() => navigation.navigate('login')}
+            />
+          </View>
         </View>
-      </View>
+      </Wrapper>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  forgotPassword: {
-    color: 'white',
+  container: {
+    flex: 1,
+    backgroundColor: colors.dark,
+    overflow: 'hidden',
+  },
+  title: {
+    color: colors.white,
     fontSize: 30,
     textAlign: 'center',
     marginTop: height * 0.03,
-    fontFamily: fontFamily.montserratBold,
+    fontFamily: fontFamily.montserratSemiBold,
   },
-  forgotDesc: {
+  desc: {
     marginTop: height * 0.01,
-    color: 'white',
+    color: colors.white,
     fontSize: 14,
     textAlign: 'center',
-    fontFamily: fontFamily.montserratMedium,
+    fontFamily: fontFamily.montserratRegular,
   },
 });

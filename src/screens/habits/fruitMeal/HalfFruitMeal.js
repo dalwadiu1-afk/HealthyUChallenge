@@ -79,7 +79,10 @@ const HalfPlateFruitsVeggies = () => {
           </>
         ) : (
           <TouchableOpacity
-            style={[styles.uploadBtn, isLocked && { backgroundColor: '#ccc' }]}
+            style={[
+              styles.uploadBtn,
+              isLocked && { backgroundColor: 'rgba(143, 175, 120,0.16)' },
+            ]}
             disabled={isLocked}
             onPress={() => pickImage(index)}
           >
@@ -157,12 +160,13 @@ const styles = StyleSheet.create({
     marginTop: 6,
     color: colors.white,
     fontSize: 12,
+    fontFamily: fontFamily.montserratMedium,
   },
 
   card: {
     flex: 1,
     marginBottom: 16,
-    backgroundColor: '#f0f8ff',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     borderRadius: 12,
     alignItems: 'center',
     padding: 12,
@@ -173,20 +177,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 8,
+    color: colors.white,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 
   uploadBtn: {
     width: '100%',
     height: 120,
-    backgroundColor: '#d3f4d1',
+    backgroundColor: 'rgba(143, 175, 120,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 10,
   },
 
   uploadText: {
-    color: '#2d6a4f',
-    fontWeight: 'bold',
+    color: colors.white,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 
   photo: {

@@ -107,7 +107,7 @@ export default function SnackSystemUI() {
       <Image source={{ uri }} style={styles.image} />
     ) : (
       <View style={styles.noImage}>
-        <Text style={{ color: '#aaa' }}>No Image</Text>
+        <Text style={{ color: colors.white }}>No Image</Text>
       </View>
     );
 
@@ -220,6 +220,7 @@ export default function SnackSystemUI() {
                 value={snackName}
                 onChangeText={setSnackName}
                 style={styles.input}
+                placeholderTextColor={colors.white}
               />
 
               <TextInput
@@ -228,6 +229,7 @@ export default function SnackSystemUI() {
                 keyboardType="numeric"
                 onChangeText={setQty}
                 style={styles.input}
+                placeholderTextColor={colors.white}
               />
 
               {/* Upload Button */}
@@ -345,7 +347,7 @@ const styles = StyleSheet.create({
   activeText: { color: '#fff' },
 
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     padding: 14,
     borderRadius: 12,
     marginBottom: 12,
@@ -369,7 +371,7 @@ const styles = StyleSheet.create({
     height: 100,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#eee',
+    backgroundColor: 'rgba(143, 175, 120,0.16)',
     borderRadius: 10,
     marginBottom: 10,
   },
@@ -407,8 +409,12 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.montserratSemiBold,
   },
 
-  title: { fontSize: 16, fontFamily: fontFamily.montserratSemiBold },
-  sub: { fontSize: 13, color: '#666', marginTop: 4 },
+  title: {
+    fontSize: 16,
+    fontFamily: fontFamily.montserratSemiBold,
+    color: colors.white,
+  },
+  sub: { fontSize: 13, color: colors.white, marginTop: 4 },
 
   status: {
     marginTop: 6,
@@ -432,9 +438,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginTop: 10,
     fontFamily: fontFamily.montserratMedium,
+    color: colors.white,
   },
 
-  label: { fontSize: 14, color: '#666', fontFamily: fontFamily.montserratBold },
+  label: {
+    fontSize: 14,
+    color: colors.white,
+    fontFamily: fontFamily.montserratBold,
+  },
   // row: {
   //   flexDirection: 'row',
   //   marginHorizontal: 20,
