@@ -402,6 +402,8 @@ import Svg, { Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { colors, fontFamily } from '../../constant/colors';
 import { fontFamily as ff } from '../../constant';
 import ChatCard from '../../components/social/chatCard';
+import ProfileHeader from '../../components/profile/ProfileHeader';
+import { Wrapper } from '../../components';
 
 const { width } = Dimensions.get('window');
 
@@ -503,83 +505,68 @@ export default function Feeds({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        barStyle="light-content"
-      />
-
-      <FlatList
-        data={POSTS}
-        keyExtractor={item => item.id.toString()}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={
-          <>
-            {/* Header */}
-            <Animated.View style={[styles.header, headerStyle]}>
-              <TouchableOpacity
-                style={styles.avatarBtn}
-                onPress={() =>
-                  navigation.navigate('Profile', { screen: 'ProfileDetails' })
-                }
-                activeOpacity={0.8}
-              >
-                <View style={styles.headerAvatar}>
-                  <Text style={styles.headerAvatarText}>LN</Text>
-                </View>
-              </TouchableOpacity>
-              <View style={styles.headerText}>
-                <Text style={styles.headerGreeting}>Hello Linh 👋</Text>
-                <Text style={styles.headerDate}>Thursday, 08 July</Text>
+      <View
+        style={{
+          marginTop: StatusBar.currentHeight,
+          paddingHorizontal: 15,
+          zIndex: 1,
+        }}
+      >
+        <ProfileHeader onPress={() => navigation.navigate('AvgSteps')} />
+      </View>
+      <Wrapper
+        orbsRight
+        safeAreaPops={{ edges: ['bottom'] }}
+        containerStyle={{ paddingHorizontal: 0 }}
+      >
+        <FlatList
+          data={POSTS}
+          keyExtractor={item => item.id.toString()}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+          ListHeaderComponent={
+            <>
+              {/* Search */}
+              <View style={styles.searchRow}>
+                <Text style={styles.searchIcon}>🔍</Text>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search friends or posts…"
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  value={search}
+                  onChangeText={setSearch}
+                />
               </View>
-              <TouchableOpacity style={styles.notifBtn} activeOpacity={0.8}>
-                <Text style={styles.notifIcon}>🔔</Text>
-                <View style={styles.notifDot} />
-              </TouchableOpacity>
-            </Animated.View>
 
-            {/* Search */}
-            <View style={styles.searchRow}>
-              <Text style={styles.searchIcon}>🔍</Text>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search friends or posts…"
-                placeholderTextColor="rgba(255,255,255,0.3)"
-                value={search}
-                onChangeText={setSearch}
+              {/* Stories */}
+              <Text style={styles.sectionLabel}>Stories</Text>
+              <FlatList
+                data={STORIES}
+                horizontal
+                keyExtractor={s => s.id.toString()}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.storiesRow}
+                renderItem={({ item }) => <StoryItem story={item} />}
               />
-            </View>
 
-            {/* Stories */}
-            <Text style={styles.sectionLabel}>Stories</Text>
-            <FlatList
-              data={STORIES}
-              horizontal
-              keyExtractor={s => s.id.toString()}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.storiesRow}
-              renderItem={({ item }) => <StoryItem story={item} />}
+              {/* Feed label */}
+              <View style={styles.feedLabelRow}>
+                <Text style={styles.sectionLabel}>Community Feed</Text>
+                <TouchableOpacity activeOpacity={0.7}>
+                  <Text style={styles.seeAll}>See all</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          }
+          renderItem={({ item, index }) => (
+            <ChatCard
+              item={item}
+              index={index}
+              onCardPress={() => navigation.navigate('FeedDetails')}
             />
-
-            {/* Feed label */}
-            <View style={styles.feedLabelRow}>
-              <Text style={styles.sectionLabel}>Community Feed</Text>
-              <TouchableOpacity activeOpacity={0.7}>
-                <Text style={styles.seeAll}>See all</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        }
-        renderItem={({ item, index }) => (
-          <ChatCard
-            item={item}
-            index={index}
-            onCardPress={() => navigation.navigate('FeedDetails')}
-          />
-        )}
-      />
-
+          )}
+        />
+      </Wrapper>
       {/* FAB — add post (outside FlatList so absolute positioning is relative to root View) */}
       <TouchableOpacity
         style={styles.fab}
@@ -614,8 +601,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingTop: 52,
-    paddingBottom: 100,
   },
   header: {
     flexDirection: 'row',

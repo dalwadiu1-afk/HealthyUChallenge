@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,11 @@ import {
 } from 'react-native';
 import { colors, fontFamily } from '../../constant';
 import Svg, { Path } from 'react-native-svg';
+import { StreakCalendar } from '../common/calendar';
 
 export default function ProfileHeader({ onPress }) {
+  const [showCalender, setShowCalender] = useState(false);
+  const [showInsight, setShowInsight] = useState(false);
   const headerAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.stagger(120, [
@@ -56,7 +59,9 @@ export default function ProfileHeader({ onPress }) {
       </View>
       <View style={styles.headerText}>
         <Text style={styles.headerGreeting}>Hello Linh! 👋</Text>
-        <Text style={styles.headerDate}>Thursday, 08 July</Text>
+        <TouchableOpacity onPress={() => setShowCalender(!showCalender)}>
+          <Text style={styles.headerDate}>Thursday, 08 July</Text>
+        </TouchableOpacity>
       </View>
       <TouchableOpacity
         style={styles.chatBtn}
@@ -65,6 +70,14 @@ export default function ProfileHeader({ onPress }) {
       >
         <ChatBubbleIcon />
       </TouchableOpacity>
+      {showCalender ? (
+        <StreakCalendar
+          showInsight={showInsight}
+          setShowInsight={setShowInsight}
+        />
+      ) : (
+        <View />
+      )}
     </Animated.View>
   );
 }

@@ -241,14 +241,14 @@ export function StreakCalendar({
 const styles = StyleSheet.create({
   container: {
     padding: 10,
-    top: height * 0.12,
+    top: height * 0.069,
     alignSelf: 'center',
     // marginHorizontal: 10,
     backgroundColor: '#DBD9EC',
     borderRadius: 10,
     position: 'absolute',
-    zIndex: 2,
-    width: '90%',
+    zIndex: 1,
+    width: '100%',
     elevation: 100,
     borderWidth: 2,
     borderColor: colors.primary,
