@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,56 +9,56 @@ import {
   ScrollView,
   StatusBar,
   Animated,
-} from "react-native";
-import Svg, { Path } from "react-native-svg";
-import { SafeAreaProvider } from "react-native-safe-area-context";
-import { colors, fontFamily } from "../../constant";
-import { Wrapper } from "../../components";
+} from 'react-native';
+import Svg, { Path } from 'react-native-svg';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { colors, fontFamily } from '../../constant';
+import { Wrapper } from '../../components';
 
-const { width, height } = Dimensions.get("window");
+const { width, height } = Dimensions.get('window');
 
 const MENU_ITEMS = [
   {
-    emoji: "🎯",
-    title: "Goals",
-    subtitle: "View & edit your health goals",
-    screenName: "ProfileDetails",
+    emoji: '🎯',
+    title: 'Goals',
+    subtitle: 'View & edit your health goals',
+    screenName: 'ProfileDetails',
     badge: null,
   },
   {
-    emoji: "💪",
-    title: "My Body",
-    subtitle: "BMI, weight, body measurements",
-    screenName: "ProfileDetails",
-    badge: "Missing Info",
+    emoji: '💪',
+    title: 'My Body',
+    subtitle: 'BMI, weight, body measurements',
+    screenName: 'ProfileDetails',
+    badge: 'Missing Info',
   },
   {
-    emoji: "📋",
-    title: "Instructions",
-    subtitle: "App guide and how-to tips",
-    screenName: "Instructions",
-    badge: "New",
+    emoji: '📋',
+    title: 'Instructions',
+    subtitle: 'App guide and how-to tips',
+    screenName: 'Instructions',
+    badge: 'New',
   },
   {
-    emoji: "🏆",
-    title: "Leaderboard",
-    subtitle: "See how you rank with others",
-    screenName: "Leaderboard",
+    emoji: '🏆',
+    title: 'Leaderboard',
+    subtitle: 'See how you rank with others',
+    screenName: 'Leaderboard',
     badge: null,
   },
   {
-    emoji: "⚙️",
-    title: "Settings",
-    subtitle: "Notifications, privacy & more",
-    screenName: "ProfileDetails",
+    emoji: '⚙️',
+    title: 'Settings',
+    subtitle: 'Notifications, privacy & more',
+    screenName: 'ProfileDetails',
     badge: null,
   },
 ];
 
 const STATS = [
-  { label: "Day Streak", value: "14", emoji: "🔥" },
-  { label: "Habits Done", value: "87", emoji: "✅" },
-  { label: "Active Days", value: "31", emoji: "📅" },
+  { label: 'Day Streak', value: '14', emoji: '🔥' },
+  { label: 'Habits Done', value: '87', emoji: '✅' },
+  { label: 'Active Days', value: '31', emoji: '📅' },
 ];
 
 function MenuItem({ item, onPress, index }) {
@@ -105,9 +105,9 @@ function MenuItem({ item, onPress, index }) {
               styles.badge,
               {
                 backgroundColor:
-                  item.badge === "New"
-                    ? "rgba(143,175,120,0.2)"
-                    : "rgba(192,108,91,0.2)",
+                  item.badge === 'New'
+                    ? 'rgba(143,175,120,0.2)'
+                    : 'rgba(192,108,91,0.2)',
               },
             ]}
           >
@@ -116,7 +116,7 @@ function MenuItem({ item, onPress, index }) {
                 styles.badgeText,
                 {
                   color:
-                    item.badge === "New" ? colors.secondary : colors.danger,
+                    item.badge === 'New' ? colors.secondary : colors.danger,
                 },
               ]}
             >
@@ -172,7 +172,7 @@ export default function Profile({ navigation }) {
               style={styles.avatar}
               resizeMode="cover"
               source={{
-                uri: "https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg",
+                uri: 'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
               }}
             />
             <TouchableOpacity style={styles.editAvatarBtn} activeOpacity={0.8}>
@@ -215,7 +215,7 @@ export default function Profile({ navigation }) {
         <View
           style={{
             borderBottomWidth: 1,
-            borderBottomColor: "rgba(255,255,255,0.07)",
+            borderBottomColor: 'rgba(255,255,255,0.07)',
             marginVertical: 20,
           }}
         />
@@ -250,34 +250,34 @@ const styles = StyleSheet.create({
   },
   scroll: {},
   hero: {
-    alignItems: "center",
+    alignItems: 'center',
   },
   heroTopRow: {
-    width: "100%",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 20,
   },
   heroLabel: {
     color: colors.secondary,
     fontSize: 11,
-    fontFamily: fontFamily.interMedium,
+    fontFamily: fontFamily.montserratMedium,
     letterSpacing: 4,
   },
   settingsBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    justifyContent: "center",
-    alignItems: "center",
+    borderColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   settingsIcon: { fontSize: 16 },
   avatarWrapper: {
-    position: "relative",
+    position: 'relative',
     marginBottom: 14,
   },
   avatar: {
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
     borderColor: colors.secondary,
   },
   editAvatarBtn: {
-    position: "absolute",
+    position: 'absolute',
     bottom: 2,
     right: 2,
     width: 28,
@@ -296,66 +296,66 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: colors.dark,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center",
-    alignItems: "center",
+    borderColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   userName: {
     color: colors.white,
     fontSize: 22,
-    fontFamily: fontFamily.poppinsBold,
+    fontFamily: fontFamily.montserratBold,
     marginBottom: 4,
   },
   userHandle: {
-    color: "rgba(255,255,255,0.35)",
+    color: 'rgba(255,255,255,0.35)',
     fontSize: 12,
-    fontFamily: fontFamily.interRegular,
+    fontFamily: fontFamily.montserratRegular,
     marginBottom: 22,
   },
   statsRow: {
-    flexDirection: "row",
-    width: "100%",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    flexDirection: 'row',
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: 'rgba(255,255,255,0.08)',
     paddingVertical: 14,
   },
   statItem: {
     flex: 1,
-    alignItems: "center",
+    alignItems: 'center',
     borderRightWidth: 1,
-    borderRightColor: "rgba(255,255,255,0.08)",
+    borderRightColor: 'rgba(255,255,255,0.08)',
   },
   statEmoji: { fontSize: 18, marginBottom: 4 },
   statValue: {
     color: colors.white,
     fontSize: 18,
-    fontFamily: fontFamily.poppinsBold,
+    fontFamily: fontFamily.montserratBold,
     lineHeight: 22,
   },
   statLabel: {
-    color: "rgba(255,255,255,0.35)",
+    color: 'rgba(255,255,255,0.35)',
     fontSize: 10,
-    fontFamily: fontFamily.interRegular,
+    fontFamily: fontFamily.montserratRegular,
     marginTop: 2,
   },
   menuSection: {},
   menuHeader: {
-    color: "rgba(255,255,255,0.35)",
+    color: 'rgba(255,255,255,0.35)',
     fontSize: 11,
-    fontFamily: fontFamily.interMedium,
+    fontFamily: fontFamily.montserratMedium,
     letterSpacing: 2,
     marginBottom: 10,
     marginLeft: 4,
   },
   menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: 'rgba(255,255,255,0.08)',
     padding: 14,
     marginBottom: 10,
     gap: 12,
@@ -364,22 +364,22 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 13,
-    backgroundColor: "rgba(255,255,255,0.07)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   menuEmoji: { fontSize: 20 },
   menuText: { flex: 1 },
   menuTitle: {
     color: colors.white,
     fontSize: 15,
-    fontFamily: fontFamily.poppinsSemiBold,
+    fontFamily: fontFamily.montserratSemiBold,
     marginBottom: 2,
   },
   menuSubtitle: {
-    color: "rgba(255,255,255,0.38)",
+    color: 'rgba(255,255,255,0.38)',
     fontSize: 12,
-    fontFamily: fontFamily.interRegular,
+    fontFamily: fontFamily.montserratRegular,
   },
   badge: {
     borderRadius: 49,
@@ -388,29 +388,29 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 10,
-    fontFamily: fontFamily.interSemiBold,
+    fontFamily: fontFamily.montserratSemiBold,
   },
   chevron: {
-    color: "rgba(255,255,255,0.25)",
+    color: 'rgba(255,255,255,0.25)',
     fontSize: 22,
     fontFamily: fontFamily.poppinsRegular,
   },
   logoutBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 8,
     paddingVertical: 14,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(192,108,91,0.25)",
-    backgroundColor: "rgba(192,108,91,0.08)",
+    borderColor: 'rgba(192,108,91,0.25)',
+    backgroundColor: 'rgba(192,108,91,0.08)',
     gap: 8,
   },
   logoutIcon: { fontSize: 16 },
   logoutText: {
     color: colors.danger,
     fontSize: 15,
-    fontFamily: fontFamily.poppinsSemiBold,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });

@@ -1,92 +1,115 @@
-import React, { useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View,
   Text,
+  Animated,
   TouchableOpacity,
   StyleSheet,
-  StatusBar,
-  Dimensions,
 } from 'react-native';
-import { color, colors, fontFamily } from './../../constant/index';
-import { SearchBar, StreakCalendar, SvgImg, Wrapper } from '../../components';
-import { chatIcon } from '../../assets/images';
+import { colors, fontFamily } from '../../constant';
+import Svg, { Path } from 'react-native-svg';
 
-const { height } = Dimensions.get('window');
-export default function ProfileHeader({
-  containerStyle = {},
-  onProfileClick = () => {},
-  profile = {
-    name: '',
-    date: '',
-  },
-}) {
-  const [showCalender, setShowCalender] = useState(false);
-  const [showInsight, setShowInsight] = useState(false);
+export default function ProfileHeader({ onPress }) {
+  const headerAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.stagger(120, [
+      Animated.timing(headerAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  function ChatBubbleIcon() {
+    return (
+      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"
+          stroke="#8FAF78"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    );
+  }
   return (
-    <View style={{ ...styles.container, ...containerStyle }}>
-      <View style={{ flexDirection: 'column', flex: 1 }}>
-        <View style={{ flexDirection: 'row' }}>
-          <TouchableOpacity onPress={onProfileClick} style={styles.leftPhoto} />
-          <View style={{ marginLeft: 12, justifyContent: 'center', flex: 1 }}>
-            <Text
-              style={{
-                fontSize: 14,
-                color: colors.white,
-                fontFamily: fontFamily.montserratMedium,
-              }}
-            >
-              {profile?.name}
-            </Text>
-            <TouchableOpacity onPress={() => setShowCalender(!showCalender)}>
-              <Text
-                style={{
-                  fontSize: 18,
-                  fontFamily: fontFamily.montserratBold,
-                  color: colors.white,
-                }}
-              >
-                {profile?.date}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.chatBtn}>
-            <SvgImg iconName={chatIcon} height={35} width={35} />
-          </View>
-        </View>
-        <View>
-          {showCalender ? (
-            <StreakCalendar
-              container={{ top: height * 0.012, width: '100%' }}
-              showInsight={showInsight}
-              setShowInsight={setShowInsight}
-            />
-          ) : (
-            <View />
-          )}
-        </View>
+    <Animated.View
+      style={[
+        styles.header,
+        {
+          opacity: headerAnim,
+          transform: [
+            {
+              translateY: headerAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [-16, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      <View style={styles.headerAvatar}>
+        <Text style={styles.headerAvatarText}>LN</Text>
       </View>
-    </View>
+      <View style={styles.headerText}>
+        <Text style={styles.headerGreeting}>Hello Linh! 👋</Text>
+        <Text style={styles.headerDate}>Thursday, 08 July</Text>
+      </View>
+      <TouchableOpacity
+        style={styles.chatBtn}
+        activeOpacity={0.8}
+        onPress={onPress}
+      >
+        <ChatBubbleIcon />
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
+
 const styles = StyleSheet.create({
-  chatBtn: {
-    width: 68,
-    height: 68,
-    borderRadius: 50,
-    borderWidth: 1,
-    borderColor: colors.white,
+  /* ── Header ── */
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  headerAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.secondary,
   },
-  container: {
-    marginTop: StatusBar.currentHeight,
-    flexDirection: 'row',
-    paddingBottom: 10,
+  headerAvatarText: {
+    color: colors.white,
+    fontSize: 14,
+    fontFamily: fontFamily.montserratSemiBold,
   },
-  leftPhoto: {
-    backgroundColor: 'blue',
-    width: 68,
-    height: 68,
-    borderRadius: 50,
+  headerText: { flex: 1, marginLeft: 12 },
+  headerGreeting: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 12,
+    fontFamily: fontFamily.montserratRegular,
+  },
+  headerDate: {
+    color: colors.white,
+    fontSize: 17,
+    fontFamily: fontFamily.montserratBold,
+  },
+  chatBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

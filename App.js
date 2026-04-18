@@ -56,7 +56,11 @@ export default function App() {
         ) : (
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Auth" component={AuthStack} />
-            <Stack.Screen name="Main" component={BottomNavigation} />
+            <Stack.Screen
+              name="Main"
+              component={BottomNavigation}
+              initialParams={{ isLoggedIn: isLoggedIn }}
+            />
           </Stack.Navigator>
         )}
       </NavigationContainer>

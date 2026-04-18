@@ -105,7 +105,7 @@ export default function SleepChart30Days() {
               fontSize="12"
               fill={colors.textSecondary}
               textAnchor="middle"
-              fontFamily={fontFamily.interRegular}
+              fontFamily={fontFamily.montserratRegular}
             >
               {formatDate(item.date)}
             </SvgText>
@@ -117,7 +117,7 @@ export default function SleepChart30Days() {
                 y={chartHeight - padding - barHeight - 8}
                 fontSize="10"
                 fill={colors.textPrimary}
-                fontFamily={fontFamily.poppinsBold}
+                fontFamily={fontFamily.montserratBold}
                 textAnchor="middle"
               >
                 {item.sleep}h
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
   value: {
     fontSize: 14,
     color: colors.textPrimary,
-    fontFamily: fontFamily.poppinsSemiBold,
+    fontFamily: fontFamily.montserratSemiBold,
   },
   divider: {
     height: 1,

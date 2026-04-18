@@ -16,7 +16,7 @@ const globalStyle = StyleSheet.create({
     flex: 1,
     color: colors.white,
     fontSize: 14,
-    fontFamily: fontFamily.interRegular,
+    fontFamily: fontFamily.montserratRegular,
   },
   disableIBTextInput: {
     color: colors.grey,

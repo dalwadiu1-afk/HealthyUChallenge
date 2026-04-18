@@ -4,330 +4,573 @@ import {
   Text,
   TouchableOpacity,
   Image,
+  ScrollView,
   TextInput,
   StyleSheet,
-  FlatList,
+  StatusBar,
 } from 'react-native';
+import Svg, {
+  Path,
+  Defs,
+  LinearGradient,
+  Stop,
+  Rect,
+  Circle,
+} from 'react-native-svg';
 import { launchCamera } from 'react-native-image-picker';
-import { Header, Wrapper } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
+import { Header, Wrapper } from '../../../components';
 
 const DAYS_PER_WEEK = 1;
 
-const VeggieChallenge = () => {
+function GradientBg({ id, c1, c2, r = 20 }) {
+  return (
+    <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none">
+      <Defs>
+        <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor={c1} stopOpacity="1" />
+          <Stop offset="1" stopColor={c2} stopOpacity="1" />
+        </LinearGradient>
+      </Defs>
+      <Rect width="100%" height="100%" fill={`url(#${id})`} rx={r} />
+    </Svg>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
+        stroke="rgba(143,175,120,0.7)"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Circle
+        cx={12}
+        cy={13}
+        r={4}
+        stroke="rgba(143,175,120,0.7)"
+        strokeWidth={1.8}
+      />
+    </Svg>
+  );
+}
+
+const VeggieChallenge = ({ navigation }) => {
   const [weeks, setWeeks] = useState([
     {
       startDate: new Date().toISOString(),
       entries: Array(DAYS_PER_WEEK).fill(null),
     },
   ]);
-
   const [currentWeek, setCurrentWeek] = useState(0);
   const [currentDay, setCurrentDay] = useState(0);
 
-  // ⏱ WEEK UNLOCK LOGIC
   const isWeekUnlocked = weekIndex => {
-    // ✅ Week 1 always unlocked
     if (weekIndex === 0) return true;
-
     const week = weeks[weekIndex];
-
     if (!week?.startDate) return false;
-
-    const start = new Date(week.startDate);
-    const now = new Date();
-
-    const diffDays = (now - start) / (1000 * 60 * 60 * 24);
-
-    return diffDays >= 7;
+    return (new Date() - new Date(week.startDate)) / 86400000 >= 7;
   };
 
-  // 📸 CAMERA HANDLER
   const pickImage = async (weekIndex, dayIndex) => {
-    if (weekIndex !== currentWeek) return;
-    if (!isWeekUnlocked(weekIndex)) return;
-
+    if (weekIndex !== currentWeek || !isWeekUnlocked(weekIndex)) return;
     const granted = await requestCameraPermission();
     if (!granted) return;
 
     launchCamera({ mediaType: 'photo', quality: 0.7 }, response => {
       if (response.didCancel || response.errorCode) return;
-
       const uri = response?.assets?.[0]?.uri;
       if (!uri) return;
 
       setWeeks(prev => {
         const updated = [...prev];
-
         if (!updated[weekIndex]) return prev;
-
-        updated[weekIndex].entries[dayIndex] = {
-          uri,
-          label: '',
-          timestamp: new Date().toLocaleString(),
+        updated[weekIndex] = {
+          ...updated[weekIndex],
+          entries: updated[weekIndex].entries.map((e, i) =>
+            i === dayIndex
+              ? { uri, label: '', timestamp: new Date().toLocaleString() }
+              : e,
+          ),
         };
-
         return updated;
       });
 
-      // 👉 MOVE PROGRESS
       if (dayIndex < DAYS_PER_WEEK - 1) {
         setCurrentDay(prev => prev + 1);
       } else {
-        setCurrentWeek(prev => {
-          const nextWeek = prev + 1;
-
-          setWeeks(old => {
-            const copy = [...old];
-
-            // create next week only if missing
-            if (!copy[nextWeek]) {
-              copy.push({
-                startDate: new Date().toISOString(),
-                entries: Array(DAYS_PER_WEEK).fill(null),
-              });
-            }
-
-            return copy;
-          });
-
-          setCurrentDay(0);
-          return nextWeek;
+        const nextWeek = currentWeek + 1;
+        setWeeks(old => {
+          const copy = [...old];
+          if (!copy[nextWeek]) {
+            copy.push({
+              startDate: new Date().toISOString(),
+              entries: Array(DAYS_PER_WEEK).fill(null),
+            });
+          }
+          return copy;
         });
+        setCurrentDay(0);
+        setCurrentWeek(nextWeek);
       }
     });
   };
 
-  // ✏️ LABEL UPDATE
   const updateLabel = (weekIndex, dayIndex, text) => {
     if (weekIndex !== currentWeek) return;
-
     setWeeks(prev => {
       const updated = [...prev];
-
       if (!updated[weekIndex]?.entries?.[dayIndex]) return prev;
-
-      updated[weekIndex].entries[dayIndex].label = text;
+      updated[weekIndex] = {
+        ...updated[weekIndex],
+        entries: updated[weekIndex].entries.map((e, i) =>
+          i === dayIndex ? { ...e, label: text } : e,
+        ),
+      };
       return updated;
     });
   };
 
-  // 🗑 DELETE ENTRY
   const deleteEntry = (weekIndex, dayIndex) => {
     if (weekIndex !== currentWeek) return;
-
     setWeeks(prev => {
       const updated = [...prev];
-
       if (!updated[weekIndex]) return prev;
-
-      updated[weekIndex].entries[dayIndex] = null;
+      updated[weekIndex] = {
+        ...updated[weekIndex],
+        entries: updated[weekIndex].entries.map((e, i) =>
+          i === dayIndex ? null : e,
+        ),
+      };
       return updated;
     });
   };
 
-  // 🔒 CHECK EDIT ACCESS
-  const isEditable = (weekIndex, dayIndex) => {
-    return (
-      weekIndex === currentWeek &&
-      isWeekUnlocked(weekIndex) &&
-      dayIndex === currentDay
-    );
-  };
+  const isEditable = (weekIndex, dayIndex) =>
+    weekIndex === currentWeek &&
+    isWeekUnlocked(weekIndex) &&
+    dayIndex === currentDay;
+
+  const completedWeeks = weeks.filter(w =>
+    w.entries.every(e => e !== null),
+  ).length;
+  const progress = weeks.length > 0 ? completedWeeks / weeks.length : 0;
 
   return (
-    <Wrapper>
-      <Header header="Veggie Challenge" />
+    <View style={styles.root}>
+      <Header
+        header={'Veggie Challenge'}
+        headerContainer={{
+          marginTop: StatusBar.currentHeight,
+          paddingHorizontal: 24,
+        }}
+      />
+      <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
+        {/* Hero */}
 
-      <View style={styles.container}>
-        <Text style={styles.title}>🥦 Weekly Veggie Challenge</Text>
+        <Text style={styles.heroTitle}>🥦 Weekly Veggie Challenge</Text>
+        <Text style={styles.heroSub}>
+          Upload 1 veggie meal per week — new week unlocks every 7 days
+        </Text>
 
-        <Text style={styles.subtitle}>Week {currentWeek + 1}</Text>
+        <View style={styles.progressRow}>
+          <View style={styles.progressBg}>
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${Math.round(progress * 100)}%` },
+              ]}
+            />
+          </View>
+          <Text style={styles.progressLabel}>
+            {completedWeeks}/{weeks.length} weeks
+          </Text>
+        </View>
 
-        <FlatList
-          data={weeks}
-          keyExtractor={(item, index) => index.toString()}
-          renderItem={({ item, index: weekIndex }) => {
-            const unlocked = isWeekUnlocked(weekIndex);
+        {weeks.map((week, wi) => {
+          const unlocked = isWeekUnlocked(wi);
+          const isCurrent = wi === currentWeek;
+          const weekDone = week.entries.every(e => e !== null);
 
-            return (
-              <View style={styles.card}>
-                <Text style={styles.weekTitle}>
-                  Week {weekIndex + 1} {unlocked ? '🔥 Unlocked' : '🔒 Locked'}
+          return (
+            <View
+              key={wi}
+              style={[
+                styles.weekCard,
+                weekDone && styles.weekCardDone,
+                !unlocked && styles.weekCardLocked,
+              ]}
+            >
+              {weekDone && unlocked && (
+                <GradientBg
+                  id={`vwg${wi}`}
+                  c1="rgba(77,102,68,0.18)"
+                  c2="rgba(45,74,37,0.08)"
+                />
+              )}
+
+              {/* Week header row */}
+              <View style={styles.weekHeader}>
+                <View
+                  style={[
+                    styles.weekNumBadge,
+                    weekDone && styles.weekNumBadgeDone,
+                    !unlocked && styles.weekNumBadgeLocked,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.weekNumText,
+                      weekDone && { color: colors.white },
+                    ]}
+                  >
+                    {weekDone ? '✓' : wi + 1}
+                  </Text>
+                </View>
+                <Text
+                  style={[styles.weekTitleText, !unlocked && styles.lockedText]}
+                >
+                  Week {wi + 1}
                 </Text>
+                {weekDone && (
+                  <View style={styles.completedPill}>
+                    <Text style={styles.completedPillText}>Completed</Text>
+                  </View>
+                )}
+                {isCurrent && !weekDone && (
+                  <View style={styles.currentPill}>
+                    <Text style={styles.currentPillText}>Active</Text>
+                  </View>
+                )}
+                {!unlocked && (
+                  <View style={styles.lockedPill}>
+                    <Text style={styles.lockedPillText}>🔒 Locked</Text>
+                  </View>
+                )}
+              </View>
 
-                {item.entries.map((entry, dayIndex) => {
-                  const editable = isEditable(weekIndex, dayIndex);
-
-                  return (
-                    <View key={dayIndex} style={styles.dayBox}>
-                      <Text style={styles.dayText}>Day {dayIndex + 1}</Text>
-
-                      {/* LOCKED WEEK VIEW */}
-                      {!unlocked ? (
-                        entry ? (
-                          <>
+              {/* Locked */}
+              {!unlocked ? (
+                <View style={styles.lockedBox}>
+                  <Text style={styles.lockEmoji}>🔒</Text>
+                  <Text style={styles.lockedSub}>Unlocks after 7 days</Text>
+                </View>
+              ) : (
+                <>
+                  {week.entries.map((entry, di) => {
+                    const editable = isEditable(wi, di);
+                    return (
+                      <View key={di}>
+                        {entry ? (
+                          <View style={styles.entryCard}>
                             <Image
                               source={{ uri: entry.uri }}
-                              style={styles.photo}
+                              style={styles.entryImg}
                             />
-                            <Text>🔒 Unlocks after 7 days</Text>
-                          </>
-                        ) : (
-                          <Text>🔒 Locked</Text>
-                        )
-                      ) : entry ? (
-                        <>
-                          <Image
-                            source={{ uri: entry.uri }}
-                            style={styles.photo}
-                          />
-
-                          <TextInput
-                            value={entry.label}
-                            placeholder="Vegetable Name"
-                            onChangeText={text =>
-                              updateLabel(weekIndex, dayIndex, text)
-                            }
-                            style={styles.input}
-                          />
-
-                          <Text style={styles.time}>⏰ {entry.timestamp}</Text>
-
-                          <View style={styles.row}>
-                            <TouchableOpacity
-                              disabled={!editable}
-                              onPress={() => pickImage(weekIndex, dayIndex)}
-                            >
-                              <Text style={styles.retake}>Retake</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              disabled={!editable}
-                              onPress={() => deleteEntry(weekIndex, dayIndex)}
-                            >
-                              <Text style={styles.delete}>Delete</Text>
-                            </TouchableOpacity>
+                            <Text style={styles.entryTime}>
+                              {entry.timestamp}
+                            </Text>
+                            <TextInput
+                              value={entry.label}
+                              onChangeText={t => updateLabel(wi, di, t)}
+                              editable={editable}
+                              placeholder="Vegetable name…"
+                              placeholderTextColor="rgba(255,255,255,0.3)"
+                              style={styles.entryInput}
+                            />
+                            {editable && (
+                              <View style={styles.entryActions}>
+                                <TouchableOpacity
+                                  style={styles.retakeBtn}
+                                  onPress={() => pickImage(wi, di)}
+                                >
+                                  <Text style={styles.retakeText}>Retake</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={styles.deleteBtn}
+                                  onPress={() => deleteEntry(wi, di)}
+                                >
+                                  <Text style={styles.deleteText}>Delete</Text>
+                                </TouchableOpacity>
+                              </View>
+                            )}
                           </View>
-                        </>
-                      ) : (
-                        <TouchableOpacity
-                          disabled={!unlocked}
-                          onPress={() => pickImage(weekIndex, dayIndex)}
-                          style={[
-                            styles.uploadBtn,
-                            !unlocked && {
-                              backgroundColor: '#ccc',
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={{
-                              fontFamily: fontFamily.montserratSemiBold,
-                            }}
+                        ) : isCurrent && di === currentDay ? (
+                          <TouchableOpacity
+                            style={styles.uploadBtn}
+                            onPress={() => pickImage(wi, di)}
+                            activeOpacity={0.8}
                           >
-                            {unlocked ? 'Upload' : 'Locked (7 days)'}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-            );
-          }}
-        />
-      </View>
-    </Wrapper>
+                            <CameraIcon />
+                            <Text style={styles.uploadText}>
+                              Upload Veggie Meal Photo
+                            </Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </>
+              )}
+            </View>
+          );
+        })}
+      </Wrapper>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 12 },
+  root: { flex: 1, backgroundColor: colors.dark },
 
-  title: {
-    fontSize: 20,
-    textAlign: 'center',
-    color: colors.white,
-    fontFamily: fontFamily.montserratSemiBold,
+  heroBg: { paddingBottom: 20, overflow: 'hidden' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: (StatusBar.currentHeight || 44) + 8,
+    paddingHorizontal: 18,
+    paddingBottom: 16,
   },
-
-  subtitle: {
-    textAlign: 'center',
-    color: colors.white,
-    marginVertical: 10,
-    fontFamily: fontFamily.montserratMedium,
-  },
-
-  card: {
-    backgroundColor: 'rgba(143, 175, 120,0.16)',
-    marginBottom: 16,
-    padding: 12,
-    borderRadius: 12,
-  },
-
-  weekTitle: {
-    fontSize: 16,
-    marginBottom: 10,
-    fontFamily: fontFamily.montserratSemiBold,
-    color: colors.white,
-  },
-
-  dayBox: {
-    marginBottom: 14,
-    padding: 10,
-    backgroundColor: 'rgba(143, 175, 120,0.16)',
-    borderRadius: 10,
-  },
-
-  dayText: {
-    fontWeight: '600',
-    marginBottom: 6,
-    fontFamily: fontFamily.montserratMedium,
-    color: colors.white,
-  },
-
-  uploadBtn: {
-    height: 100,
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#d3f4d1',
-    borderRadius: 10,
   },
-
-  photo: {
-    width: '100%',
-    height: 120,
-    borderRadius: 10,
-  },
-
-  input: {
-    borderBottomWidth: 1,
-    marginTop: 8,
-    padding: 6,
-    fontFamily: fontFamily.montserratMedium,
-  },
-
-  time: {
-    fontSize: 12,
-    marginTop: 6,
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
     color: colors.white,
-    fontFamily: fontFamily.montserratMedium,
+    fontSize: 18,
+    fontFamily: fontFamily.montserratBold,
   },
-
-  row: {
+  heroTitle: {
+    color: colors.white,
+    fontSize: 22,
+    fontFamily: fontFamily.montserratBold,
+    paddingHorizontal: 18,
+    marginBottom: 6,
+    includeFontPadding: false,
+  },
+  heroSub: {
+    color: colors.grey,
+    fontSize: 13,
+    fontFamily: fontFamily.montserratRegular,
+    paddingHorizontal: 18,
+    marginBottom: 16,
+  },
+  progressRow: {
+    paddingHorizontal: 18,
+    marginBottom: 20,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
+    alignItems: 'center',
+    gap: 12,
+  },
+  progressBg: {
+    flex: 1,
+    height: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.secondary,
+    borderRadius: 6,
+  },
+  progressLabel: {
+    color: colors.grey,
+    fontSize: 11,
+    fontFamily: fontFamily.montserratRegular,
   },
 
-  retake: { color: '#007bff', fontFamily: fontFamily.montserratMedium },
-  delete: { color: 'red', fontFamily: fontFamily.montserratMedium },
+  scroll: { padding: 18, paddingTop: 16, paddingBottom: 48 },
 
-  aiBtn: {
-    marginTop: 8,
+  /* Week cards */
+  weekCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    padding: 16,
+    marginBottom: 14,
+    overflow: 'hidden',
+  },
+  weekCardDone: { borderColor: 'rgba(143,175,120,0.3)' },
+  weekCardLocked: {
+    borderColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+
+  weekHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 14,
+    gap: 10,
+  },
+  weekNumBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  weekNumBadgeDone: {
+    backgroundColor: colors.primary,
+    borderColor: colors.secondary,
+  },
+  weekNumBadgeLocked: { backgroundColor: 'rgba(255,255,255,0.04)' },
+  weekNumText: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 13,
+    fontFamily: fontFamily.montserratBold,
+  },
+  weekTitleText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+    flex: 1,
+  },
+  lockedText: { color: 'rgba(255,255,255,0.25)' },
+
+  completedPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 49,
+    backgroundColor: 'rgba(143,175,120,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.35)',
+  },
+  completedPillText: {
+    color: colors.secondary,
+    fontSize: 11,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+  currentPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 49,
+    backgroundColor: 'rgba(255,193,90,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,193,90,0.35)',
+  },
+  currentPillText: {
+    color: '#FFC15A',
+    fontSize: 11,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+  lockedPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 49,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  lockedPillText: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 11,
+    fontFamily: fontFamily.montserratRegular,
+  },
+
+  lockedBox: {
+    height: 90,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  lockEmoji: { fontSize: 22, includeFontPadding: false },
+  lockedSub: {
+    color: 'rgba(255,255,255,0.2)',
+    fontSize: 12,
+    fontFamily: fontFamily.montserratRegular,
+  },
+
+  /* Entry card */
+  entryCard: {
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.2)',
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  entryImg: { width: '100%', height: 160, borderRadius: 0 },
+  entryTime: {
+    color: 'rgba(255,255,255,0.25)',
+    fontSize: 10,
+    fontFamily: fontFamily.montserratRegular,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  entryInput: {
+    color: colors.white,
+    fontSize: 13,
+    fontFamily: fontFamily.montserratRegular,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginHorizontal: 12,
+    marginTop: 4,
+  },
+  entryActions: { flexDirection: 'row', gap: 8, padding: 12 },
+  retakeBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 49,
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.3)',
+    backgroundColor: 'rgba(143,175,120,0.1)',
+    alignItems: 'center',
+  },
+  retakeText: {
+    color: colors.secondary,
+    fontSize: 12,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+  deleteBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 49,
+    borderWidth: 1,
+    borderColor: 'rgba(255,107,107,0.3)',
+    backgroundColor: 'rgba(255,107,107,0.08)',
+    alignItems: 'center',
+  },
+  deleteText: {
+    color: '#FF6B6B',
+    fontSize: 12,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  /* Upload */
+  uploadBtn: {
+    height: 100,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(143,175,120,0.25)',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(143,175,120,0.04)',
+  },
+  uploadText: {
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 13,
+    fontFamily: fontFamily.montserratMedium,
   },
 });
 

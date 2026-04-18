@@ -4,18 +4,23 @@ import {
   Text,
   TouchableOpacity,
   Image,
-  FlatList,
+  ScrollView,
   StyleSheet,
+  StatusBar,
+  Dimensions,
 } from 'react-native';
 import { launchCamera } from 'react-native-image-picker';
-import { Header, Wrapper } from '../../../components';
+import Svg, { Path } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
+import { Header, Wrapper } from '../../../components';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TOTAL_DAYS = 28;
+const CARD_SIZE = (SCREEN_WIDTH - 18 * 2 - 10) / 2;
 
-const HalfPlateFruitsVeggies = () => {
-  const [photos, setPhotos] = useState([]);
+const HalfPlateFruitsVeggies = ({ navigation }) => {
+  const [photos, setPhotos] = useState(Array(TOTAL_DAYS).fill(null));
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const pickImage = async index => {
@@ -23,19 +28,14 @@ const HalfPlateFruitsVeggies = () => {
     if (!granted) return;
 
     launchCamera({ mediaType: 'photo', quality: 0.7 }, response => {
-      if (response.didCancel) return;
-      if (response.errorCode) return;
-
+      if (response.didCancel || response.errorCode) return;
       if (response?.assets?.length > 0) {
         const newPhotos = [...photos];
-
         newPhotos[index] = {
           uri: response.assets[0].uri,
           timestamp: new Date().toLocaleString(),
         };
-
         setPhotos(newPhotos);
-
         if (index === currentIndex && currentIndex < TOTAL_DAYS - 1) {
           setCurrentIndex(prev => prev + 1);
         }
@@ -47,180 +47,371 @@ const HalfPlateFruitsVeggies = () => {
     const newPhotos = [...photos];
     newPhotos[index] = null;
     setPhotos(newPhotos);
-
-    // Move progress back if deleting latest
-    if (index === currentIndex - 1) {
+    if (index === currentIndex - 1)
       setCurrentIndex(prev => Math.max(prev - 1, 0));
-    }
   };
 
-  const renderItem = ({ index }) => {
+  const completed = photos.filter(Boolean).length;
+  const progress = completed / TOTAL_DAYS;
+
+  // Pair days into rows of 2
+  const rows = Array.from({ length: Math.ceil(TOTAL_DAYS / 2) }, (_, i) => [
+    i * 2,
+    i * 2 + 1 < TOTAL_DAYS ? i * 2 + 1 : null,
+  ]);
+
+  const DayCard = ({ index }) => {
+    if (index === null) return <View style={{ width: CARD_SIZE }} />;
+
     const item = photos[index];
     const isLocked = index > currentIndex;
+    const isDone = !!item;
 
     return (
-      <View style={styles.card}>
-        <Text style={styles.mealLabel}>Day {index + 1}</Text>
+      <View
+        style={[
+          styles.card,
+          isDone && styles.cardDone,
+          isLocked && styles.cardLocked,
+        ]}
+      >
+        {/* Day label */}
+        <View style={styles.cardHeader}>
+          <Text style={[styles.dayLabel, isLocked && styles.dayLabelLocked]}>
+            Day {index + 1}
+          </Text>
+          {isDone && (
+            <View style={styles.doneBadge}>
+              <Text style={styles.doneBadgeText}>✓</Text>
+            </View>
+          )}
+        </View>
 
-        {item ? (
-          <>
+        {/* Content */}
+        {isDone ? (
+          <View style={styles.photoWrap}>
             <Image source={{ uri: item.uri }} style={styles.photo} />
-            <Text style={styles.timeText}>{item.timestamp}</Text>
-
-            <View style={styles.actionRow}>
-              <TouchableOpacity onPress={() => pickImage(index)}>
-                <Text style={styles.retake}>Retake</Text>
+            <Text style={styles.timestamp}>{item.timestamp}</Text>
+            <View style={styles.photoActions}>
+              <TouchableOpacity
+                style={styles.retakeBtn}
+                onPress={() => pickImage(index)}
+              >
+                <Text style={styles.retakeText}>Retake</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity onPress={() => deletePhoto(index)}>
-                <Text style={styles.delete}>Delete</Text>
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={() => deletePhoto(index)}
+              >
+                <Text style={styles.deleteText}>Delete</Text>
               </TouchableOpacity>
             </View>
-          </>
+          </View>
+        ) : isLocked ? (
+          <View style={styles.lockedBox}>
+            <Text style={styles.lockEmoji}>🔒</Text>
+            <Text style={styles.lockedText}>Locked</Text>
+          </View>
         ) : (
           <TouchableOpacity
-            style={[
-              styles.uploadBtn,
-              isLocked && { backgroundColor: 'rgba(143, 175, 120,0.16)' },
-            ]}
-            disabled={isLocked}
+            style={styles.uploadBtn}
             onPress={() => pickImage(index)}
+            activeOpacity={0.8}
           >
-            <Text style={styles.uploadText}>
-              {isLocked ? '🔒 Locked' : 'Upload Photo'}
-            </Text>
+            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+              <Path
+                d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
+                stroke="rgba(143,175,120,0.7)"
+                strokeWidth={1.8}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <Path
+                d="M12 17a4 4 0 100-8 4 4 0 000 8z"
+                stroke="rgba(143,175,120,0.7)"
+                strokeWidth={1.8}
+              />
+            </Svg>
+            <Text style={styles.uploadText}>Upload Photo</Text>
           </TouchableOpacity>
         )}
       </View>
     );
   };
 
-  const completed = photos.filter(p => p).length;
-  const progress = (completed / TOTAL_DAYS) * 100;
-
   return (
-    <Wrapper>
-      <Header header="" />
-
-      <View style={styles.container}>
-        <Text style={styles.title}>🥗 Half Plate Fruits & Veggies</Text>
-
-        {/* ✅ Progress Bar */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressBarBg}>
-            <View style={[styles.progressFill, { width: `${progress}%` }]} />
+    <View style={styles.root}>
+      <Header
+        header={'🥗 Half Fruit & Veggies'}
+        headerContainer={{
+          marginTop: StatusBar.currentHeight,
+          paddingHorizontal: 24,
+        }}
+      />
+      <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
+        <View style={styles.progressCard}>
+          <View style={styles.progressLabelRow}>
+            <Text style={styles.progressLabel}>Daily Progress</Text>
+            <Text style={styles.progressCount}>
+              {completed} / {TOTAL_DAYS} days
+            </Text>
           </View>
-          <Text style={styles.progressText}>
-            {completed}/{TOTAL_DAYS} completed
-          </Text>
+          <View style={styles.progressBg}>
+            <View
+              style={[styles.progressFill, { width: `${progress * 100}%` }]}
+            />
+          </View>
+          {/* Week indicators */}
+          <View style={styles.weekRow}>
+            {['W1', 'W2', 'W3', 'W4'].map((w, i) => {
+              const weekDone =
+                photos.slice(i * 7, (i + 1) * 7).filter(Boolean).length === 7;
+              return (
+                <View
+                  key={i}
+                  style={[styles.weekChip, weekDone && styles.weekChipDone]}
+                >
+                  <Text
+                    style={[
+                      styles.weekChipText,
+                      weekDone && styles.weekChipTextDone,
+                    ]}
+                  >
+                    {w}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
 
-        <FlatList
-          data={Array.from({ length: TOTAL_DAYS })}
-          renderItem={renderItem}
-          keyExtractor={(item, index) => index.toString()}
-          numColumns={2}
-          columnWrapperStyle={{ justifyContent: 'space-between' }}
-        />
-      </View>
-    </Wrapper>
+        {/* Day grid */}
+        {rows.map((pair, rowIndex) => (
+          <View key={rowIndex} style={styles.row}>
+            <DayCard index={pair[0]} />
+            <DayCard index={pair[1]} />
+          </View>
+        ))}
+      </Wrapper>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  root: { flex: 1, backgroundColor: colors.dark },
 
-  title: {
-    fontSize: 22,
-    marginVertical: 8,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: (StatusBar.currentHeight || 44) + 8,
+    paddingHorizontal: 18,
+    paddingBottom: 10,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    flex: 1,
     textAlign: 'center',
-    fontFamily: fontFamily.montserratSemiBold,
     color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratBold,
+    lineHeight: 22,
   },
 
-  progressContainer: {
-    marginHorizontal: 16,
+  scroll: { paddingHorizontal: 18, paddingBottom: 48 },
+
+  heroTitle: {
+    color: colors.white,
+    fontSize: 20,
+    fontFamily: fontFamily.montserratBold,
     marginBottom: 16,
+    includeFontPadding: false,
   },
 
-  progressBarBg: {
-    height: 10,
-    backgroundColor: '#ddd',
-    borderRadius: 10,
+  /* Progress */
+  progressCard: {
+    backgroundColor: colors.bubbleDark,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.2)',
+    padding: 16,
+    marginBottom: 20,
   },
-
-  progressFill: {
-    height: 10,
-    backgroundColor: '#4caf50',
-    borderRadius: 10,
+  progressLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
-
-  progressText: {
-    textAlign: 'center',
-    marginTop: 6,
-    color: colors.white,
+  progressLabel: {
+    color: 'rgba(255,255,255,0.45)',
     fontSize: 12,
     fontFamily: fontFamily.montserratMedium,
   },
-
-  card: {
-    flex: 1,
-    marginBottom: 16,
-    backgroundColor: 'rgba(143, 175, 120,0.16)',
-    borderRadius: 12,
-    alignItems: 'center',
-    padding: 12,
-    marginHorizontal: 4,
-  },
-
-  mealLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
+  progressCount: {
     color: colors.white,
+    fontSize: 12,
     fontFamily: fontFamily.montserratSemiBold,
   },
+  progressBg: {
+    height: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.secondary,
+    borderRadius: 6,
+  },
+  weekRow: { flexDirection: 'row', gap: 6 },
+  weekChip: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 49,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    alignItems: 'center',
+  },
+  weekChipDone: {
+    borderColor: 'rgba(143,175,120,0.4)',
+    backgroundColor: 'rgba(143,175,120,0.12)',
+  },
+  weekChipText: {
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 11,
+    fontFamily: fontFamily.montserratMedium,
+  },
+  weekChipTextDone: { color: colors.secondary },
 
-  uploadBtn: {
-    width: '100%',
-    height: 120,
-    backgroundColor: 'rgba(143, 175, 120,0.5)',
+  /* Grid */
+  row: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+
+  /* Cards */
+  card: {
+    width: CARD_SIZE,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    padding: 12,
+    overflow: 'hidden',
+  },
+  cardDone: {
+    borderColor: 'rgba(143,175,120,0.3)',
+    backgroundColor: 'rgba(143,175,120,0.06)',
+  },
+  cardLocked: {
+    borderColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  dayLabel: {
+    color: colors.white,
+    fontSize: 13,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+  dayLabelLocked: { color: 'rgba(255,255,255,0.25)' },
+  doneBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 10,
+  },
+  doneBadgeText: {
+    color: colors.white,
+    fontSize: 10,
+    fontFamily: fontFamily.montserratBold,
   },
 
+  /* Upload */
+  uploadBtn: {
+    height: 110,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(143,175,120,0.2)',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(143,175,120,0.04)',
+  },
   uploadText: {
-    color: colors.white,
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 11,
+    fontFamily: fontFamily.montserratMedium,
+  },
+
+  /* Locked */
+  lockedBox: {
+    height: 110,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
+  lockEmoji: { fontSize: 20, includeFontPadding: false },
+  lockedText: {
+    color: 'rgba(255,255,255,0.2)',
+    fontSize: 11,
+    fontFamily: fontFamily.montserratRegular,
+  },
+
+  /* Photo */
+  photoWrap: {},
+  photo: { width: '100%', height: 100, borderRadius: 10, marginBottom: 6 },
+  timestamp: {
+    color: 'rgba(255,255,255,0.25)',
+    fontSize: 9,
+    fontFamily: fontFamily.montserratRegular,
+    marginBottom: 8,
+  },
+  photoActions: { flexDirection: 'row', gap: 6 },
+  retakeBtn: {
+    flex: 1,
+    paddingVertical: 5,
+    borderRadius: 49,
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.3)',
+    backgroundColor: 'rgba(143,175,120,0.1)',
+    alignItems: 'center',
+  },
+  retakeText: {
+    color: colors.secondary,
+    fontSize: 10,
     fontFamily: fontFamily.montserratSemiBold,
   },
-
-  photo: {
-    width: '100%',
-    height: 120,
-    borderRadius: 10,
+  deleteBtn: {
+    flex: 1,
+    paddingVertical: 5,
+    borderRadius: 49,
+    borderWidth: 1,
+    borderColor: 'rgba(255,107,107,0.3)',
+    backgroundColor: 'rgba(255,107,107,0.08)',
+    alignItems: 'center',
   },
-
-  timeText: {
-    marginTop: 6,
-    fontSize: 12,
-    color: '#555',
-  },
-
-  actionRow: {
-    flexDirection: 'row',
-    marginTop: 8,
-    gap: 16,
-  },
-
-  retake: {
-    color: '#007bff',
-    fontWeight: '600',
-  },
-
-  delete: {
-    color: 'red',
-    fontWeight: '600',
+  deleteText: {
+    color: '#FF6B6B',
+    fontSize: 10,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });
 

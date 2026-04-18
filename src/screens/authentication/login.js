@@ -83,7 +83,7 @@ export default function Login({ navigation }) {
           <Text style={styles.tagline}>WELCOME BACK</Text>
           <Text style={styles.headline}>
             Glad to see{'\n'}you,{' '}
-            <Text style={styles.headlineAccent}>Again!</Text>
+            {/* <Text style={styles.headlineAccent}>Again!</Text> */}
           </Text>
           <Text style={styles.subtitle}>
             Log in to continue your wellness journey.
@@ -122,6 +122,11 @@ export default function Login({ navigation }) {
               returnKeyType="done"
               onRightIconPress={() => setSecureText(!secureText)}
               textIcon={eyeIcon}
+              otherSvgProps={{
+                color: secureText
+                  ? 'rgba(255,255,255,0.1)'
+                  : 'rgba(255,255,255,0.8)',
+              }}
             />
           </View>
 
@@ -184,13 +189,13 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.white,
     fontSize: 14,
-    fontFamily: fontFamily.interRegular,
+    fontFamily: fontFamily.montserratRegular,
     paddingVertical: 14,
   },
   inputLabel: {
     color: 'rgba(255,255,255,0.55)',
     fontSize: 12,
-    fontFamily: fontFamily.interMedium,
+    fontFamily: fontFamily.montserratMedium,
     letterSpacing: 0.5,
     marginBottom: 8,
     marginLeft: 4,
@@ -231,7 +236,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     color: 'rgba(255,255,255,0.55)',
     fontSize: 12,
-    fontFamily: fontFamily.interMedium,
+    fontFamily: fontFamily.montserratMedium,
     letterSpacing: 0.5,
     marginBottom: 8,
     marginLeft: 4,
@@ -241,7 +246,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.white,
     fontSize: 14,
-    fontFamily: fontFamily.interRegular,
+    fontFamily: fontFamily.montserratRegular,
     // paddingVertical: 14,
   },
   eyeBtn: {
@@ -256,7 +261,7 @@ const styles = StyleSheet.create({
   forgotText: {
     color: colors.secondary,
     fontSize: 13,
-    fontFamily: fontFamily.interMedium,
+    fontFamily: fontFamily.montserratMedium,
   },
   loginBtn: {
     backgroundColor: colors.primary,
@@ -268,7 +273,7 @@ const styles = StyleSheet.create({
   loginBtnText: {
     color: colors.white,
     fontSize: 15,
-    fontFamily: fontFamily.poppinsSemiBold,
+    fontFamily: fontFamily.montserratSemiBold,
     letterSpacing: 0.3,
   },
   footer: {
@@ -285,6 +290,6 @@ const styles = StyleSheet.create({
   footerLink: {
     color: colors.secondary,
     fontSize: 13,
-    fontFamily: fontFamily.interSemiBold,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });

@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     color: 'rgba(255,255,255,0.55)',
     fontSize: 12,
-    fontFamily: fontFamily.interMedium,
+    fontFamily: fontFamily.montserratMedium,
     letterSpacing: 0.5,
     marginBottom: 8,
     marginLeft: 4,
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.white,
     fontSize: 14,
-    fontFamily: fontFamily.interRegular,
+    fontFamily: fontFamily.montserratRegular,
     paddingVertical: 14,
   },
   sendBtn: {
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   sendBtnText: {
     color: colors.white,
     fontSize: 15,
-    fontFamily: fontFamily.poppinsSemiBold,
+    fontFamily: fontFamily.montserratSemiBold,
     letterSpacing: 0.3,
   },
   footer: {
@@ -237,6 +237,6 @@ const styles = StyleSheet.create({
   footerLink: {
     color: colors.secondary,
     fontSize: 13,
-    fontFamily: fontFamily.interSemiBold,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });

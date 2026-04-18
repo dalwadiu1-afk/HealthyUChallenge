@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-} from "react-native";
+} from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -19,15 +19,15 @@ import Animated, {
   withSequence,
   withDelay,
   Easing,
-} from "react-native-reanimated";
-import { SafeAreaProvider } from "react-native-safe-area-context";
-import { colors, fontFamily } from "../../constant";
-import { Header, Hyperlink, SvgImg, Wrapper } from "../../components/index";
-import { backBtn, eyeIcon } from "../../assets/images";
-import InputBox from "../../components/common/InputBox";
-import { AuthBtn } from "../../components/common/authBtn";
+} from 'react-native-reanimated';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { colors, fontFamily } from '../../constant';
+import { Header, Hyperlink, SvgImg, Wrapper } from '../../components/index';
+import { backBtn, eyeIcon } from '../../assets/images';
+import InputBox from '../../components/common/InputBox';
+import { AuthBtn } from '../../components/common/authBtn';
 
-const { height, width } = Dimensions.get("window");
+const { height, width } = Dimensions.get('window');
 
 function FloatingOrb({ size, color, style, delay = 0 }) {
   const translateY = useSharedValue(0);
@@ -61,7 +61,7 @@ function FloatingOrb({ size, color, style, delay = 0 }) {
           height: size,
           borderRadius: size / 2,
           backgroundColor: color,
-          position: "absolute",
+          position: 'absolute',
         },
         style,
         animStyle,
@@ -71,10 +71,10 @@ function FloatingOrb({ size, color, style, delay = 0 }) {
 }
 
 export default function Signup({ navigation }) {
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [securePassword, setSecurePassword] = useState(true);
   const [secureConfirm, setSecureConfirm] = useState(true);
 
@@ -149,8 +149,8 @@ export default function Signup({ navigation }) {
         <Animated.View style={[styles.greetSection, greetAnimStyle]}>
           <Text style={styles.tagline}>CREATE ACCOUNT</Text>
           <Text style={styles.headline}>
-            Hello!{"\n"}
-            <Text style={styles.headlineAccent}>Register</Text> to{"\n"}get
+            Hello!{'\n'}
+            <Text style={styles.headlineAccent}>Register</Text> to{'\n'}get
             started.
           </Text>
         </Animated.View>
@@ -160,7 +160,7 @@ export default function Signup({ navigation }) {
           {/* Username */}
           <View style={styles.inputGroup}>
             <InputBox
-              label={"Username"}
+              label={'Username'}
               labelStyle={styles.inputLabel}
               inputContainerStyle={styles.textInput}
               value={username}
@@ -175,7 +175,7 @@ export default function Signup({ navigation }) {
           {/* Email */}
           <View style={styles.inputGroup}>
             <InputBox
-              label={"Email"}
+              label={'Email'}
               labelStyle={styles.inputLabel}
               inputContainerStyle={styles.textInput}
               value={email}
@@ -191,7 +191,7 @@ export default function Signup({ navigation }) {
           {/* Password */}
           <View style={styles.inputGroup}>
             <InputBox
-              label={" Password"}
+              label={' Password'}
               labelStyle={styles.inputLabel}
               inputContainerStyle={[styles.textInput, { flex: 1 }]}
               value={password}
@@ -208,7 +208,7 @@ export default function Signup({ navigation }) {
           {/* Confirm Password */}
           <View style={styles.inputGroup}>
             <InputBox
-              label={" Confirm Password"}
+              label={' Confirm Password'}
               labelStyle={styles.inputLabel}
               inputContainerStyle={[styles.textInput, { flex: 1 }]}
               value={confirmPassword}
@@ -228,7 +228,7 @@ export default function Signup({ navigation }) {
           {/* Register button */}
           <AuthBtn
             isComplete
-            onPress={() => navigation.navigate("Main")}
+            onPress={() => navigation.navigate('Main')}
             title="Create Account"
           />
         </Animated.View>
@@ -238,7 +238,7 @@ export default function Signup({ navigation }) {
           <Text style={styles.footerText}>Already have an account? </Text>
           <Hyperlink
             title="Login Now"
-            onPress={() => navigation.navigate("login")}
+            onPress={() => navigation.navigate('login')}
             activeOpacity={0.7}
             textStyle={styles.footerLink}
           />
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.dark,
-    overflow: "hidden",
+    overflow: 'hidden',
   },
   scroll: {
     flexGrow: 1,
@@ -268,10 +268,10 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 49,
     borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.2)",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    justifyContent: "center",
-    alignItems: "center",
+    borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   greetSection: {
     marginBottom: 28,
@@ -279,14 +279,14 @@ const styles = StyleSheet.create({
   tagline: {
     color: colors.secondary,
     fontSize: 11,
-    fontFamily: fontFamily.interMedium,
+    fontFamily: fontFamily.montserratMedium,
     letterSpacing: 4,
     marginBottom: 10,
   },
   headline: {
     color: colors.white,
     fontSize: 34,
-    fontFamily: fontFamily.poppinsBold,
+    fontFamily: fontFamily.montserratBold,
     lineHeight: 42,
   },
   headlineAccent: {
@@ -297,30 +297,30 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   inputLabel: {
-    color: "rgba(255,255,255,0.55)",
+    color: 'rgba(255,255,255,0.55)',
     fontSize: 12,
-    fontFamily: fontFamily.interMedium,
+    fontFamily: fontFamily.montserratMedium,
     letterSpacing: 0.5,
     marginBottom: 8,
     marginLeft: 4,
   },
   inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.07)",
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderRadius: 49,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: 'rgba(255,255,255,0.12)',
     paddingHorizontal: 16,
   },
   inputError: {
-    borderColor: "rgba(192, 108, 91, 0.6)",
+    borderColor: 'rgba(192, 108, 91, 0.6)',
   },
   textInput: {
     flex: 1,
     color: colors.white,
     fontSize: 14,
-    fontFamily: fontFamily.interRegular,
+    fontFamily: fontFamily.montserratRegular,
     paddingVertical: 14,
   },
   eyeBtn: {
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
   errorText: {
     color: colors.danger,
     fontSize: 11,
-    fontFamily: fontFamily.interRegular,
+    fontFamily: fontFamily.montserratRegular,
     marginTop: 5,
     marginLeft: 4,
   },
@@ -338,30 +338,30 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingVertical: 14,
     borderRadius: 49,
-    alignItems: "center",
+    alignItems: 'center',
     marginTop: 8,
     marginBottom: 24,
   },
   registerBtnText: {
     color: colors.white,
     fontSize: 15,
-    fontFamily: fontFamily.poppinsSemiBold,
+    fontFamily: fontFamily.montserratSemiBold,
     letterSpacing: 0.3,
   },
   footer: {
-    flexDirection: "row",
-    justifyContent: "center",
+    flexDirection: 'row',
+    justifyContent: 'center',
     flex: 1,
-    alignItems: "flex-end",
+    alignItems: 'flex-end',
   },
   footerText: {
-    color: "rgba(255,255,255,0.4)",
+    color: 'rgba(255,255,255,0.4)',
     fontSize: 13,
-    fontFamily: fontFamily.interRegular,
+    fontFamily: fontFamily.montserratRegular,
   },
   footerLink: {
     color: colors.secondary,
     fontSize: 13,
-    fontFamily: fontFamily.interSemiBold,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });

@@ -13,6 +13,7 @@ export default function NewPassword({ navigation }) {
   const [secureNewPass, setSecureNewPass] = useState(true);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [secureConfirmPass, setConfirmSecurePass] = useState(true);
+  const isValid = newPassword.length >= 6 && newPassword === confirmPassword;
   return (
     <View style={styles.container}>
       <Wrapper>
@@ -33,6 +34,11 @@ export default function NewPassword({ navigation }) {
               textIcon={eyeIcon}
               secureTextEntry={secureNewPass}
               onRightIconPress={() => setSecureNewPass(!secureNewPass)}
+              otherSvgProps={{
+                color: secureNewPass
+                  ? 'rgba(255,255,255,0.1)'
+                  : 'rgba(255,255,255,0.8)',
+              }}
             />
             <InputBox
               mainContainer={styles.inputWrapper}
@@ -44,13 +50,21 @@ export default function NewPassword({ navigation }) {
               textIcon={eyeIcon}
               secureTextEntry={secureConfirmPass}
               onRightIconPress={() => setConfirmSecurePass(!secureConfirmPass)}
+              otherSvgProps={{
+                color: secureConfirmPass
+                  ? 'rgba(255,255,255,0.1)'
+                  : 'rgba(255,255,255,0.8)',
+              }}
             />
           </View>
           <AuthBtn
-            btnStyle={{ marginTop: 20 }}
-            isComplete
+            btnStyle={{
+              marginTop: 20,
+              backgroundColor: isValid ? colors.primary : colors.secondary,
+            }}
             onPress={() => navigation.navigate('success')}
             title="Reset Password"
+            disabled={!isValid}
           />
         </View>
       </Wrapper>

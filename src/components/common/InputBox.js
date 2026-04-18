@@ -77,7 +77,6 @@ export default function InputBox({
               iconName={textIcon}
               width={22}
               height={22}
-              color="white"
               {...otherSvgProps}
             />
           </TouchableOpacity>

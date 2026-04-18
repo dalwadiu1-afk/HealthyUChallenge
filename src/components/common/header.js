@@ -50,23 +50,25 @@ export function Header({
     transform: [{ translateY: headerY.value }],
   }));
   return (
-    <View
-      style={{
-        flexDirection: 'row',
-        ...headerContainer,
-        marginBottom: 10,
-      }}
+    <Animated.View
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginBottom: 10,
+          ...headerContainer,
+        },
+        headerAnimStyle,
+      ]}
     >
-      <Animated.View style={[styles.headerRow, headerAnimStyle]}>
-        <TouchableOpacity
-          disabled={disableLeft}
-          style={{ ...styles.backBtn, ...leftBtnStyle }}
-          onPress={onLeftPress ? onLeftPress : () => navController.goBack()}
-          activeOpacity={0.75}
-        >
-          <SvgImg iconName={leftImg} height={20} width={9} />
-        </TouchableOpacity>
-      </Animated.View>
+      <TouchableOpacity
+        disabled={disableLeft}
+        style={{ ...styles.backBtn, ...leftBtnStyle }}
+        onPress={onLeftPress ? onLeftPress : () => navController.goBack()}
+        activeOpacity={0.75}
+      >
+        <SvgImg iconName={leftImg} height={20} width={9} />
+      </TouchableOpacity>
 
       <Text
         style={{
@@ -77,6 +79,7 @@ export function Header({
       >
         {header}
       </Text>
+
       {showRightBtn ? (
         <TouchableOpacity
           disabled={disableRight}
@@ -86,9 +89,9 @@ export function Header({
           <SvgImg iconName={rightImg} height={28} width={28} />
         </TouchableOpacity>
       ) : (
-        <View style={{ width: 52, height: 52 }} />
+        <View style={{ width: height * 0.06 }} />
       )}
-    </View>
+    </Animated.View>
   );
 }
 

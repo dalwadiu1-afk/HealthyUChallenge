@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
   verifyBtnText: {
     color: colors.white,
     fontSize: 15,
-    fontFamily: fontFamily.poppinsSemiBold,
+    fontFamily: fontFamily.montserratSemiBold,
     letterSpacing: 0.3,
   },
   footer: {
@@ -450,6 +450,6 @@ const styles = StyleSheet.create({
   resendText: {
     color: colors.secondary,
     fontSize: 13,
-    fontFamily: fontFamily.interSemiBold,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });

@@ -95,7 +95,7 @@ export default function InstructionsDetails() {
             <Text
               style={{
                 fontSize: 18,
-                fontFamily: fontFamily.poppinsSemiBold,
+                fontFamily: fontFamily.montserratSemiBold,
               }}
             >
               Informations
@@ -105,7 +105,7 @@ export default function InstructionsDetails() {
               style={{
                 marginTop: 12,
                 fontSize: 14,
-                fontFamily: fontFamily.interRegular,
+                fontFamily: fontFamily.montserratRegular,
               }}
             >
               Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 26,
     textAlign: 'center',
-    fontFamily: fontFamily.poppinsSemiBold,
+    fontFamily: fontFamily.montserratSemiBold,
   },
   pullBtn: {
     height: 65,
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   },
   cardTextTime: {
     fontSize: 12,
-    fontFamily: fontFamily.interRegular,
+    fontFamily: fontFamily.montserratRegular,
     color: colors.grey,
   },
 });

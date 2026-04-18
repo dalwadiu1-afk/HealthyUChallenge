@@ -6,6 +6,6 @@ export * from './common/Wrapper';
 export * from './common/SearchBar';
 export * from './social/chatCard';
 export * from './profile/ProfileCard';
-export * from './profile/ProfileHeader';
+export * from './profile/ProfileHeader2';
 export * from './common/SvgImg';
 export * from './common/calendar';

@@ -1,0 +1,259 @@
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  Button,
+  StyleSheet,
+  ActivityIndicator,
+} from 'react-native';
+import { Camera, useCameraDevice } from 'react-native-vision-camera';
+
+export default function FoodScanner() {
+  const camera = useRef(null);
+  const device = useCameraDevice('back');
+
+  const [hasPermission, setHasPermission] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const [foods, setFoods] = useState([]);
+  const [nutrition, setNutrition] = useState([]);
+
+  useEffect(() => {
+    const requestPermission = async () => {
+      const status = await Camera.requestCameraPermission();
+      setHasPermission(status === 'granted');
+    };
+
+    requestPermission();
+  }, []);
+
+  // 📸 TAKE PHOTO
+  const takePhoto = async () => {
+    try {
+      if (!camera.current) return;
+
+      setLoading(true);
+
+      const photo = await camera.current.takePhoto();
+
+      // 🧠 STEP 1: REAL FOOD DETECTION
+      const detectedFoods = await detectFoods(photo.path);
+      setFoods(detectedFoods);
+
+      // 🍎 STEP 2: NUTRITION PER FOOD
+      const nutri = await getMultiNutrition(detectedFoods);
+      setNutrition(nutri);
+
+      setLoading(false);
+    } catch (e) {
+      console.log(e);
+      setLoading(false);
+    }
+  };
+
+  // 🧠 REAL AI FOOD DETECTION (Google Vision Ready)
+  const detectFoods = async imagePath => {
+    try {
+      const base64Image = await convertToBase64(imagePath);
+      console.log('base64Imagefg :>> ', base64Imagefg);
+      const res = await fetch(
+        `https://vision.googleapis.com/v1/images:annotate?key=AIzaSyCh_z10sKs-H5Iw86mlnjABNmfsElSMwhY`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            requests: [
+              {
+                image: { content: base64Image },
+                features: [
+                  { type: 'LABEL_DETECTION', maxResults: 10 },
+                  { type: 'OBJECT_LOCALIZATION', maxResults: 10 },
+                ],
+              },
+            ],
+          }),
+        },
+      );
+
+      console.log('res :>> ', res);
+
+      const data = await res.json();
+
+      const labels = data.responses?.[0]?.labelAnnotations || [];
+      const objects = data.responses?.[0]?.localizedObjectAnnotations || [];
+
+      const foodSet = new Set();
+
+      labels.forEach(l => {
+        if (isFood(l.description)) {
+          foodSet.add(l.description.toLowerCase());
+        }
+      });
+
+      objects.forEach(o => {
+        if (isFood(o.name)) {
+          foodSet.add(o.name.toLowerCase());
+        }
+      });
+
+      return Array.from(foodSet);
+    } catch (e) {
+      console.log('AI Error:', e);
+      return [];
+    }
+  };
+
+  // 🍎 FILTER FOOD ONLY
+  const isFood = text => {
+    const foodList = [
+      'rice',
+      'chicken',
+      'salad',
+      'banana',
+      'apple',
+      'egg',
+      'pizza',
+      'bread',
+      'fish',
+      'beef',
+      'vegetable',
+    ];
+
+    return foodList.some(f => text.toLowerCase().includes(f));
+  };
+
+  // 🍎 MULTI NUTRITION API
+  const getMultiNutrition = async foods => {
+    const results = [];
+
+    for (const food of foods) {
+      const res = await fetch(
+        `https://api.edamam.com/api/food-database/v2/parser?ingr=${food}&app_id=6ef6773f&app_key=4c0178c7c47c4039117bb47ae570617d	—`,
+      );
+
+      console.log('data :>> ', data);
+
+      const data = await res.json();
+
+      const nutrients = data.parsed?.[0]?.food?.nutrients || {};
+
+      results.push({
+        food,
+        calories: nutrients.ENERC_KCAL || 0,
+        protein: nutrients.PROCNT || 0,
+        fiber: nutrients.FIBTG || 0,
+      });
+    }
+
+    return results;
+  };
+
+  // 🧠 BASE64 CONVERTER
+  const convertToBase64 = async path => {
+    const RNFS = require('react-native-fs');
+    return await RNFS.readFile(path, 'base64');
+  };
+
+  if (!device) return <Text>No Camera Found</Text>;
+
+  if (!hasPermission) {
+    return (
+      <View style={styles.center}>
+        <Text>Requesting Camera Permission...</Text>
+      </View>
+    );
+  }
+
+  // 🔥 TOTAL CALORIES
+  const totalCalories = nutrition.reduce((sum, item) => sum + item.calories, 0);
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/* CAMERA */}
+      <Camera
+        ref={camera}
+        style={StyleSheet.absoluteFill}
+        device={device}
+        isActive={true}
+        photo={true}
+      />
+
+      {/* BUTTON */}
+      <View style={styles.buttonContainer}>
+        <Button title="Scan Food" onPress={takePhoto} />
+      </View>
+
+      {/* LOADING */}
+      {loading && (
+        <View style={styles.loading}>
+          <ActivityIndicator size="large" />
+          <Text style={{ color: '#fff' }}>Analyzing food...</Text>
+        </View>
+      )}
+
+      {/* RESULT */}
+      {nutrition.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.title}>🍽️ Foods Detected</Text>
+
+          <Text>🧠 {foods.join(', ')}</Text>
+
+          <View style={{ marginTop: 10 }}>
+            {nutrition.map((item, i) => (
+              <View key={i} style={{ marginBottom: 6 }}>
+                <Text style={{ fontWeight: 'bold' }}>{item.food}</Text>
+                <Text>🔥 Calories: {item.calories}</Text>
+                <Text>💪 Protein: {item.protein}</Text>
+                <Text>🌾 Fiber: {item.fiber}</Text>
+              </View>
+            ))}
+          </View>
+
+          <Text style={{ marginTop: 10, fontWeight: 'bold' }}>
+            🔥 Total Calories: {totalCalories}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  buttonContainer: {
+    position: 'absolute',
+    bottom: 40,
+    alignSelf: 'center',
+  },
+
+  loading: {
+    position: 'absolute',
+    top: '50%',
+    alignSelf: 'center',
+    alignItems: 'center',
+  },
+
+  card: {
+    position: 'absolute',
+    bottom: 120,
+    left: 20,
+    right: 20,
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 14,
+    elevation: 5,
+  },
+
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});

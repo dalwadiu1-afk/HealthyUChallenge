@@ -7,16 +7,14 @@ export function AuthBtn({
   onPress = () => {},
   title = '',
   btnStyle = {},
+  ...btnProps
 }) {
   return (
     <TouchableOpacity
-      style={[
-        styles.verifyBtn,
-        !isComplete && styles.verifyBtnDisabled,
-        { ...btnStyle },
-      ]}
+      style={[styles.verifyBtn, { ...btnStyle }]}
       onPress={onPress}
       activeOpacity={isComplete ? 0.82 : 1}
+      {...btnProps}
     >
       <Text style={styles.verifyBtnText}>{title}</Text>
     </TouchableOpacity>
@@ -29,9 +27,7 @@ const styles = StyleSheet.create({
     borderRadius: 49,
     alignItems: 'center',
   },
-  verifyBtnDisabled: {
-    backgroundColor: colors.primary,
-  },
+
   verifyBtnText: {
     color: colors.white,
     fontSize: 15,

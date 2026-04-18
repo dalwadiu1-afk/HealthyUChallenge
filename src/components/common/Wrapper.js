@@ -35,6 +35,7 @@ export function Wrapper({
   scrollEnable = true,
   onlyTop = false,
   scrollProps = {},
+  safeAreaPops,
 }) {
   function FloatingOrb({ size, color, style, delay = 0 }) {
     const translateY = useSharedValue(0);
@@ -186,6 +187,7 @@ export function Wrapper({
             <SafeAreaView
               style={{ flex: 1 }}
               edges={['top', !onlyTop && 'bottom']}
+              {...safeAreaPops}
             >
               <StatusBar
                 translucent={translucent}
@@ -203,6 +205,7 @@ export function Wrapper({
           <SafeAreaView
             style={{ flex: 1 }}
             edges={['top', !onlyTop && 'bottom']}
+            {...safeAreaPops}
           >
             <StatusBar
               translucent={translucent}
