@@ -1,5 +1,5 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import Resources from '../screens/Resources/Resources';
+import Resources from '../screens/Resources/ResourcesList';
 
 const Stack = createNativeStackNavigator();
 
@@ -9,7 +9,7 @@ export default function ResourceStack() {
     <Stack.Navigator
       screenOptions={{ headerShown: false, unmountOnBlur: true }}
     >
-      <Stack.Screen name="Resources" component={Resources} />
+      <Stack.Screen name="ResourcesList" component={Resources} />
     </Stack.Navigator>
   );
 }

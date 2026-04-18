@@ -12,7 +12,7 @@ import { fontFamily } from '../../constant';
 const TABS = [
   { key: 1, name: 'Habits', label: 'Habits' },
   { key: 2, name: 'SocialStack', label: 'Social' },
-  { key: 3, name: 'Resources', label: 'Resources' },
+  { key: 3, name: 'ResourcesList', label: 'Resources' },
   { key: 4, name: 'Profile', label: 'Profile' },
 ];
 

@@ -146,7 +146,7 @@ function ResourceCard({ item, index }) {
   );
 }
 
-export default function Resources() {
+export default function ResourcesList() {
   const [activeCategory, setActiveCategory] = useState('All');
   const headerAnim = useRef(new Animated.Value(0)).current;
 
