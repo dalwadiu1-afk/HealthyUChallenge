@@ -1,137 +1,176 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Image,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
-import { colors } from '../../constant/colors';
-import { chatIcon, heartIcon, shareIcon } from '../../assets/images';
-import { fontFamily } from '../../constant';
-import { SvgImg } from '../common/SvgImg';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { colors, fontFamily } from '../../constant';
 
-export default function ChatCard({
-  item,
-  index,
-  onCardPress,
-  chatContainer = {},
-}) {
+const AVATAR_COLORS = ['#4D6644', '#5A96FF', '#A782FF', '#FFC15A', '#6B9E6E'];
+
+export default function ChatCard({ item, index, onCardPress }) {
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(item?.likes ?? 0);
+  const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
+  const initials =
+    item?.name
+      ?.split(' ')
+      .map(w => w[0])
+      .join('')
+      .slice(0, 2) ?? 'U';
+
+  const handleLike = () => {
+    setLiked(p => !p);
+    setLikeCount(p => (liked ? p - 1 : p + 1));
+  };
+
   return (
     <TouchableOpacity
-      activeOpacity={1}
+      activeOpacity={0.92}
       onPress={onCardPress}
-      style={{
-        ...styles.chatContainer,
-        ...chatContainer,
-      }}
+      style={styles.card}
     >
-      <TouchableOpacity activeOpacity={1} style={{ flexDirection: 'row' }}>
-        <View style={styles.icon} />
-        <View style={{ marginLeft: 27, justifyContent: 'center' }}>
-          <Text
-            style={{ fontSize: 16, fontFamily: fontFamily.montserratSemiBold }}
-          >
-            {item?.name}
-          </Text>
+      {/* Header row */}
+      <View style={styles.headerRow}>
+        <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+          <Text style={styles.avatarText}>{initials}</Text>
+        </View>
+        <View style={styles.userInfo}>
+          <Text style={styles.userName}>{item?.name}</Text>
           <Text style={styles.time}>{item?.time}</Text>
         </View>
-      </TouchableOpacity>
-      <View style={{ marginTop: 16 }}>
-        <Text style={styles.message} numberOfLines={2} lineBreakMode="tail">
-          {item?.message}
-        </Text>
-        <Image
-          source={{
-            uri: item?.picture,
-          }}
-          style={{
-            width: '100%',
-            height: 200,
-            borderRadius: 8,
-            marginTop: 11,
-          }}
-          resizeMethod="auto"
-        />
+        <TouchableOpacity style={styles.moreBtn} activeOpacity={0.7}>
+          <Text style={styles.moreDots}>•••</Text>
+        </TouchableOpacity>
       </View>
 
-      <View
-        style={{
-          justifyContent: 'space-between',
-          flexDirection: 'row',
-          marginTop: 16,
-        }}
-      >
-        <View style={{ flexDirection: 'row', flex: 1 }}>
-          <View style={styles.countContainer}>
-            <SvgImg iconName={heartIcon} height={24} width={24} />
-            <Text style={styles.counts}>{item?.likes}</Text>
-          </View>
+      {/* Message */}
+      <Text style={styles.message} numberOfLines={3}>
+        {item?.message}
+      </Text>
 
-          {/* put Actionsheet here when I presss the commment Icon  */}
-          <View
-            style={{
-              ...styles.countContainer,
-              marginLeft: 24,
-            }}
-          >
-            <SvgImg iconName={chatIcon} height={24} width={24} />
-            <Text style={styles.counts}>{item?.comments}</Text>
-          </View>
-        </View>
+      {/* Image */}
+      {item?.picture && (
+        <Image
+          source={{ uri: item.picture }}
+          style={styles.postImage}
+          resizeMode="cover"
+        />
+      )}
 
-        <View
-          style={{
-            ...styles.countContainer,
-            marginLeft: 24,
-          }}
+      {/* Footer actions */}
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={handleLike}
+          activeOpacity={0.7}
         >
-          <SvgImg iconName={shareIcon} height={24} width={24} />
-          <Text style={styles.counts}>Share</Text>
-        </View>
+          <Text style={[styles.actionIcon, liked && styles.likedIcon]}>
+            {liked ? '❤️' : '🤍'}
+          </Text>
+          <Text style={[styles.actionText, liked && { color: '#FF6B8A' }]}>
+            {likeCount}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
+          <Text style={styles.actionIcon}>💬</Text>
+          <Text style={styles.actionText}>{item?.comments}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
+          <Text style={styles.actionIcon}>↗️</Text>
+          <Text style={styles.actionText}>Share</Text>
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  chatContainer: {
-    marginBottom: 12,
-    padding: 24,
+  card: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 20,
     borderWidth: 1,
-    backgroundColor: 'white',
-    borderRadius: 36,
+    borderColor: 'rgba(255,255,255,0.09)',
+    padding: 16,
+    marginBottom: 14,
   },
-  icon: {
-    width: 44,
-    height: 44,
-    borderRadius: 100,
-    backgroundColor: 'green',
-  },
-  time: {
-    fontFamily: fontFamily.montserratRegular,
-    fontSize: 14,
-    lineHeight: 24,
-    letterSpacing: 0,
-  },
-  message: {
-    fontSize: 16,
-    lineHeight: 26,
-    letterSpacing: 0,
-    fontFamily: fontFamily.montserratMedium,
-  },
-  countContainer: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
   },
-  counts: {
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: colors.white,
     fontSize: 14,
-    color: colors.black,
-    paddingHorizontal: 10,
-    fontWeight: 400,
-    lineHeight: 24,
-    letterSpacing: 0,
     fontFamily: fontFamily.montserratSemiBold,
+  },
+  userInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  userName: {
+    fontSize: 15,
+    color: colors.white,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+  time: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.38)',
+    fontFamily: fontFamily.montserratRegular,
+    marginTop: 1,
+  },
+  moreBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  moreDots: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 13,
+    letterSpacing: 1,
+  },
+  message: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: 'rgba(255,255,255,0.78)',
+    fontFamily: fontFamily.montserratRegular,
+    marginBottom: 12,
+  },
+  postImage: {
+    width: '100%',
+    height: 190,
+    borderRadius: 14,
+    marginBottom: 14,
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+    gap: 4,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    gap: 5,
+  },
+  actionIcon: {
+    fontSize: 16,
+  },
+  likedIcon: {
+    fontSize: 16,
+  },
+  actionText: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 13,
+    fontFamily: fontFamily.montserratMedium,
   },
 });
