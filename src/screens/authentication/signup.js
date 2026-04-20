@@ -1,74 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  Dimensions,
-  StyleSheet,
-  StatusBar,
-  TouchableOpacity,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native';
+import { View, Text, Dimensions, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withRepeat,
-  withSequence,
   withDelay,
   Easing,
 } from 'react-native-reanimated';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors, fontFamily } from '../../constant';
-import { Header, Hyperlink, SvgImg, Wrapper } from '../../components/index';
-import { backBtn, eyeIcon } from '../../assets/images';
+import { Header, Hyperlink, Wrapper } from '../../components/index';
+import { eyeIcon } from '../../assets/images';
 import InputBox from '../../components/common/InputBox';
 import { AuthBtn } from '../../components/common/authBtn';
+import auth from '@react-native-firebase/auth';
 
 const { height, width } = Dimensions.get('window');
-
-function FloatingOrb({ size, color, style, delay = 0 }) {
-  const translateY = useSharedValue(0);
-  const opacity = useSharedValue(0);
-
-  useEffect(() => {
-    opacity.value = withDelay(delay, withTiming(1, { duration: 1200 }));
-    translateY.value = withDelay(
-      delay,
-      withRepeat(
-        withSequence(
-          withTiming(-18, { duration: 3200, easing: Easing.inOut(Easing.sin) }),
-          withTiming(18, { duration: 3200, easing: Easing.inOut(Easing.sin) }),
-        ),
-        -1,
-        false,
-      ),
-    );
-  }, []);
-
-  const animStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateY: translateY.value }],
-  }));
-
-  return (
-    <Animated.View
-      style={[
-        {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: color,
-          position: 'absolute',
-        },
-        style,
-        animStyle,
-      ]}
-    />
-  );
-}
 
 export default function Signup({ navigation }) {
   const [username, setUsername] = useState('');
@@ -77,6 +23,14 @@ export default function Signup({ navigation }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [securePassword, setSecurePassword] = useState(true);
   const [secureConfirm, setSecureConfirm] = useState(true);
+  const [error, setError] = useState({
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    general: '',
+  });
+  const [loading, setLoading] = useState(false);
 
   const headerOpacity = useSharedValue(0);
   const headerY = useSharedValue(-20);
@@ -111,10 +65,13 @@ export default function Signup({ navigation }) {
     footerOpacity.value = withDelay(700, withTiming(1, { duration: 600 }));
   }, []);
 
-  const headerAnimStyle = useAnimatedStyle(() => ({
-    opacity: headerOpacity.value,
-    transform: [{ translateY: headerY.value }],
-  }));
+  const isValidEmail = email => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  const isValidPassword = password => {
+    return password.length >= 6;
+  };
 
   const greetAnimStyle = useAnimatedStyle(() => ({
     opacity: greetOpacity.value,
@@ -129,6 +86,135 @@ export default function Signup({ navigation }) {
   const footerAnimStyle = useAnimatedStyle(() => ({
     opacity: footerOpacity.value,
   }));
+
+  const handleSignup = async () => {
+    // Reset errors
+    setError({
+      username: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      general: '',
+    });
+
+    let valid = true;
+
+    // USERNAME
+    if (!username.trim()) {
+      setError(prev => ({
+        ...prev,
+        username: 'Username is required.',
+      }));
+      valid = false;
+    }
+
+    // EMAIL
+    if (!email) {
+      setError(prev => ({
+        ...prev,
+        email: 'Email is required.',
+      }));
+      valid = false;
+    } else if (!isValidEmail(email)) {
+      setError(prev => ({
+        ...prev,
+        email: 'Enter a valid email (e.g. name@example.com).',
+      }));
+      valid = false;
+    }
+
+    // PASSWORD
+    if (!password) {
+      setError(prev => ({
+        ...prev,
+        password: 'Password is required.',
+      }));
+      valid = false;
+    } else if (!isValidPassword(password)) {
+      setError(prev => ({
+        ...prev,
+        password: 'Password must be at least 6 characters.',
+      }));
+      valid = false;
+    }
+
+    // CONFIRM PASSWORD
+    if (!confirmPassword) {
+      setError(prev => ({
+        ...prev,
+        confirmPassword: 'Please confirm your password.',
+      }));
+      valid = false;
+    } else if (password !== confirmPassword) {
+      setError(prev => ({
+        ...prev,
+        confirmPassword: 'Passwords do not match.',
+      }));
+      valid = false;
+    }
+
+    if (!valid) return;
+
+    try {
+      setLoading(true);
+
+      const userCredential = await auth().createUserWithEmailAndPassword(
+        email.trim(),
+        password,
+      );
+
+      // Optional: set display name
+      await userCredential.user.updateProfile({
+        displayName: username,
+      });
+
+      console.log('User created:', userCredential.user);
+
+      navigation.replace('Main');
+    } catch (err) {
+      console.log(err);
+
+      switch (err.code) {
+        case 'auth/email-already-in-use':
+          setError(prev => ({
+            ...prev,
+            email: 'This email is already registered. Try logging in.',
+          }));
+          break;
+
+        case 'auth/invalid-email':
+          setError(prev => ({
+            ...prev,
+            email: 'Invalid email address.',
+          }));
+          break;
+
+        case 'auth/weak-password':
+          setError(prev => ({
+            ...prev,
+            password: 'Password is too weak. Use at least 6 characters.',
+          }));
+          break;
+
+        case 'auth/network-request-failed':
+          setError(prev => ({
+            ...prev,
+            general:
+              'Network error. Check your internet connection and try again.',
+          }));
+          break;
+
+        default:
+          setError(prev => ({
+            ...prev,
+            general: 'Unable to create account. Please try again.',
+          }));
+          break;
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -185,13 +271,14 @@ export default function Signup({ navigation }) {
               keyboardType="email-address"
               autoCapitalize="none"
               returnKeyType="next"
+              errorMessage={error?.email}
             />
           </View>
 
           {/* Password */}
           <View style={styles.inputGroup}>
             <InputBox
-              label={' Password'}
+              label={'Password'}
               labelStyle={styles.inputLabel}
               inputContainerStyle={[styles.textInput, { flex: 1 }]}
               value={password}
@@ -202,13 +289,14 @@ export default function Signup({ navigation }) {
               returnKeyType="next"
               onRightIconPress={() => setSecurePassword(!securePassword)}
               textIcon={eyeIcon}
+              errorMessage={error?.password}
             />
           </View>
 
           {/* Confirm Password */}
           <View style={styles.inputGroup}>
             <InputBox
-              label={' Confirm Password'}
+              label={'Confirm Password'}
               labelStyle={styles.inputLabel}
               inputContainerStyle={[styles.textInput, { flex: 1 }]}
               value={confirmPassword}
@@ -219,6 +307,7 @@ export default function Signup({ navigation }) {
               returnKeyType="done"
               onRightIconPress={() => setSecureConfirm(!secureConfirm)}
               textIcon={eyeIcon}
+              errorMessage={error?.confirmPassword}
             />
             {confirmPassword.length > 0 && password !== confirmPassword && (
               <Text style={styles.errorText}>Passwords do not match</Text>
@@ -228,8 +317,8 @@ export default function Signup({ navigation }) {
           {/* Register button */}
           <AuthBtn
             isComplete
-            onPress={() => navigation.navigate('Main')}
-            title="Create Account"
+            onPress={handleSignup}
+            title={loading ? 'Creating...' : 'Create Account'}
           />
         </Animated.View>
 

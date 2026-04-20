@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "780023162386",
+    "project_id": "healthyuchallenge-45ec6",
+    "storage_bucket": "healthyuchallenge-45ec6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:780023162386:android:a4998a07bf4e16a9495acb",
+        "android_client_info": {
+          "package_name": "com.healthyuchallenge"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBTpnh0bzCfNTVxE6lUG3tfB5GZJdJFSiM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

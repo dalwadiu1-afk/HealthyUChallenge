@@ -15,7 +15,7 @@ import { eyeIcon } from '../../assets/images';
 export default function InputBox({
   label,
   isRequired,
-  errorMessge = '',
+  errorMessage = '',
   value,
   onChangeText,
   editable = true,
@@ -64,6 +64,17 @@ export default function InputBox({
           placeholderTextColor={colors.white}
           {...otherProps}
         />
+        {errorMessage ? (
+          <Text
+            style={{
+              color: 'red',
+              marginTop: 4,
+              fontFamily: fontFamily.montserratMedium,
+            }}
+          >
+            {errorMessage}
+          </Text>
+        ) : null}
         {textIcon && (
           <TouchableOpacity
             onPress={onRightIconPress}

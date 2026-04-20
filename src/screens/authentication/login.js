@@ -1,31 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  Dimensions,
-  StyleSheet,
-  StatusBar,
-  TouchableOpacity,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native';
+import { View, Text, Dimensions, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withRepeat,
-  withSequence,
   withDelay,
   Easing,
 } from 'react-native-reanimated';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors, fontFamily } from '../../constant';
-import { Header, Hyperlink, SvgImg, Wrapper } from '../../components/index';
-import { backBtn, eyeIcon } from '../../assets/images';
+import { Header, Hyperlink, Wrapper } from '../../components/index';
+import { eyeIcon } from '../../assets/images';
 import InputBox from '../../components/common/InputBox';
 import { AuthBtn } from '../../components/common/authBtn';
+import auth from '@react-native-firebase/auth';
 
 const { height, width } = Dimensions.get('window');
 
@@ -33,6 +20,12 @@ export default function Login({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [secureText, setSecureText] = useState(true);
+  const [error, setError] = useState({
+    email: '',
+    password: '',
+    general: '',
+  });
+  const [loading, setLoading] = useState(false);
 
   const greetOpacity = useSharedValue(0);
   const greetY = useSharedValue(30);
@@ -72,6 +65,126 @@ export default function Login({ navigation }) {
     opacity: footerOpacity.value,
   }));
 
+  const isValidEmail = email => {
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regex.test(email);
+  };
+
+  const isValidPassword = password => {
+    return password.length >= 6;
+  };
+  const isFormValid =
+    email && password && isValidEmail(email) && isValidPassword(password);
+
+  const handleLogin = async () => {
+    // Reset all errors
+    setError({ email: '', password: '', general: '' });
+
+    let valid = true;
+
+    // EMAIL VALIDATION
+    if (!email) {
+      setError(prev => ({
+        ...prev,
+        email: 'Email is required.',
+      }));
+      valid = false;
+    } else if (!isValidEmail(email)) {
+      setError(prev => ({
+        ...prev,
+        email: 'Enter a valid email (e.g. name@example.com).',
+      }));
+      valid = false;
+    }
+
+    // PASSWORD VALIDATION
+    if (!password) {
+      setError(prev => ({
+        ...prev,
+        password: 'Password is required.',
+      }));
+      valid = false;
+    } else if (!isValidPassword(password)) {
+      setError(prev => ({
+        ...prev,
+        password: 'Password must be at least 6 characters.',
+      }));
+      valid = false;
+    }
+
+    if (!valid) return;
+
+    try {
+      setLoading(true);
+
+      const userCredential = await auth().signInWithEmailAndPassword(
+        email.trim(),
+        password,
+      );
+
+      console.log('User signed in:', userCredential.user);
+
+      navigation.replace('Main');
+    } catch (err) {
+      console.log(err);
+
+      switch (err.code) {
+        case 'auth/user-not-found':
+          setError(prev => ({
+            ...prev,
+            email: 'No account found with this email. Try registering.',
+          }));
+          break;
+
+        case 'auth/wrong-password':
+          setError(prev => ({
+            ...prev,
+            password: 'Incorrect password. Try again or reset it.',
+          }));
+          break;
+
+        case 'auth/invalid-email':
+          setError(prev => ({
+            ...prev,
+            email: 'This email address is not valid.',
+          }));
+          break;
+
+        case 'auth/user-disabled':
+          setError(prev => ({
+            ...prev,
+            general: 'This account has been disabled. Contact support.',
+          }));
+          break;
+
+        case 'auth/too-many-requests':
+          setError(prev => ({
+            ...prev,
+            general:
+              'Too many failed attempts. Please wait a moment and try again.',
+          }));
+          break;
+
+        case 'auth/network-request-failed':
+          setError(prev => ({
+            ...prev,
+            general:
+              'Network error. Check your internet connection and try again.',
+          }));
+          break;
+
+        default:
+          setError(prev => ({
+            ...prev,
+            general: 'Unable to log in right now. Please try again shortly.',
+          }));
+          break;
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Back button */}
@@ -105,6 +218,7 @@ export default function Login({ navigation }) {
               keyboardType="email-address"
               autoCapitalize="none"
               returnKeyType="next"
+              errorMessage={error?.general ? error?.general : error?.email}
             />
           </View>
 
@@ -127,6 +241,7 @@ export default function Login({ navigation }) {
                   ? 'rgba(255,255,255,0.1)'
                   : 'rgba(255,255,255,0.8)',
               }}
+              errorMessage={error?.general ? error?.general : error?.email}
             />
           </View>
 
@@ -143,9 +258,9 @@ export default function Login({ navigation }) {
           {/* Login button */}
 
           <AuthBtn
-            isComplete
-            onPress={() => navigation.navigate('Main')}
-            title="Login"
+            isComplete={isFormValid}
+            onPress={handleLogin}
+            title={loading ? 'Logging in...' : 'Login'}
           />
         </Animated.View>
 
