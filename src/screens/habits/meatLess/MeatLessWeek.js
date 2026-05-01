@@ -250,7 +250,6 @@ export default function MeatlessChallenge({ navigation }) {
 
       Object.keys(updatedWeeks || {}).forEach((weekKey, index) => {
         const weekDate = getWeekDate(index); // 👈 KEY CHANGE
-
         updates[`logs.${weekKey}.${weekDate}`] = {
           meals: updatedWeeks[weekKey]?.meals || [],
           completed: (updatedWeeks[weekKey]?.meals || []).length >= MAX_MEALS,
