@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,11 @@ import { launchCamera } from 'react-native-image-picker';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
+import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
 
+const user = auth().currentUser;
+const USER_ID = user?.uid;
 const DAYS_PER_WEEK = 1;
 
 function GradientBg({ id, c1, c2, r = 20 }) {
@@ -60,105 +64,178 @@ function CameraIcon() {
 }
 
 const VeggieChallenge = ({ navigation }) => {
-  const [weeks, setWeeks] = useState([
-    {
-      startDate: new Date().toISOString(),
-      entries: Array(DAYS_PER_WEEK).fill(null),
-    },
-  ]);
+  const [weeks, setWeeks] = useState([]);
   const [currentWeek, setCurrentWeek] = useState(0);
   const [currentDay, setCurrentDay] = useState(0);
 
+  useEffect(() => {
+    if (!USER_ID) return;
+
+    const ref = database().ref(`/users/${USER_ID}/veggieChallenge`);
+
+    const listener = ref.on('value', snapshot => {
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+
+        const normalized = (
+          Array.isArray(data) ? data : Object.values(data)
+        ).map(w => ({
+          startDate: w?.startDate || Date.now(),
+          entries: Array.isArray(w?.entries)
+            ? w.entries
+            : Array(DAYS_PER_WEEK).fill(null),
+        }));
+
+        setWeeks(normalized);
+      } else {
+        const initial = [
+          {
+            startDate: Date.now(),
+            entries: Array(DAYS_PER_WEEK).fill(null),
+          },
+        ];
+        setWeeks(initial);
+        ref.set(initial);
+      }
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
+
   const isWeekUnlocked = weekIndex => {
     if (weekIndex === 0) return true;
-    const week = weeks[weekIndex];
-    if (!week?.startDate) return false;
-    return (new Date() - new Date(week.startDate)) / 86400000 >= 7;
+
+    const prevWeek = weeks[weekIndex - 1];
+    if (!prevWeek) return false;
+
+    const completed = prevWeek.entries?.every(e => e !== null);
+
+    const diffDays = (Date.now() - prevWeek.startDate) / (1000 * 60 * 60 * 24);
+
+    return completed && diffDays >= 7;
   };
 
   const pickImage = async (weekIndex, dayIndex) => {
     if (weekIndex !== currentWeek || !isWeekUnlocked(weekIndex)) return;
+
     const granted = await requestCameraPermission();
     if (!granted) return;
 
     launchCamera({ mediaType: 'photo', quality: 0.7 }, response => {
       if (response.didCancel || response.errorCode) return;
+
       const uri = response?.assets?.[0]?.uri;
       if (!uri) return;
 
       setWeeks(prev => {
         const updated = [...prev];
-        if (!updated[weekIndex]) return prev;
+
+        if (!updated[weekIndex]) {
+          updated[weekIndex] = {
+            startDate: Date.now(),
+            entries: Array(DAYS_PER_WEEK).fill(null),
+          };
+        }
+
+        const safeEntries = Array.isArray(updated[weekIndex].entries)
+          ? updated[weekIndex].entries
+          : Array(DAYS_PER_WEEK).fill(null);
+
         updated[weekIndex] = {
           ...updated[weekIndex],
-          entries: updated[weekIndex].entries.map((e, i) =>
+          entries: safeEntries.map((e, i) =>
             i === dayIndex
-              ? { uri, label: '', timestamp: new Date().toLocaleString() }
+              ? {
+                  uri,
+                  label: '',
+                  timestamp: new Date().toLocaleString(),
+                }
               : e,
           ),
         };
+
+        // ➕ create next week AFTER updating current
+        if (dayIndex === DAYS_PER_WEEK - 1) {
+          const nextWeek = weekIndex + 1;
+
+          if (!updated[nextWeek]) {
+            updated[nextWeek] = {
+              startDate: Date.now(),
+              entries: Array(DAYS_PER_WEEK).fill(null),
+            };
+          }
+
+          setCurrentWeek(nextWeek);
+          setCurrentDay(0);
+        } else {
+          setCurrentDay(prev => prev + 1);
+        }
+
+        updateWeeks(updated); // 🔥 single source of truth
         return updated;
       });
-
-      if (dayIndex < DAYS_PER_WEEK - 1) {
-        setCurrentDay(prev => prev + 1);
-      } else {
-        const nextWeek = currentWeek + 1;
-        setWeeks(old => {
-          const copy = [...old];
-          if (!copy[nextWeek]) {
-            copy.push({
-              startDate: new Date().toISOString(),
-              entries: Array(DAYS_PER_WEEK).fill(null),
-            });
-          }
-          return copy;
-        });
-        setCurrentDay(0);
-        setCurrentWeek(nextWeek);
-      }
     });
   };
 
   const updateLabel = (weekIndex, dayIndex, text) => {
     if (weekIndex !== currentWeek) return;
+
     setWeeks(prev => {
       const updated = [...prev];
+
       if (!updated[weekIndex]?.entries?.[dayIndex]) return prev;
+
       updated[weekIndex] = {
         ...updated[weekIndex],
         entries: updated[weekIndex].entries.map((e, i) =>
           i === dayIndex ? { ...e, label: text } : e,
         ),
       };
+
+      updateWeeks(updated); // 🔥 ADD THIS
       return updated;
     });
   };
 
+  const updateWeeks = newData => {
+    setWeeks(newData);
+    database().ref(`/users/${USER_ID}/veggieChallenge`).set(newData);
+  };
+
   const deleteEntry = (weekIndex, dayIndex) => {
     if (weekIndex !== currentWeek) return;
+
     setWeeks(prev => {
       const updated = [...prev];
       if (!updated[weekIndex]) return prev;
+
       updated[weekIndex] = {
         ...updated[weekIndex],
         entries: updated[weekIndex].entries.map((e, i) =>
           i === dayIndex ? null : e,
         ),
       };
+
+      updateWeeks(updated); // 🔥 THIS WAS MISSING
       return updated;
     });
   };
 
-  const isEditable = (weekIndex, dayIndex) =>
-    weekIndex === currentWeek &&
-    isWeekUnlocked(weekIndex) &&
-    dayIndex === currentDay;
+  const isEditable = weekIndex =>
+    weekIndex === currentWeek && isWeekUnlocked(weekIndex);
 
-  const completedWeeks = weeks.filter(w =>
-    w.entries.every(e => e !== null),
+  const safeWeeks = weeks.map(w => ({
+    ...w,
+    entries: Array.isArray(w.entries)
+      ? w.entries
+      : Array(DAYS_PER_WEEK).fill(null),
+  }));
+
+  const completedWeeks = safeWeeks.filter(w =>
+    w.entries?.every(e => e !== null),
   ).length;
-  const progress = weeks.length > 0 ? completedWeeks / weeks.length : 0;
+
+  const progress = weeks.length ? completedWeeks / weeks.length : 0;
 
   return (
     <View style={styles.root}>
@@ -191,10 +268,10 @@ const VeggieChallenge = ({ navigation }) => {
           </Text>
         </View>
 
-        {weeks.map((week, wi) => {
+        {safeWeeks?.map((week, wi) => {
           const unlocked = isWeekUnlocked(wi);
           const isCurrent = wi === currentWeek;
-          const weekDone = week.entries.every(e => e !== null);
+          const weekDone = week?.entries?.every(e => e !== null);
 
           return (
             <View
@@ -261,7 +338,7 @@ const VeggieChallenge = ({ navigation }) => {
                 </View>
               ) : (
                 <>
-                  {week.entries.map((entry, di) => {
+                  {week?.entries?.map((entry, di) => {
                     const editable = isEditable(wi, di);
                     return (
                       <View key={di}>

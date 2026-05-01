@@ -13,11 +13,19 @@ import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
+import database from '@react-native-firebase/database';
 import storage from '@react-native-firebase/storage';
 import { launchCamera } from 'react-native-image-picker';
 
 const TOTAL = 4;
 const USER_ID = auth().currentUser?.uid;
+const getLocalDateKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+    2,
+    '0',
+  )}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 /* ICONS */
 function CameraIcon() {
@@ -70,21 +78,17 @@ export default function FitnessClassUI() {
 
   /* FIRESTORE LISTENER */
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateKey();
 
-    const unsubscribe = firestore()
-      .collection('users')
-      .doc(USER_ID)
-      .onSnapshot(doc => {
-        const data = doc.data();
-        const todayLog = data?.logs?.[today];
+    const ref = database().ref(`users/${USER_ID}/logs/${today}`);
 
-        if (todayLog?.workoutPhotos) {
-          setPhotos(todayLog.workoutPhotos);
-        }
-      });
+    const onValueChange = ref.on('value', snapshot => {
+      const data = snapshot.val() || {};
 
-    return () => unsubscribe();
+      setPhotos(data.workoutPhotos || Array(TOTAL).fill(null));
+    });
+
+    return () => ref.off('value', onValueChange);
   }, []);
 
   /* 📸 PICK IMAGE (INSTANT UI UPDATE) */
@@ -114,7 +118,7 @@ export default function FitnessClassUI() {
       const uri = tempPhotos[index];
       if (!uri) return;
 
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDateKey();
 
       // const fileName = `workouts/${USER_ID}/${today}_${index}.jpg`;
 
@@ -126,30 +130,21 @@ export default function FitnessClassUI() {
       // // get download URL
       // const downloadURL = await ref.getDownloadURL();
 
-      const userRef = firestore().collection('users').doc(USER_ID);
+      const ref = database().ref(`users/${USER_ID}/logs/${today}`);
 
-      const snap = await userRef.get();
-      const data = snap.data();
+      const snapshot = await ref.once('value');
+      const data = snapshot.val() || {};
 
-      const logs = data?.logs || {};
-      const todayLog = logs[today] || {};
-
-      const workoutPhotos = todayLog.workoutPhotos
-        ? [...todayLog.workoutPhotos]
+      const workoutPhotos = data?.workoutPhotos
+        ? [...data.workoutPhotos]
         : Array(TOTAL).fill(null);
 
       workoutPhotos[index] = tempPhotos[index];
 
-      await userRef.set(
+      await ref.set(
         {
-          logs: {
-            ...logs,
-            [today]: {
-              ...todayLog,
-              workout: 1,
-              workoutPhotos,
-            },
-          },
+          workout: 1,
+          workoutPhotos,
         },
         { merge: true },
       );

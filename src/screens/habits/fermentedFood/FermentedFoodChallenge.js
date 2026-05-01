@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,9 +21,12 @@ import { launchCamera } from 'react-native-image-picker';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
+import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
 
 const TOTAL_DAYS = 7;
 const TOTAL_WEEKS = 4;
+const USER_ID = auth().currentUser?.uid;
 
 function GradientBg({ id, c1, c2, r = 20, horizontal = false }) {
   const x2 = horizontal ? '1' : '1';
@@ -74,6 +77,60 @@ const FermentedFoodChallenge = ({ navigation }) => {
   const completed = weeks.flat().filter(Boolean).length;
   const total = TOTAL_WEEKS * TOTAL_DAYS;
   const progress = completed / total;
+  const userRef = database().ref(`/users/${USER_ID}`);
+
+  useEffect(() => {
+    if (!USER_ID) return;
+
+    const ref = database().ref(`/users/${USER_ID}`);
+
+    const listener = ref.on('value', snap => {
+      const data = snap.val();
+
+      if (!data?.logs) return;
+
+      const restored = Array.from({ length: TOTAL_WEEKS }, () =>
+        Array(TOTAL_DAYS).fill(null),
+      );
+
+      Object.entries(data.logs || {}).forEach(([weekKey, days]) => {
+        const weekIndex = parseInt(weekKey.replace('week', ''), 10) - 1;
+
+        if (isNaN(weekIndex) || weekIndex < 0 || weekIndex >= TOTAL_WEEKS)
+          return;
+
+        Object.entries(days || {}).forEach(([dayKey, value]) => {
+          const dayIndex = parseInt(dayKey.replace('day', ''), 10);
+
+          if (isNaN(dayIndex) || dayIndex < 0 || dayIndex >= TOTAL_DAYS) return;
+
+          if (!restored[weekIndex]) return;
+
+          restored[weekIndex][dayIndex] = value;
+        });
+      });
+
+      setWeeks(restored);
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
+
+  const saveToDB = async updatedWeeks => {
+    if (!USER_ID) return;
+
+    const updates = {};
+
+    updatedWeeks.forEach((week, weekIndex) => {
+      week.forEach((day, dayIndex) => {
+        if (!day) return;
+
+        updates[`logs/week${weekIndex + 1}/day${dayIndex}`] = day;
+      });
+    });
+
+    await database().ref(`/users/${USER_ID}`).update(updates);
+  };
 
   const pickImage = async dayIndex => {
     if (dayIndex !== currentDayIndex) return;
@@ -90,6 +147,7 @@ const FermentedFoodChallenge = ({ navigation }) => {
           timestamp: new Date().toLocaleString(),
         };
         setWeeks(nw);
+        saveToDB(nw);
         if (dayIndex < TOTAL_DAYS - 1) {
           setCurrentDayIndex(p => p + 1);
         } else if (currentWeek < TOTAL_WEEKS - 1) {
@@ -102,16 +160,23 @@ const FermentedFoodChallenge = ({ navigation }) => {
 
   const updateLabel = (dayIndex, text) => {
     const nw = weeks.map(w => [...w]);
-    nw[currentWeek][dayIndex] = { ...nw[currentWeek][dayIndex], label: text };
+
+    nw[currentWeek][dayIndex] = {
+      ...nw[currentWeek][dayIndex],
+      label: text,
+    };
+
     setWeeks(nw);
+    saveToDB(nw);
   };
 
   const deletePhoto = dayIndex => {
     const nw = weeks.map(w => [...w]);
+
     nw[currentWeek][dayIndex] = null;
+
     setWeeks(nw);
-    if (dayIndex === currentDayIndex - 1)
-      setCurrentDayIndex(p => Math.max(p - 1, 0));
+    saveToDB(nw);
   };
 
   return (
@@ -152,7 +217,7 @@ const FermentedFoodChallenge = ({ navigation }) => {
           style={styles.tabsWrap}
         >
           {Array.from({ length: TOTAL_WEEKS }).map((_, i) => {
-            const weekDone = weeks[i].every(Boolean);
+            const weekDone = weeks[i]?.every(Boolean);
             const isActive = currentWeek === i;
             return (
               <TouchableOpacity

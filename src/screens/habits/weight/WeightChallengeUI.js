@@ -13,22 +13,24 @@ import { LineChart } from 'react-native-chart-kit';
 import Svg, { Path } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
-import {
-  getFirestore,
-  doc,
-  setDoc,
-  onSnapshot,
-  serverTimestamp,
-} from '@react-native-firebase/firestore';
+
+import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const USER_ID = auth().currentUser?.uid;
 
-console.log('USER_ID :>> ', USER_ID);
+const getToday = () => new Date().toISOString().split('T')[0];
 
-const today = new Date().toISOString().split('T')[0];
-const db = getFirestore();
+const getWeeksPassed = startDate => {
+  if (!startDate) return 0;
+
+  const start = new Date(startDate);
+  const now = new Date();
+
+  const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+  return Math.max(0, Math.floor(diffDays / 7));
+};
 
 const LABELS = [
   { key: 'start', label: 'Start Weight' },
@@ -49,6 +51,7 @@ const safeToFixed = num => (!num || isNaN(num) ? '0.0' : num.toFixed(1));
 export default function WeightChallengeUI({ navigation }) {
   const [step, setStep] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
+
   const [weights, setWeights] = useState({
     start: '',
     week1: '',
@@ -57,8 +60,9 @@ export default function WeightChallengeUI({ navigation }) {
     week4: '',
     end: '',
   });
-  const userRef = doc(db, 'users', USER_ID);
-  const saveTimeout = useRef(null);
+
+  const today = getToday();
+  const userRef = database().ref(`users/${USER_ID}/logs/${today}`);
   const weightArray = LABELS.map(item => parseWeight(weights[item.key]));
   const validWeights = weightArray.filter(w => w > 0);
 
@@ -68,69 +72,42 @@ export default function WeightChallengeUI({ navigation }) {
     const weeksTracked = validWeights.length - 1;
     avgLoss = totalLoss / weeksTracked;
   }
-
-  // const save = async () => {
-  //   try {
-  //     await setDoc(
-  //       doc(db, 'users', USER_ID),
-  //       {
-  //         [`logs.${today}.weightChallenge`]: {
-  //           start: weights.start,
-  //           week1: weights.week1,
-  //           week2: weights.week2,
-  //           week3: weights.week3,
-  //           week4: weights.week4,
-  //           end: weights.end,
-  //         },
-  //         [`logs.${today}.updatedAt`]: serverTimestamp(),
-  //       },
-  //       { merge: true },
-  //     );
-  //   } catch (e) {
-  //     console.log('save error', e);
-  //   }
-  // };
-
   useEffect(() => {
-    const unsubscribe = onSnapshot(userRef, docSnap => {
-      const data = docSnap.data();
-      if (!data) return;
+    const ref = database().ref(`users/${USER_ID}/logs/${today}`);
 
-      const serverWeights = data?.logs?.[today]?.weightChallenge;
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val();
 
-      if (serverWeights) {
-        setWeights(serverWeights);
+      if (data?.weightChallenge) {
+        setWeights(data.weightChallenge);
       }
 
-      setIsLoaded(true); // ✅ mark as loaded
+      setIsLoaded(true);
     });
 
-    return () => unsubscribe();
-  }, []);
+    return () => ref.off('value', listener);
+  }, [today]);
 
-  useEffect(() => {
-    if (!isLoaded) return; // 🚫 prevent overwrite
-    weightFun();
-  }, [weights]);
-
-  const weightFun = async () => {
+  const weightFun = async updatedWeights => {
     try {
-      await setDoc(
-        userRef,
-        {
-          logs: {
-            [today]: {
-              weightChallenge: weights,
-              updatedAt: serverTimestamp(),
-            },
-          },
-        },
-        { merge: true },
-      );
+      await userRef.update({
+        weightChallenge: updatedWeights,
+        updatedAt: database.ServerValue.TIMESTAMP,
+      });
     } catch (e) {
-      console.log('Firestore save error:', e);
+      console.log('RTDB save error:', e);
     }
   };
+
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const timeout = setTimeout(() => {
+      weightFun(weights);
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [step, isLoaded]);
 
   const getCurrentEditableStep = () => {
     const filled = LABELS.filter(l => parseWeight(weights[l.key]) > 0).length;
@@ -167,8 +144,13 @@ export default function WeightChallengeUI({ navigation }) {
   };
 
   const feedback = getFeedback();
-  const updateWeight = (key, value) =>
-    setWeights(prev => ({ ...prev, [key]: value }));
+
+  const updateWeight = (key, value) => {
+    setWeights(prev => {
+      const updated = { ...prev, [key]: value };
+      return updated;
+    });
+  };
 
   const chartData = {
     labels: ['Start', 'W1', 'W2', 'W3', 'W4', 'End'],

@@ -22,6 +22,7 @@ import Svg, {
 import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
 import firestore from '@react-native-firebase/firestore';
+import database from '@react-native-firebase/database';
 import moment from 'moment';
 import auth from '@react-native-firebase/auth';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -129,6 +130,7 @@ export default function SleepClock({ navigation }) {
   const [liveWakeTime, setLiveWakeTime] = useState(getNowTime());
   const [bedAngle, setBedAngle] = useState(timeToAngle('22:00'));
   const [wakeAngle, setWakeAngle] = useState(timeToAngle('06:00'));
+  const [sleepDateKey, setSleepDateKey] = useState(null);
   const [tab, setTab] = useState('timer');
   const tabs = [
     { key: 'timer', label: 'Timer' },
@@ -136,11 +138,11 @@ export default function SleepClock({ navigation }) {
   ];
 
   const init = async () => {
-    const ref = firestore().collection('users').doc(USER_ID);
-    const doc = await ref.get();
-    console.log('doc :>> ', doc.exists);
+    const ref = database().ref(`users/${USER_ID}`);
+    const snapshot = await ref.once('value');
+    const data = snapshot.val();
     // create if not exists
-    if (!doc.exists) {
+    if (!data) {
       await ref.set({
         goal: {
           selectedGoal: '8',
@@ -154,17 +156,15 @@ export default function SleepClock({ navigation }) {
     }
 
     // live listener
-    const unsub = ref.onSnapshot(snapshot => {
-      const data = snapshot.data() || {};
-      console.log('data :>> ', data);
-      setSleepData(data || {});
+    ref.on('value', snapshot => {
+      const data = snapshot.val() || {};
 
-      // set goal if exists
+      setSleepData(data);
+
       if (data?.goal?.selectedGoal) {
-        setGoalInput(String(data?.goal?.selectedGoal));
+        setGoalInput(String(data.goal.selectedGoal));
       }
 
-      // load today's log if exists
       const today = new Date().toISOString().split('T')[0];
       const todayLog = data.sleepLogs?.[today];
 
@@ -174,7 +174,7 @@ export default function SleepClock({ navigation }) {
       }
     });
 
-    return () => unsub();
+    return () => ref.off();
   };
 
   useEffect(() => {
@@ -213,13 +213,49 @@ export default function SleepClock({ navigation }) {
     if (/^\d{2}:\d{2}$/.test(text)) setWakeAngle(timeToAngle(text));
   };
 
+  const handleManualSave = async () => {
+    if (!bedTime || !wakeTime) return;
+
+    const selectedDate = moment(date, 'ddd, MMMM Do').format('YYYY-MM-DD');
+
+    const ref = database().ref(`users/${USER_ID}/sleepLogs/${selectedDate}`);
+
+    const startAngle = timeToAngle(bedTime);
+    const endAngle = timeToAngle(wakeTime);
+
+    const duration = getDuration(startAngle, endAngle);
+    const totalHours = duration.hours + duration.mins / 60;
+
+    await ref.set({
+      bedTime,
+      wakeTime,
+      duration: totalHours,
+      type: 'manual',
+      updatedAt: Date.now(),
+    });
+  };
   const handleSleepToggle = async () => {
     const now = new Date();
-    const todayKey = now.toISOString().split('T')[0];
 
-    const ref = firestore().collection('users').doc(USER_ID);
+    // ✅ LOCAL DATE (fixes May 1 bug)
+    const getLocalDateKey = () => {
+      return (
+        now.getFullYear() +
+        '-' +
+        String(now.getMonth() + 1).padStart(2, '0') +
+        '-' +
+        String(now.getDate()).padStart(2, '0')
+      );
+    };
 
+    // ───── START ─────
     if (!started) {
+      const startKey = getLocalDateKey(); // ✅ FIXED
+
+      setSleepDateKey(startKey);
+
+      const ref = database().ref(`users/${USER_ID}/sleepLogs/${startKey}`);
+
       setStartTime(now);
       setStarted(true);
 
@@ -227,22 +263,16 @@ export default function SleepClock({ navigation }) {
       setBedTime(t);
       setBedAngle(timeToAngle(t));
 
-      // save bedTime
-      await ref.set(
-        {
-          sleepLogs: {
-            [tab == 'timer' ? todayKey : moment(date).format('yyyy-mm-dd')]: {
-              bedTime: t,
-            },
-          },
-        },
-        { merge: true },
-      );
+      await ref.update({
+        bedTime: t,
+      });
 
       return;
     }
 
-    // STOP SLEEP
+    // ───── STOP ─────
+    const ref = database().ref(`users/${USER_ID}/sleepLogs/${sleepDateKey}`);
+
     setStarted(false);
 
     const wake = getNowTime();
@@ -252,21 +282,15 @@ export default function SleepClock({ navigation }) {
     const duration = getDuration(bedAngle, wakeAngle);
     const totalHours = duration.hours + duration.mins / 60;
 
-    await ref.set(
-      {
-        sleepLogs: {
-          [tab == 'timer' ? todayKey : moment(date).format('yyyy-mm-dd')]: {
-            bedTime,
-            wakeTime: wake,
-            duration: totalHours,
-          },
-        },
-      },
-      { merge: true },
-    );
+    await ref.update({
+      bedTime,
+      wakeTime: wake,
+      duration: totalHours,
+    });
 
     setStartTime(null);
     setLiveSeconds(0);
+    setSleepDateKey(null);
   };
 
   const wakePan = PanResponder.create({
@@ -295,17 +319,9 @@ export default function SleepClock({ navigation }) {
   const quality = getSleepQuality(hours);
 
   async function setGoal() {
-    await firestore()
-      .collection('users')
-      .doc(USER_ID)
-      .set(
-        {
-          goal: {
-            selectedGoal: goalInput,
-          },
-        },
-        { merge: true },
-      );
+    await database().ref(`users/${USER_ID}/goal`).update({
+      selectedGoal: goalInput,
+    });
   }
 
   const onChange = (event, selectedDate) => {
@@ -607,22 +623,24 @@ export default function SleepClock({ navigation }) {
         )}
 
         {/* ── Set Goal button ── */}
-        <TouchableOpacity
-          style={styles.setGoalBtn}
-          activeOpacity={0.85}
-          onPress={setGoal}
-        >
-          <GradientBg
-            id="sleepGoalBtn"
-            c1="#6A9455"
-            c2="#3A5A2A"
-            r={16}
-            horizontal
-          />
-          <Text style={styles.setGoalText}>
-            {sleepData?.goal?.selectedGoal ? 'Upload Sleep Data' : 'Set Goal'}
-          </Text>
-        </TouchableOpacity>
+        {(tab == 'manually' || !sleepData?.goal?.selectedGoal) && (
+          <TouchableOpacity
+            style={styles.setGoalBtn}
+            activeOpacity={0.85}
+            onPress={tab == 'timer' ? setGoal : handleManualSave}
+          >
+            <GradientBg
+              id="sleepGoalBtn"
+              c1="#6A9455"
+              c2="#3A5A2A"
+              r={16}
+              horizontal
+            />
+            <Text style={styles.setGoalText}>
+              {sleepData?.goal?.selectedGoal ? 'Upload Sleep Data' : 'Set Goal'}
+            </Text>
+          </TouchableOpacity>
+        )}
         {show && (
           <DateTimePicker
             onValueChange={onChange}

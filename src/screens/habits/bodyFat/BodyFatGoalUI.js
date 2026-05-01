@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,14 @@ import {
   StyleSheet,
   StatusBar,
   ScrollView,
+  TextInput,
+  Pressable,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
+import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
 import Svg, {
   Path,
   Defs,
@@ -19,6 +25,11 @@ import Svg, {
 } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
+
+const user = auth().currentUser;
+const USER_ID = user?.uid || 'USER_UID';
+const CORRECT_OTP = '1234';
+const { height } = Dimensions.get('window');
 
 function GradientBg({ id, c1, c2, r = 20, horizontal = false }) {
   return (
@@ -110,6 +121,12 @@ const BodyFatGoalScreen = ({ navigation }) => {
   const [goalType, setGoalType] = useState('decrease');
   const [startBFP, setStartBFP] = useState(25);
   const [targetBFP, setTargetBFP] = useState(18);
+  const [showOtp, setShowOtp] = useState(false);
+  const [editable, setEditable] = useState(false);
+  const [locked, setLocked] = useState(false);
+
+  const [otp, setOtp] = useState(['', '', '', '']);
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
   const difference = Math.abs(targetBFP - startBFP);
 
@@ -128,6 +145,116 @@ const BodyFatGoalScreen = ({ navigation }) => {
   const currentCat = getCategory(startBFP);
   const targetCat = getCategory(targetBFP);
   const isCut = goalType === 'decrease';
+
+  const inputs = [useRef(null), useRef(null), useRef(null), useRef(null)];
+
+  useEffect(() => {
+    if (!USER_ID) return;
+
+    const checkGoal = async () => {
+      const snapshot = await database()
+        .ref(`/users/${USER_ID}/bodyFatGoal`)
+        .once('value');
+
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+
+        const now = Date.now();
+        const diffDays = Math.floor(
+          (now - data.createdAt) / (1000 * 60 * 60 * 24),
+        );
+
+        if (diffDays === 0) {
+          // same day → allow edit
+          setLocked(false);
+        } else if (diffDays < 30) {
+          setLocked(true);
+          setEditable(false);
+        } else {
+          setLocked(false);
+        }
+
+        setStartBFP(data.startBFP);
+        setTargetBFP(data.targetBFP);
+        setGoalType(data.goalType);
+      }
+    };
+
+    checkGoal();
+  }, []);
+
+  const openOtp = () => {
+    setShowOtp(true);
+
+    Animated.timing(slideAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeOtp = () => {
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => setShowOtp(false));
+
+    const enteredOtp = otp.join('');
+    console.log('enteredOtp === CORRECT_OTP :>> ', enteredOtp === CORRECT_OTP);
+    if (enteredOtp === CORRECT_OTP && !locked) {
+      setEditable(true);
+    } else {
+      setEditable(false);
+    }
+  };
+
+  const uploadData = async () => {
+    const user = auth().currentUser;
+
+    if (!user) {
+      console.log('User not logged in');
+      return;
+    }
+
+    try {
+      await database().ref(`/users/${user.uid}/bodyFatGoal`).set({
+        startBFP,
+        targetBFP,
+        goalType,
+        createdAt: Date.now(),
+      });
+
+      console.log('Saved successfully');
+
+      setLocked(true);
+      setEditable(false);
+    } catch (e) {
+      console.log('Upload error:', e);
+    }
+  };
+
+  const handleOtpChange = (val, index) => {
+    const next = [...otp];
+    next[index] = val;
+    setOtp(next);
+    if (val && index < 3) {
+      inputs[index + 1].current?.focus();
+    }
+  };
+
+  const handleOtpBackspace = (e, index) => {
+    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
+      inputs[index - 1].current?.focus();
+    }
+  };
+
+  const otpFilled = otp.every(c => c.length === 1);
+
+  const panelTranslate = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [300, 0],
+  });
 
   return (
     <View style={styles.root}>
@@ -246,6 +373,27 @@ const BodyFatGoalScreen = ({ navigation }) => {
 
         {/* Sliders card */}
         <View style={styles.slidersCard}>
+          <TouchableOpacity onPress={openOtp} style={{ marginBottom: 12 }}>
+            <Text style={styles.sliderLabel}>Enter Starting BFP</Text>
+            <TextInput
+              style={styles.goalInput}
+              keyboardType="numeric"
+              value={String(startBFP)}
+              onChangeText={val => setStartBFP(Number(val) || 0)}
+              editable={editable && !locked}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={openOtp} style={{ marginBottom: 12 }}>
+            <Text style={styles.sliderLabel}>Enter Target BFP</Text>
+            <TextInput
+              style={styles.goalInput}
+              keyboardType="numeric"
+              value={String(targetBFP)}
+              onChangeText={val => setTargetBFP(Number(val) || 0)}
+              editable={editable && !locked}
+            />
+          </TouchableOpacity>
           {/* Current slider */}
           <View style={styles.sliderBlock}>
             <View style={styles.sliderLabelRow}>
@@ -266,16 +414,22 @@ const BodyFatGoalScreen = ({ navigation }) => {
                 </Text>
               </View>
             </View>
-            <Slider
-              value={startBFP}
-              onValueChange={setStartBFP}
-              minimumValue={5}
-              maximumValue={50}
-              step={0.5}
-              minimumTrackTintColor={currentCat.color}
-              maximumTrackTintColor="rgba(255,255,255,0.12)"
-              thumbTintColor={currentCat.color}
-            />
+            <View pointerEvents={editable && !locked ? 'auto' : 'none'}>
+              <Slider
+                value={startBFP}
+                onValueChange={val => {
+                  if (!editable || locked) return;
+                  setStartBFP(val);
+                }}
+                style={{ opacity: editable && !locked ? 1 : 0.4 }}
+                minimumValue={5}
+                maximumValue={50}
+                step={0.5}
+                minimumTrackTintColor={currentCat.color}
+                maximumTrackTintColor="rgba(255,255,255,0.12)"
+                thumbTintColor={currentCat.color}
+              />
+            </View>
             <View style={styles.sliderRange}>
               <Text style={styles.sliderRangeText}>5%</Text>
               <Text style={styles.sliderRangeText}>50%</Text>
@@ -302,16 +456,22 @@ const BodyFatGoalScreen = ({ navigation }) => {
                 </Text>
               </View>
             </View>
-            <Slider
-              value={targetBFP}
-              onValueChange={setTargetBFP}
-              minimumValue={5}
-              maximumValue={50}
-              step={0.5}
-              minimumTrackTintColor={targetCat.color}
-              maximumTrackTintColor="rgba(255,255,255,0.12)"
-              thumbTintColor={targetCat.color}
-            />
+            <View pointerEvents={editable && !locked ? 'auto' : 'none'}>
+              <Slider
+                value={targetBFP}
+                onValueChange={val => {
+                  if (!editable || locked) return;
+                  setTargetBFP(val);
+                }}
+                style={{ opacity: editable && !locked ? 1 : 0.4 }}
+                minimumValue={5}
+                maximumValue={50}
+                step={0.5}
+                minimumTrackTintColor={targetCat.color}
+                maximumTrackTintColor="rgba(255,255,255,0.12)"
+                thumbTintColor={targetCat.color}
+              />
+            </View>
             <View style={styles.sliderRange}>
               <Text style={styles.sliderRangeText}>5%</Text>
               <Text style={styles.sliderRangeText}>50%</Text>
@@ -387,8 +547,9 @@ const BodyFatGoalScreen = ({ navigation }) => {
         {/* Save button */}
         <TouchableOpacity
           style={[styles.saveBtn, !!validationMsg && styles.saveBtnDisabled]}
-          disabled={!!validationMsg}
+          disabled={!!validationMsg || locked}
           activeOpacity={0.85}
+          onPress={uploadData}
         >
           {!validationMsg && (
             <GradientBg
@@ -401,6 +562,85 @@ const BodyFatGoalScreen = ({ navigation }) => {
           )}
           <Text style={styles.saveBtnText}>Save Goal</Text>
         </TouchableOpacity>
+        {/* OTP bottom sheet */}
+        {showOtp && (
+          <>
+            <Pressable style={styles.overlay} onPress={closeOtp} />
+            <Animated.View
+              style={[
+                styles.otpPanel,
+                { transform: [{ translateY: panelTranslate }] },
+              ]}
+            >
+              <GradientBg id="otpPanel" c1="#1E2D1A" c2="#161D15" r={24} />
+
+              {/* Handle */}
+              <View style={styles.panelHandle} />
+
+              <Text style={styles.otpTitle}>Enter Confirmation Code</Text>
+              <Text style={styles.otpSub}>
+                Enter the 4-digit code provided by your practitioner
+              </Text>
+
+              <View style={styles.otpRow}>
+                {otp.map((digit, i) => (
+                  <TextInput
+                    key={i}
+                    ref={inputs[i]}
+                    style={[styles.otpBox, digit && styles.otpBoxFilled]}
+                    value={digit}
+                    onChangeText={val => handleOtpChange(val.slice(-1), i)}
+                    onKeyPress={e => handleOtpBackspace(e, i)}
+                    keyboardType="number-pad"
+                    maxLength={1}
+                    textAlign="center"
+                    placeholderTextColor="rgba(255,255,255,0.15)"
+                    placeholder="·"
+                    selectionColor={colors.secondary}
+                  />
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.otpConfirmBtn,
+                  !otpFilled && styles.otpConfirmBtnDisabled,
+                ]}
+                activeOpacity={0.85}
+                disabled={!otpFilled}
+                onPress={() => {
+                  const enteredOtp = otp.join('');
+
+                  if (enteredOtp === CORRECT_OTP && !locked) {
+                    setEditable(true);
+                  } else {
+                    setEditable(false);
+                  }
+
+                  closeOtp();
+                }}
+              >
+                {otpFilled && (
+                  <GradientBg
+                    id="otpConfirm"
+                    c1="#6A9455"
+                    c2="#3A5A2A"
+                    r={14}
+                    horizontal
+                  />
+                )}
+                <Text
+                  style={[
+                    styles.otpConfirmText,
+                    !otpFilled && styles.otpConfirmTextDisabled,
+                  ]}
+                >
+                  Confirm
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </>
+        )}
       </Wrapper>
     </View>
   );
@@ -439,6 +679,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: fontFamily.montserratRegular,
     paddingHorizontal: 18,
+  },
+  goalInput: {
+    color: colors.white,
+    fontSize: 16,
+    fontFamily: fontFamily.montserratBold,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 6,
+    marginTop: 4,
   },
 
   scroll: { padding: 18, paddingTop: 16, paddingBottom: 48 },
@@ -622,6 +871,87 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.montserratSemiBold,
     letterSpacing: 0.3,
   },
+
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 10,
+  },
+  otpPanel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: height / 1.5,
+    zIndex: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: 'hidden',
+    padding: 24,
+    paddingBottom: 40,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  panelHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignSelf: 'center',
+    marginBottom: 22,
+  },
+  otpTitle: {
+    color: colors.white,
+    fontSize: 18,
+    fontFamily: fontFamily.montserratBold,
+    marginBottom: 4,
+  },
+  otpSub: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 12,
+    fontFamily: fontFamily.montserratRegular,
+    marginBottom: 24,
+    lineHeight: 18,
+  },
+  otpRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 14,
+    marginBottom: 28,
+  },
+  otpBox: {
+    width: 58,
+    height: 60,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    color: colors.white,
+    fontSize: 24,
+    fontFamily: fontFamily.montserratBold,
+    textAlign: 'center',
+  },
+  otpBoxFilled: {
+    borderColor: 'rgba(143,175,120,0.5)',
+    backgroundColor: 'rgba(143,175,120,0.08)',
+  },
+  otpConfirmBtn: {
+    height: 52,
+    borderRadius: 14,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  otpConfirmBtnDisabled: {},
+  otpConfirmText: {
+    color: colors.white,
+    fontSize: 16,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+  otpConfirmTextDisabled: { color: 'rgba(255,255,255,0.3)' },
 });
 
 export default BodyFatGoalScreen;

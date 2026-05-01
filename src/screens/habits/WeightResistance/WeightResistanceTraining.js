@@ -13,6 +13,7 @@ import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import firestore, { FieldValue } from '@react-native-firebase/firestore';
+import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import storage from '@react-native-firebase/storage';
 import { launchCamera } from 'react-native-image-picker';
@@ -21,6 +22,14 @@ import { requestCameraPermission } from '../../../utils/helper';
 const TOTAL = 8;
 const WEEKLY_TARGET = 2;
 const USER_ID = auth().currentUser?.uid;
+
+const getLocalDateKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+    2,
+    '0',
+  )}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 const emptySessions = () =>
   Array.from({ length: TOTAL }, () => ({
@@ -69,13 +78,11 @@ export default function WeightTrainingUI({ navigation, route }) {
     Array.from({ length: TOTAL }, () => ({ photo: null, timestamp: null })),
   );
 
-  const tempPhotos = useRef(
-    Array.from({ length: TOTAL }, () => ({ photo: null, timestamp: null })),
-  ).current;
+  const tempPhotos = useRef({});
 
   const headerAnim = useRef(new Animated.Value(0)).current;
 
-  const today = new Date();
+  const today = getLocalDateKey();
 
   let weeksPassed = 0;
 
@@ -101,57 +108,24 @@ export default function WeightTrainingUI({ navigation, route }) {
   }, []);
 
   useEffect(() => {
-    if (!isFocused) return;
+    const today = getLocalDateKey();
+    const ref = database().ref(`users/${USER_ID}/logs/${today}`);
 
-    const ref = firestore().collection('users').doc(USER_ID);
+    const onValueChange = ref.on('value', snapshot => {
+      const data = snapshot.val();
 
-    unsubscribeRef.current = ref.onSnapshot(
-      doc => {
-        const data = doc.data();
+      const rawPhotos = data?.workoutPhotos || [];
 
-        if (!data) return;
+      const normalized = Array.from({ length: TOTAL }, (_, i) => ({
+        photo: rawPhotos?.[i]?.photo || null,
+        timestamp: rawPhotos?.[i]?.timestamp || null,
+      }));
 
-        setWorkoutData(data);
+      setSessions(normalized);
+    });
 
-        const todayLog = data?.logs?.[todayRef];
-
-        const rawPhotos = todayLog?.workoutPhotos;
-
-        // ✅ ALWAYS normalize schema
-        const normalized = Array.from({ length: TOTAL }, (_, i) => {
-          const item = rawPhotos?.[i];
-
-          return {
-            photo: item?.photo || null,
-            timestamp: item?.timestamp || null,
-          };
-        });
-
-        // ✅ prevent flicker on first load only
-        if (firstLoadRef.current) {
-          setSessions(normalized);
-          firstLoadRef.current = false;
-          return;
-        }
-
-        // ✅ deep sync without UI reset flicker
-        setSessions(prev => {
-          const isSame = JSON.stringify(prev) === JSON.stringify(normalized);
-
-          return isSame ? prev : normalized;
-        });
-      },
-      error => {
-        console.log('Firestore listener error:', error);
-      },
-    );
-
-    return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-      }
-    };
-  }, [isFocused]);
+    return () => ref.off('value', onValueChange);
+  }, []);
 
   /* =========================
      SAFE STATS (NO CRASHES)
@@ -182,20 +156,12 @@ export default function WeightTrainingUI({ navigation, route }) {
   ========================= */
   const saveWorkoutStats = async stats => {
     try {
-      await firestore()
-        .collection('users')
-        .doc(USER_ID)
-        .set(
-          {
-            activities: {
-              workout: {
-                ...stats,
-                updatedAt: FieldValue.serverTimestamp(),
-              },
-            },
-          },
-          { merge: true },
-        );
+      await database()
+        .ref(`users/${USER_ID}/activities/workout`)
+        .update({
+          ...stats,
+          updatedAt: database.ServerValue.TIMESTAMP,
+        });
     } catch (e) {
       console.log('stats save error:', e);
     }
@@ -208,81 +174,72 @@ export default function WeightTrainingUI({ navigation, route }) {
       weeklyProgress: getWeeklyProgress(sessions),
     });
   }, [sessions]);
+
   /* 📸 PICK IMAGE */
   const handleUpload = async index => {
     const granted = await requestCameraPermission();
     if (!granted) return;
 
-    try {
-      const result = await launchCamera({
-        mediaType: 'photo',
-        quality: 0.7,
-        saveToPhotos: true,
-      });
+    const result = await launchCamera({
+      mediaType: 'photo',
+      quality: 0.7,
+      saveToPhotos: true,
+    });
 
-      if (result.didCancel) return;
+    if (result.didCancel) return;
 
-      const uri = result?.assets?.[0]?.uri;
-      if (!uri) return;
+    const uri = result?.assets?.[0]?.uri;
+    if (!uri) return;
 
-      tempPhotos[index] = {
-        photo: uri,
-        timestamp: new Date().toLocaleString(),
-      };
+    const photoData = {
+      photo: uri,
+      timestamp: new Date().toISOString(),
+    };
 
-      setSessions(prev => {
-        const updated = [...prev];
-        updated[index] = tempPhotos[index];
-        return updated;
-      });
-    } catch (e) {
-      console.log('Camera error:', e);
-    }
+    tempPhotos.current[index] = photoData;
+
+    setSessions(prev => {
+      const updated = [...prev];
+      updated[index] = photoData;
+      return updated;
+    });
   };
 
   /* 🔥 SAVE SESSION */
   const handleDone = async index => {
     try {
-      const photoData = tempPhotos[index];
+      const photoData = tempPhotos.current[index];
       if (!photoData) return;
 
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDateKey();
+      const ref = database().ref(`users/${USER_ID}/logs/${today}`);
 
-      const userRef = firestore().collection('users').doc(USER_ID);
+      const snapshot = await ref.once('value');
+      const data = snapshot.val() || {};
 
-      const snap = await userRef.get();
-      const data = snap.data() || {};
+      // ALWAYS normalize to array
+      let workoutPhotos = data?.workoutPhotos || [];
 
-      const logs = data?.logs || {};
-      const todayLog = logs[today] || {};
+      if (!Array.isArray(workoutPhotos)) {
+        workoutPhotos = Object.values(workoutPhotos || {});
+      }
 
-      const workoutPhotos = Array.isArray(todayLog.workoutPhotos)
-        ? [...todayLog.workoutPhotos]
-        : Array(TOTAL).fill(null);
+      workoutPhotos = Array(TOTAL)
+        .fill(null)
+        .map((_, i) => workoutPhotos[i] || null);
 
       workoutPhotos[index] = photoData;
-
-      await userRef.set(
-        {
-          logs: {
-            ...logs,
-            [today]: {
-              ...todayLog,
-              workoutWeek: weeksPassed + 1,
-              workoutPhotos,
-            },
-          },
-        },
-        { merge: true },
-      );
-
-      setSessions(prev => {
-        const updated = [...prev];
-        updated[index] = photoData;
-        return updated;
+      console.log('photoData :>> ', photoData);
+      await ref.set({
+        ...data,
+        workoutWeek: weeksPassed + 1,
+        workoutPhotos,
+        updatedAt: database.ServerValue.TIMESTAMP,
       });
 
-      tempPhotos[index] = null;
+      setSessions(workoutPhotos);
+
+      delete tempPhotos.current[index];
     } catch (e) {
       console.log('Upload error:', e);
     }

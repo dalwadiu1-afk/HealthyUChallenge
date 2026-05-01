@@ -32,6 +32,7 @@ import {
   onSnapshot,
 } from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
+import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 
 const { width: SW } = Dimensions.get('window');
@@ -43,7 +44,6 @@ const getWeekDate = weekIndex => {
   date.setDate(date.getDate() + weekIndex * 7);
   return date.toISOString().split('T')[0];
 };
-const db = getFirestore();
 const user = auth().currentUser;
 const USER_ID = user?.uid || 'USER_UID';
 
@@ -105,12 +105,10 @@ export default function MeatlessChallenge({ navigation }) {
   const progress = totalMeals / (TOTAL_WEEKS * MAX_MEALS) || 0;
 
   useEffect(() => {
-    console.log('user :>> ', user);
+    const userRef = database().ref(`/users/${USER_ID}`);
 
-    const docRef = doc(db, 'users', USER_ID);
-
-    const unsubscribe = onSnapshot(docRef, snapshot => {
-      const data = snapshot?.data();
+    const listener = userRef.on('value', snapshot => {
+      const data = snapshot.val();
 
       if (data?.goal?.startDate) {
         START_DATE = new Date(data.goal.startDate);
@@ -125,10 +123,8 @@ export default function MeatlessChallenge({ navigation }) {
         week4: { meals: [], completed: false },
       };
 
-      // ✅ LOOP WEEK KEYS (NOT today)
       Object.keys(restored).forEach((weekKey, index) => {
-        const weekDate = getWeekDate(index); // 👈 KEY FIX
-
+        const weekDate = getWeekDate(index);
         const weekData = logs?.[weekKey]?.[weekDate];
 
         if (weekData) {
@@ -139,29 +135,10 @@ export default function MeatlessChallenge({ navigation }) {
         }
       });
 
-      // 🚨 prevent stale overwrite (your logic is good 👍)
-      setWeeks(prev => {
-        const prevCount = Object.values(prev).reduce(
-          (sum, w) => sum + (w?.meals?.length || 0),
-          0,
-        );
-
-        const newCount = Object.values(restored).reduce(
-          (sum, w) => sum + (w?.meals?.length || 0),
-          0,
-        );
-
-        if (newCount < prevCount) {
-          console.log('⛔ Ignoring stale snapshot');
-          return prev;
-        }
-
-        console.log('✅ Applying snapshot');
-        return restored;
-      });
+      setWeeks(restored);
     });
 
-    return () => unsubscribe();
+    return () => userRef.off('value', listener);
   }, [USER_ID]);
 
   const addMeal = async weekKey => {
@@ -245,18 +222,18 @@ export default function MeatlessChallenge({ navigation }) {
     try {
       if (!USER_ID) return;
 
-      const docRef = doc(db, 'users', USER_ID);
       const updates = {};
 
       Object.keys(updatedWeeks || {}).forEach((weekKey, index) => {
-        const weekDate = getWeekDate(index); // 👈 KEY CHANGE
-        updates[`logs.${weekKey}.${weekDate}`] = {
+        const weekDate = getWeekDate(index);
+
+        updates[`logs/${weekKey}/${weekDate}`] = {
           meals: updatedWeeks[weekKey]?.meals || [],
           completed: (updatedWeeks[weekKey]?.meals || []).length >= MAX_MEALS,
         };
       });
 
-      await setDoc(docRef, updates, { merge: true });
+      await database().ref(`/users/${USER_ID}`).update(updates);
     } catch (e) {
       console.log('❌ ERROR:', e);
     }

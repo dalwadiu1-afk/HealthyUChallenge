@@ -19,6 +19,7 @@ import Svg, {
 import { colors, fontFamily } from '../../../constant';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
+import database from '@react-native-firebase/database';
 import { getSmartTips } from '../../../utils/helper';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -85,38 +86,40 @@ export default function FiberChartDays({ navigation }) {
 
   /* ───────── FIRESTORE LIVE DATA ───────── */
   useEffect(() => {
-    const unsub = firestore()
-      .collection('users')
-      .doc(USER_ID)
-      .onSnapshot(doc => {
-        const data = doc.data();
-        const logs = data?.logs || {};
-        const start = data?.goal?.startDate
-          ? new Date(data?.goal?.startDate)
-          : new Date(); // fallback
+    const ref = database().ref(`users/${USER_ID}`);
 
-        const formatted = Array.from({ length: 30 }, (_, i) => {
-          const date = new Date(start);
-          date.setDate(start.getDate() + i);
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val() || {};
+      const logs = data.logs || {};
+      const start = data?.goal?.startDate
+        ? new Date(data.goal.startDate)
+        : new Date(); // fallback
 
-          const key = date.toISOString().split('T')[0];
+      const formatted = Array.from({ length: 30 }, (_, i) => {
+        const date = new Date(start);
+        date.setDate(start.getDate() + i);
 
-          return {
-            dayIndex: i,
-            fiber: logs[key]?.fiber || 0,
-            date,
-          };
-        });
+        const key = date.toISOString().split('T')[0];
 
-        setFiberData(formatted);
-        setTips(getSmartTips(formatted));
-        console.log('getSmartTips(formatted) :>> ', getSmartTips(formatted));
-        // set today automatically
-        setSelected(getTodayIndex(start));
+        return {
+          dayIndex: i,
+          fiber: logs[key]?.fiber || 0,
+          date,
+        };
       });
 
-    return () => unsub();
+      setFiberData(formatted);
+      setTips(getSmartTips(formatted));
+      console.log('getSmartTips(formatted) :>> ', getSmartTips(formatted));
+
+      // set today automatically
+      setSelected(getTodayIndex(start));
+    });
+
+    // cleanup
+    return () => ref.off('value', listener);
   }, []);
+
   const max = Math.max(...fiberData.map(d => d.fiber), 40);
   const graphHeight = CHART_HEIGHT - PADDING * 2;
   const getBarH = val => (val / max) * graphHeight;
@@ -140,7 +143,7 @@ export default function FiberChartDays({ navigation }) {
 
     const newFiber = (currentTodayData?.fiber || 0) + val;
 
-    // update local state (ONLY today's entry)
+    // update local state (same as before)
     const updated = fiberData.map(item => {
       const key = item.date.toISOString().split('T')[0];
 
@@ -156,20 +159,14 @@ export default function FiberChartDays({ navigation }) {
 
     setFiberData(updated);
 
-    // write ONLY today's log in Firestore
-    await firestore()
-      .collection('users')
-      .doc(USER_ID)
-      .set(
-        {
-          logs: {
-            [todayKey]: {
-              fiber: newFiber,
-            },
-          },
-        },
-        { merge: true },
-      );
+    // ✅ ONLY CHANGE HERE (Firestore → Realtime DB)
+    try {
+      await database().ref(`users/${USER_ID}/logs/${todayKey}`).update({
+        fiber: newFiber,
+      });
+    } catch (e) {
+      console.log('Error updating fiber:', e);
+    }
   };
 
   const pastData = fiberData.slice(0, selected + 1);

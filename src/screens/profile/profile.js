@@ -11,6 +11,7 @@ import {
 import Svg, { Path } from 'react-native-svg';
 import { colors, fontFamily } from '../../constant';
 import { Wrapper } from '../../components';
+import auth from '@react-native-firebase/auth';
 
 const { width, height } = Dimensions.get('window');
 
@@ -146,6 +147,15 @@ export default function Profile({ navigation }) {
     ]).start();
   }, []);
 
+  const handleLogout = async () => {
+    try {
+      await auth().signOut();
+      console.log('✅ User signed out');
+    } catch (e) {
+      console.log('❌ Logout error:', e);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Wrapper>
@@ -235,7 +245,11 @@ export default function Profile({ navigation }) {
         </View>
 
         {/* Logout */}
-        <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.logoutBtn}
+          activeOpacity={0.8}
+          onPress={handleLogout}
+        >
           <Text style={styles.logoutIcon}>🚪</Text>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
