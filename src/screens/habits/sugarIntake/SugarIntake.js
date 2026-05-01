@@ -21,71 +21,131 @@ import Svg, {
 } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
+import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
 
 const { width: SW } = Dimensions.get('window');
 const CHART_HEIGHT = 220;
 const PADDING = 20;
 const BAR_WIDTH = 14;
 const ITEM_WIDTH = 30;
+const USER_ID = auth().currentUser?.uid;
 
-function GradientBg({ id, c1, c2, r = 20 }) {
-  return (
-    <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none">
-      <Defs>
-        <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor={c1} stopOpacity="1" />
-          <Stop offset="1" stopColor={c2} stopOpacity="1" />
-        </LinearGradient>
-      </Defs>
-      <Rect width="100%" height="100%" fill={`url(#${id})`} rx={r} />
-    </Svg>
-  );
-}
+const getDateKey = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`; // "2026-04-01"
+};
 
 export default function SugarChart30Days({ navigation }) {
   const [product, setProduct] = useState('');
   const [sugarInput, setSugarInput] = useState('');
+  const [selected, setSelected] = useState(10);
+  const [rawData, setRawData] = useState([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [todayString, setTodayString] = useState(new Date().toDateString());
+  const [startDate, setStartDate] = useState(new Date());
 
   const gender = 'female';
   const goal = gender === 'female' ? 24 : 36;
+  const todayKey = getDateKey();
+  const selectedKey = data[selected]?.key;
+  const isToday = selectedKey === todayKey;
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
 
-  const [today, setToday] = useState(new Date().toDateString());
+  const base = new Date(startDate);
+  base.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.floor((todayDate - base) / (1000 * 60 * 60 * 24));
+
+  // 👉 cycle index (0 = first 30 days, 1 = next 30 days, etc)
+  const cycle = Math.floor(diffDays / 30);
+
+  // 👉 start of current cycle
+  const cycleStart = new Date(base);
+  cycleStart.setDate(base.getDate() + cycle * 30);
+
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date().toDateString();
-      if (now !== today) setToday(now);
+      if (now !== todayString) setToday(now);
     }, 60000);
     return () => clearInterval(interval);
-  }, [today]);
+  }, [todayString]);
 
-  const startDate = new Date('2026-03-25');
+  useEffect(() => {
+    if (!USER_ID) return;
 
-  const [rawData, setRawData] = useState([
-    { dayIndex: 0, items: [{ name: 'Tea', sugar: 12 }] },
-    { dayIndex: 1, items: [{ name: 'Juice', sugar: 18 }] },
-    { dayIndex: 2, items: [{ name: 'Cake', sugar: 28 }] },
-  ]);
+    // refs
+    const logsRef = database().ref(`users/${USER_ID}/sugarLogs`);
+    const startDateRef = database().ref(`users/${USER_ID}/goal/startDate`);
+
+    // 1️⃣ Get start date ONCE
+    startDateRef.once('value').then(snapshot => {
+      const value = snapshot.val();
+
+      if (value) {
+        setStartDate(new Date(value));
+      } else {
+        const fallback = new Date();
+        fallback.setDate(fallback.getDate() - 29);
+        setStartDate(fallback);
+      }
+    });
+
+    // 2️⃣ Listen to sugar logs LIVE
+    const listener = logsRef.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (data) {
+        const parsed = Object.keys(data).map(key => ({
+          date: key,
+          items: data[key]?.items || [],
+        }));
+
+        setRawData(parsed);
+      } else {
+        setRawData([]);
+      }
+
+      setIsLoaded(true);
+    });
+
+    // cleanup
+    return () => logsRef.off('value', listener);
+  }, [USER_ID]);
 
   const formatDate = date =>
     date.toLocaleDateString('en-US', { day: 'numeric' });
 
   const data = useMemo(() => {
+    if (!startDate) return [];
+
+    const base = new Date(cycleStart);
+    base.setHours(0, 0, 0, 0);
+
     return Array.from({ length: 30 }, (_, i) => {
-      const found = rawData.find(d => d.dayIndex === i);
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i);
+      const date = new Date(base);
+      date.setDate(base.getDate() + i);
+
+      const key = getDateKey(date);
+
+      const found = rawData.find(d => d.date === key);
+
       const totalSugar =
         found?.items?.reduce((s, item) => s + item.sugar, 0) || 0;
+
       return {
-        dayIndex: i,
-        sugar: totalSugar,
         date,
+        sugar: totalSugar,
         items: found?.items || [],
+        key,
       };
     });
-  }, [rawData]);
-
-  const [selected, setSelected] = useState(10);
+  }, [rawData, cycleStart]);
 
   const max = Math.max(...data.map(d => d.sugar), goal);
   const graphHeight = CHART_HEIGHT - PADDING * 2;
@@ -104,9 +164,12 @@ export default function SugarChart30Days({ navigation }) {
   const requiredAvg =
     remainingDays > 0 ? Math.max(0, (goal * 30 - total) / remainingDays) : 0;
 
-  const todayIndex = data.findIndex(d => d.date.toDateString() === today);
-  const todayExceeded = todayIndex !== -1 && data[todayIndex].sugar > goal;
-
+  const todayIndex = Math.floor(
+    (new Date() - startDate) / (1000 * 60 * 60 * 24),
+  );
+  const todayIndexSafe = todayIndex >= 0 && todayIndex < 30 ? todayIndex : -1;
+  const todayExceeded =
+    todayIndexSafe !== -1 && data[todayIndexSafe]?.sugar > goal;
   const trendPoints = data
     .map((d, i) => {
       const x = i * ITEM_WIDTH + ITEM_WIDTH / 2;
@@ -115,32 +178,42 @@ export default function SugarChart30Days({ navigation }) {
     })
     .join(' ');
 
-  const handleAddSugar = () => {
+  const handleAddSugar = async () => {
     if (!product || !sugarInput) return;
-    if (todayIndex === -1) return;
 
-    setRawData(prev => {
-      const updated = [...prev];
-      const index = updated.findIndex(d => d.dayIndex === todayIndex);
-      if (index !== -1) {
-        updated[index] = {
-          ...updated[index],
-          items: [
-            ...updated[index].items,
-            { name: product, sugar: Number(sugarInput) },
-          ],
-        };
-      } else {
-        updated.push({
-          dayIndex: todayIndex,
-          items: [{ name: product, sugar: Number(sugarInput) }],
-        });
-      }
-      return updated;
-    });
+    const newItem = {
+      name: product,
+      sugar: Number(sugarInput),
+    };
+
+    await saveSugarData(newItem);
 
     setProduct('');
     setSugarInput('');
+  };
+
+  const saveSugarData = async newItem => {
+    try {
+      const dateKey = getDateKey();
+
+      const ref = database().ref(`users/${USER_ID}/sugarLogs/${dateKey}`);
+
+      const snapshot = await ref.once('value');
+      const existing = snapshot.val();
+
+      if (existing) {
+        await ref.update({
+          items: [...(existing.items || []), newItem],
+        });
+      } else {
+        await ref.set({
+          date: dateKey,
+          items: [newItem],
+        });
+      }
+    } catch (e) {
+      console.log('Save error:', e);
+    }
   };
 
   const chartTotalWidth = ITEM_WIDTH * 30;
@@ -323,7 +396,7 @@ export default function SugarChart30Days({ navigation }) {
                   { color: getColor(data[selected]?.sugar) },
                 ]}
               >
-                {data[selected]?.sugar}g
+                {data[selected]?.sugar || 0}g
               </Text>
             </View>
           </View>
@@ -331,7 +404,7 @@ export default function SugarChart30Days({ navigation }) {
           {data[selected]?.items.length === 0 ? (
             <Text style={styles.emptyText}>No items recorded for this day</Text>
           ) : (
-            data[selected].items.map((item, idx) => (
+            data[selected]?.items.map((item, idx) => (
               <View key={idx} style={styles.itemRow}>
                 <Text style={styles.itemName}>{item.name}</Text>
                 <Text
@@ -345,37 +418,41 @@ export default function SugarChart30Days({ navigation }) {
         </View>
 
         {/* Add sugar card */}
-        <View style={styles.addCard}>
-          <Text style={styles.addTitle}>🍬 Add Sugar Entry</Text>
-          <Text style={styles.addSub}>Entries are added to today's data</Text>
+        {isToday && (
+          <View style={styles.addCard}>
+            <Text style={styles.addTitle}>🍬 Add Sugar Entry</Text>
+            <Text style={styles.addSub}>
+              Entries are added to todayDate 's data
+            </Text>
 
-          <TextInput
-            value={product}
-            onChangeText={setProduct}
-            placeholder="Product name (e.g. Coke)"
-            placeholderTextColor="rgba(255,255,255,0.25)"
-            style={styles.input}
-          />
-          <TextInput
-            value={sugarInput}
-            onChangeText={setSugarInput}
-            keyboardType="numeric"
-            placeholder="Sugar amount (g)"
-            placeholderTextColor="rgba(255,255,255,0.25)"
-            style={[styles.input, { marginBottom: 0 }]}
-          />
+            <TextInput
+              value={product}
+              onChangeText={setProduct}
+              placeholder="Product name (e.g. Coke)"
+              placeholderTextColor="rgba(255,255,255,0.25)"
+              style={styles.input}
+            />
+            <TextInput
+              value={sugarInput}
+              onChangeText={setSugarInput}
+              keyboardType="numeric"
+              placeholder="Sugar amount (g)"
+              placeholderTextColor="rgba(255,255,255,0.25)"
+              style={[styles.input, { marginBottom: 0 }]}
+            />
 
-          <TouchableOpacity
-            style={[
-              styles.addBtn,
-              (!product || !sugarInput) && styles.addBtnDisabled,
-            ]}
-            onPress={handleAddSugar}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.addBtnText}>Add Entry</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={[
+                styles.addBtn,
+                (!product || !sugarInput) && styles.addBtnDisabled,
+              ]}
+              onPress={handleAddSugar}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.addBtnText}>Add Entry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </Wrapper>
     </View>
   );

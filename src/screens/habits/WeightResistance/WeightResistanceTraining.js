@@ -1,20 +1,41 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Image,
-  ScrollView,
   StatusBar,
   Animated,
 } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
+import firestore, { FieldValue } from '@react-native-firebase/firestore';
+import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
+import storage from '@react-native-firebase/storage';
+import { launchCamera } from 'react-native-image-picker';
+import { requestCameraPermission } from '../../../utils/helper';
 
 const TOTAL = 8;
 const WEEKLY_TARGET = 2;
+const USER_ID = auth().currentUser?.uid;
+
+const getLocalDateKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+    2,
+    '0',
+  )}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const emptySessions = () =>
+  Array.from({ length: TOTAL }, () => ({
+    photo: null,
+    timestamp: null,
+  }));
 
 function CameraIcon() {
   return (
@@ -51,101 +72,32 @@ function CheckIcon() {
   );
 }
 
-function WorkoutCard({ index, photo, timestamp, onUpload }) {
-  const anim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(anim, {
-      toValue: 1,
-      duration: 380,
-      delay: index * 70,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  const done = !!photo;
-  const weekNum = Math.floor(index / WEEKLY_TARGET) + 1;
-  const sessionNum = (index % WEEKLY_TARGET) + 1;
-
-  return (
-    <Animated.View
-      style={{
-        opacity: anim,
-        transform: [
-          {
-            translateY: anim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [24, 0],
-            }),
-          },
-        ],
-      }}
-    >
-      <View style={[styles.card, done && styles.cardDone]}>
-        {/* Card header */}
-        <View style={styles.cardHeader}>
-          <View style={[styles.numBadge, done && styles.numBadgeDone]}>
-            {done ? (
-              <CheckIcon />
-            ) : (
-              <Text style={styles.numText}>{index + 1}</Text>
-            )}
-          </View>
-          <View style={styles.cardHeaderText}>
-            <Text style={styles.cardTitle}>Session #{index + 1}</Text>
-            <Text style={styles.cardSub}>
-              Week {weekNum} · Session {sessionNum}
-              {done ? '  ✓ Uploaded' : ''}
-            </Text>
-          </View>
-          {done && (
-            <View style={styles.donePill}>
-              <Text style={styles.donePillText}>Done</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Upload */}
-        <TouchableOpacity
-          style={[styles.uploadBox, done && styles.uploadBoxDone]}
-          onPress={() => onUpload(index)}
-          activeOpacity={0.8}
-        >
-          {photo ? (
-            <>
-              <Image source={{ uri: photo }} style={styles.uploadImage} />
-              <View style={styles.uploadOverlay}>
-                <TouchableOpacity
-                  style={styles.retakeBtn}
-                  onPress={() => onUpload(index)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.retakeText}>Retake</Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : (
-            <View style={styles.uploadPlaceholder}>
-              <CameraIcon />
-              <Text style={styles.uploadText}>+ Upload Photo</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        {/* Timestamp */}
-        {done && timestamp && (
-          <Text style={styles.timestamp}>Uploaded {timestamp}</Text>
-        )}
-      </View>
-    </Animated.View>
-  );
-}
-
-export default function WeightTrainingUI({ navigation }) {
+export default function WeightTrainingUI({ navigation, route }) {
+  const [workoutData, setWorkoutData] = useState({});
   const [sessions, setSessions] = useState(
     Array.from({ length: TOTAL }, () => ({ photo: null, timestamp: null })),
   );
+
+  const tempPhotos = useRef({});
+
   const headerAnim = useRef(new Animated.Value(0)).current;
+
+  const today = getLocalDateKey();
+
+  let weeksPassed = 0;
+
+  if (workoutData?.goal?.startDate) {
+    const startDate = new Date(workoutData.goal.startDate);
+    const diffTime = today.getTime() - startDate.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    weeksPassed = Math.max(0, Math.floor(diffDays / 7));
+  }
+
+  const isFocused = useIsFocused();
+  const unsubscribeRef = useRef(null);
+  const firstLoadRef = useRef(true);
+
+  const todayRef = useRef(new Date().toISOString().split('T')[0]).current;
 
   useEffect(() => {
     Animated.timing(headerAnim, {
@@ -155,18 +107,242 @@ export default function WeightTrainingUI({ navigation }) {
     }).start();
   }, []);
 
-  const handleUpload = index => {
-    const updated = [...sessions];
-    updated[index] = {
-      photo:
-        'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-      timestamp: new Date().toLocaleString(),
-    };
-    setSessions(updated);
+  useEffect(() => {
+    const today = getLocalDateKey();
+    const ref = database().ref(`users/${USER_ID}/logs/${today}`);
+
+    const onValueChange = ref.on('value', snapshot => {
+      const data = snapshot.val();
+
+      const rawPhotos = data?.workoutPhotos || [];
+
+      const normalized = Array.from({ length: TOTAL }, (_, i) => ({
+        photo: rawPhotos?.[i]?.photo || null,
+        timestamp: rawPhotos?.[i]?.timestamp || null,
+      }));
+
+      setSessions(normalized);
+    });
+
+    return () => ref.off('value', onValueChange);
+  }, []);
+
+  /* =========================
+     SAFE STATS (NO CRASHES)
+  ========================= */
+  const done = sessions.filter(s => s?.photo).length;
+  const weeksCompleted = Math.floor(done / WEEKLY_TARGET);
+  const totalWeeks = TOTAL / WEEKLY_TARGET;
+
+  const getWeeklyProgress = (list = []) => {
+    const weeks = Array.from({ length: totalWeeks }, () => 0);
+
+    list.forEach((s, index) => {
+      if (!s?.photo) return;
+
+      const weekIndex = Math.floor(index / WEEKLY_TARGET);
+      if (weekIndex < totalWeeks) {
+        weeks[weekIndex] += 1;
+      }
+    });
+
+    return weeks.map((done, i) => ({
+      week: i + 1,
+      done,
+    }));
+  };
+  /* =========================
+     SAVE STATS (OPTIMIZED)
+  ========================= */
+  const saveWorkoutStats = async stats => {
+    try {
+      await database()
+        .ref(`users/${USER_ID}/activities/workout`)
+        .update({
+          ...stats,
+          updatedAt: database.ServerValue.TIMESTAMP,
+        });
+    } catch (e) {
+      console.log('stats save error:', e);
+    }
   };
 
-  const done = sessions.filter(s => s.photo).length;
-  const weeksCompleted = Math.floor(done / WEEKLY_TARGET);
+  useEffect(() => {
+    saveWorkoutStats({
+      sessionsDone: done,
+      weeksCompleted,
+      weeklyProgress: getWeeklyProgress(sessions),
+    });
+  }, [sessions]);
+
+  /* 📸 PICK IMAGE */
+  const handleUpload = async index => {
+    const granted = await requestCameraPermission();
+    if (!granted) return;
+
+    const result = await launchCamera({
+      mediaType: 'photo',
+      quality: 0.7,
+      saveToPhotos: true,
+    });
+
+    if (result.didCancel) return;
+
+    const uri = result?.assets?.[0]?.uri;
+    if (!uri) return;
+
+    const photoData = {
+      photo: uri,
+      timestamp: new Date().toISOString(),
+    };
+
+    tempPhotos.current[index] = photoData;
+
+    setSessions(prev => {
+      const updated = [...prev];
+      updated[index] = photoData;
+      return updated;
+    });
+  };
+
+  /* 🔥 SAVE SESSION */
+  const handleDone = async index => {
+    try {
+      const photoData = tempPhotos.current[index];
+      if (!photoData) return;
+
+      const today = getLocalDateKey();
+      const ref = database().ref(`users/${USER_ID}/logs/${today}`);
+
+      const snapshot = await ref.once('value');
+      const data = snapshot.val() || {};
+
+      // ALWAYS normalize to array
+      let workoutPhotos = data?.workoutPhotos || [];
+
+      if (!Array.isArray(workoutPhotos)) {
+        workoutPhotos = Object.values(workoutPhotos || {});
+      }
+
+      workoutPhotos = Array(TOTAL)
+        .fill(null)
+        .map((_, i) => workoutPhotos[i] || null);
+
+      workoutPhotos[index] = photoData;
+      console.log('photoData :>> ', photoData);
+      await ref.set({
+        ...data,
+        workoutWeek: weeksPassed + 1,
+        workoutPhotos,
+        updatedAt: database.ServerValue.TIMESTAMP,
+      });
+
+      setSessions(workoutPhotos);
+
+      delete tempPhotos.current[index];
+    } catch (e) {
+      console.log('Upload error:', e);
+    }
+  };
+
+  /* =========================
+   UI COMPONENT (UNCHANGED)
+========================= */
+  function WorkoutCard({ index, photo, timestamp, onUpload, weeksPassed }) {
+    const anim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 380,
+        delay: index * 70,
+        useNativeDriver: true,
+      }).start();
+    }, []);
+
+    const done = photo;
+    const weekNum = Math.floor(index / WEEKLY_TARGET) + 1;
+    const sessionNum = (index % WEEKLY_TARGET) + 1;
+
+    const totalWeeks = TOTAL / WEEKLY_TARGET;
+    const currentWeek = weeksPassed;
+    const startIndex = currentWeek * WEEKLY_TARGET;
+    const endIndex = startIndex + WEEKLY_TARGET - 1;
+
+    const isLocked =
+      weeksPassed >= totalWeeks ? true : index < startIndex || index > endIndex;
+
+    return (
+      <Animated.View
+        style={{
+          opacity: isLocked ? 0.6 : anim,
+          transform: [
+            {
+              translateY: anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [24, 0],
+              }),
+            },
+          ],
+        }}
+      >
+        <View style={[styles.card, done && styles.cardDone]}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.numBadge, done && styles.numBadgeDone]}>
+              {done ? (
+                <CheckIcon />
+              ) : (
+                <Text style={styles.numText}>{index + 1}</Text>
+              )}
+            </View>
+
+            <View style={styles.cardHeaderText}>
+              <Text style={styles.cardTitle}>Session #{index + 1}</Text>
+              <Text style={styles.cardSub}>
+                Week {weekNum} · Session {sessionNum}{' '}
+                {isLocked
+                  ? 'Locked 🔒'
+                  : done
+                  ? 'Photo uploaded ✓'
+                  : 'Tap to upload proof'}
+              </Text>
+            </View>
+
+            {done && !isLocked && (
+              <TouchableOpacity
+                onPress={() => handleDone(index)}
+                style={styles.donePill}
+              >
+                <Text style={styles.donePillText}>Done</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.uploadBox, done && styles.uploadBoxDone]}
+            onPress={() => {
+              if (!isLocked) onUpload(index);
+            }}
+          >
+            {photo ? (
+              <>
+                <Image source={{ uri: photo }} style={styles.uploadImage} />
+              </>
+            ) : (
+              <View style={styles.uploadPlaceholder}>
+                <CameraIcon />
+                <Text style={styles.uploadText}>+ Upload Photo</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {done && timestamp && (
+            <Text style={styles.timestamp}>Uploaded {timestamp}</Text>
+          )}
+        </View>
+      </Animated.View>
+    );
+  }
 
   return (
     <View style={styles.root}>
@@ -177,6 +353,7 @@ export default function WeightTrainingUI({ navigation }) {
           paddingHorizontal: 24,
         }}
       />
+
       <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
         <Animated.View style={{ opacity: headerAnim }}>
           <Text style={styles.heroTitle}>🏋️ Weight Training Sessions</Text>
@@ -185,7 +362,6 @@ export default function WeightTrainingUI({ navigation }) {
             proof
           </Text>
 
-          {/* Stats strip */}
           <View style={styles.statsStrip}>
             {[
               { label: 'Sessions Done', value: `${done}` },
@@ -202,7 +378,6 @@ export default function WeightTrainingUI({ navigation }) {
             ))}
           </View>
 
-          {/* Progress bar */}
           <View style={styles.progressCard}>
             <View style={styles.progressLabelRow}>
               <Text style={styles.progressLabel}>Overall progress</Text>
@@ -210,6 +385,7 @@ export default function WeightTrainingUI({ navigation }) {
                 {done} / {TOTAL}
               </Text>
             </View>
+
             <View style={styles.progressBg}>
               <View
                 style={[
@@ -218,12 +394,11 @@ export default function WeightTrainingUI({ navigation }) {
                 ]}
               />
             </View>
-            {/* Week markers */}
+
             <View style={styles.weekMarkers}>
-              {Array.from({ length: TOTAL / WEEKLY_TARGET }).map((_, i) => {
-                const weekDone = sessions
-                  .slice(i * WEEKLY_TARGET, (i + 1) * WEEKLY_TARGET)
-                  .every(s => s.photo);
+              {Array.from({ length: totalWeeks }).map((_, i) => {
+                const weekDone = i < Math.min(weeksPassed, totalWeeks);
+
                 return (
                   <View
                     key={i}
@@ -244,20 +419,16 @@ export default function WeightTrainingUI({ navigation }) {
           </View>
         </Animated.View>
 
-        {/* Session cards */}
         {sessions.map((s, index) => (
           <WorkoutCard
             key={index}
             index={index}
-            photo={s.photo}
-            timestamp={s.timestamp}
+            photo={s?.photo}
+            timestamp={s?.timestamp}
             onUpload={handleUpload}
+            weeksPassed={weeksPassed}
           />
         ))}
-
-        <TouchableOpacity style={styles.ctaBtn} activeOpacity={0.85}>
-          <Text style={styles.ctaText}>Start Training</Text>
-        </TouchableOpacity>
       </Wrapper>
     </View>
   );
@@ -376,7 +547,7 @@ const styles = StyleSheet.create({
   },
   weekChipDone: {
     borderColor: 'rgba(143,175,120,0.4)',
-    backgroundColor: 'rgba(143,175,120,0.12)',
+    backgroundColor: 'rgba(104, 250, 0, 0.12)',
   },
   weekChipText: {
     color: 'rgba(255,255,255,0.35)',

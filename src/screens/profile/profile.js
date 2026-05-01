@@ -6,14 +6,12 @@ import {
   Image,
   Dimensions,
   TouchableOpacity,
-  ScrollView,
-  StatusBar,
   Animated,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors, fontFamily } from '../../constant';
 import { Wrapper } from '../../components';
+import auth from '@react-native-firebase/auth';
 
 const { width, height } = Dimensions.get('window');
 
@@ -21,7 +19,7 @@ const MENU_ITEMS = [
   {
     emoji: '🎯',
     title: 'Goals',
-    subtitle: 'View & edit your health goals',
+    subtitle: 'View your health goals',
     screenName: 'ProfileDetails',
     badge: null,
   },
@@ -149,6 +147,15 @@ export default function Profile({ navigation }) {
     ]).start();
   }, []);
 
+  const handleLogout = async () => {
+    try {
+      await auth().signOut();
+      console.log('✅ User signed out');
+    } catch (e) {
+      console.log('❌ Logout error:', e);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Wrapper>
@@ -175,7 +182,11 @@ export default function Profile({ navigation }) {
                 uri: 'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
               }}
             />
-            <TouchableOpacity style={styles.editAvatarBtn} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.editAvatarBtn}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('EditProfile')}
+            >
               <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
                 <Path
                   d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"
@@ -234,7 +245,11 @@ export default function Profile({ navigation }) {
         </View>
 
         {/* Logout */}
-        <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.logoutBtn}
+          activeOpacity={0.8}
+          onPress={handleLogout}
+        >
           <Text style={styles.logoutIcon}>🚪</Text>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>

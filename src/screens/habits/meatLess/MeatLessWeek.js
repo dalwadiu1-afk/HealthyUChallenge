@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -23,11 +23,31 @@ import { launchCamera } from 'react-native-image-picker';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  onSnapshot,
+} from '@react-native-firebase/firestore';
+import storage from '@react-native-firebase/storage';
+import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
 
 const { width: SW } = Dimensions.get('window');
 const TOTAL_WEEKS = 4;
 const MAX_MEALS = 4;
-const START_DATE = new Date('2026-04-01');
+let START_DATE = new Date('2026-04-28');
+const getWeekDate = weekIndex => {
+  const date = new Date(START_DATE);
+  date.setDate(date.getDate() + weekIndex * 7);
+  return date.toISOString().split('T')[0];
+};
+const user = auth().currentUser;
+const USER_ID = user?.uid || 'USER_UID';
+
+console.log('user :>> ', user);
 
 const getDaysPassed = () => Math.floor((new Date() - START_DATE) / 86400000);
 const getUnlockedWeek = () =>
@@ -69,50 +89,154 @@ function CameraIcon() {
 }
 
 export default function MeatlessChallenge({ navigation }) {
-  const [weeks, setWeeks] = useState(
-    Array.from({ length: TOTAL_WEEKS }, () => []),
+  const [weeks, setWeeks] = useState({
+    week1: { meals: [], completed: false },
+    week2: { meals: [], completed: false },
+    week3: { meals: [], completed: false },
+    week4: { meals: [], completed: false },
+  });
+  const unlockedWeek = `week${getUnlockedWeek() + 1}`;
+
+  const totalMeals = Object.values(weeks)?.reduce(
+    (sum, week) => sum + (week?.meals?.length || 0),
+    0,
   );
-  const unlockedWeek = getUnlockedWeek();
 
-  const totalMeals = weeks.reduce((s, w) => s + w.length, 0);
-  const progress = totalMeals / (TOTAL_WEEKS * MAX_MEALS);
+  const progress = totalMeals / (TOTAL_WEEKS * MAX_MEALS) || 0;
 
-  const addMeal = async weekIndex => {
-    if (weekIndex !== unlockedWeek) return;
-    if (weeks[weekIndex].length >= MAX_MEALS) {
+  useEffect(() => {
+    const userRef = database().ref(`/users/${USER_ID}`);
+
+    const listener = userRef.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (data?.goal?.startDate) {
+        START_DATE = new Date(data.goal.startDate);
+      }
+
+      const logs = data?.logs || {};
+
+      const restored = {
+        week1: { meals: [], completed: false },
+        week2: { meals: [], completed: false },
+        week3: { meals: [], completed: false },
+        week4: { meals: [], completed: false },
+      };
+
+      Object.keys(restored).forEach((weekKey, index) => {
+        const weekDate = getWeekDate(index);
+        const weekData = logs?.[weekKey]?.[weekDate];
+
+        if (weekData) {
+          restored[weekKey] = {
+            meals: weekData.meals || [],
+            completed: weekData.completed || false,
+          };
+        }
+      });
+
+      setWeeks(restored);
+    });
+
+    return () => userRef.off('value', listener);
+  }, [USER_ID]);
+
+  const addMeal = async weekKey => {
+    if (weekKey !== unlockedWeek) return;
+
+    if (weeks[weekKey]?.meals?.length >= MAX_MEALS) {
       Alert.alert('Limit reached', 'Max 4 meals per week');
       return;
     }
+
     const granted = await requestCameraPermission();
     if (!granted) return;
 
-    launchCamera({ mediaType: 'photo', quality: 0.7 }, response => {
-      if (response.didCancel || response.errorCode) return;
-      if (response?.assets?.length > 0) {
-        const newWeeks = [...weeks];
-        newWeeks[weekIndex] = [
-          ...newWeeks[weekIndex],
-          {
-            uri: response.assets[0].uri,
-            label: '',
-            timestamp: new Date().toLocaleString(),
-          },
-        ];
-        setWeeks(newWeeks);
-      }
+    launchCamera({ mediaType: 'photo', quality: 0.7 }, res => {
+      const uri = res?.assets?.[0]?.uri;
+      if (!uri) return;
+
+      // ✅ ALWAYS use latest state
+      setWeeks(prev => {
+        const updated = { ...prev };
+
+        updated[weekKey] = {
+          ...updated[weekKey],
+          meals: [
+            ...(updated[weekKey]?.meals || []),
+            {
+              uri,
+              label: '',
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        };
+
+        // 🔥 save AFTER computing latest state
+        saveToFirestore(updated);
+
+        return updated;
+      });
     });
   };
 
-  const updateLabel = (wi, mi, text) => {
-    const nw = [...weeks];
-    nw[wi][mi] = { ...nw[wi][mi], label: text };
-    setWeeks(nw);
+  const updateLabel = (weekKey, mealIndex, text) => {
+    setWeeks(prev => {
+      const updated = {
+        ...prev,
+        [weekKey]: {
+          ...prev[weekKey],
+          meals: prev[weekKey].meals.map((meal, i) =>
+            i === mealIndex ? { ...meal, label: text } : meal,
+          ),
+        },
+      };
+
+      saveToFirestore(updated); // 🔥 always latest
+      return updated;
+    });
+  };
+  const deleteMeal = (weekKey, mealIndex) => {
+    setWeeks(prev => {
+      const updated = { ...prev };
+
+      updated[weekKey] = {
+        ...updated[weekKey],
+        meals: updated[weekKey].meals.filter((_, i) => i !== mealIndex),
+      };
+
+      saveToFirestore(updated); // 🔥 always latest
+      return updated;
+    });
   };
 
-  const deleteMeal = (wi, mi) => {
-    const nw = [...weeks];
-    nw[wi] = nw[wi].filter((_, i) => i !== mi);
-    setWeeks(nw);
+  // const uploadImage = async (uri, userId, weekIndex, mealIndex) => {
+  //   const filename = `meal_${Date.now()}.jpg`;
+  //   const refPath = `meals/${userId}/week_${weekIndex}/${filename}`;
+
+  //   await storage().ref(refPath).putFile(uri);
+  //   return await storage().ref(refPath).getDownloadURL();
+  // };
+
+  const saveToFirestore = async updatedWeeks => {
+    try {
+      if (!USER_ID) return;
+
+      const updates = {};
+
+      Object.keys(updatedWeeks || {}).forEach((weekKey, index) => {
+        const weekDate = getWeekDate(index);
+
+        updates[`logs/${weekKey}/${weekDate}`] = {
+          meals: updatedWeeks[weekKey]?.meals || [],
+          completed: (updatedWeeks[weekKey]?.meals || []).length >= MAX_MEALS,
+        };
+      });
+
+      await database().ref(`/users/${USER_ID}`).update(updates);
+    } catch (e) {
+      console.log('❌ ERROR:', e);
+    }
   };
 
   return (
@@ -144,12 +268,14 @@ export default function MeatlessChallenge({ navigation }) {
             </Text>
           </View>
         </View>
-        {weeks.map((weekMeals, wi) => {
-          const isLocked = wi > unlockedWeek;
-          const isCurrent = wi === unlockedWeek;
-          const isPast = wi < unlockedWeek;
-          const weekDone = isPast || weekMeals.length === MAX_MEALS;
-
+        {Object.keys(weeks).map((weekKey, wi) => {
+          const currentWeekIndex = getUnlockedWeek();
+          const isPast = wi < currentWeekIndex;
+          const isLocked = wi > currentWeekIndex;
+          const isCurrent = wi === currentWeekIndex;
+          const weekMeals = weeks[weekKey]?.meals || [];
+          const weekDone = isPast || weekMeals?.length === MAX_MEALS;
+          console.log('weekMeals?.length :>> ', weeks[weekKey]);
           return (
             <View
               key={wi}
@@ -211,7 +337,7 @@ export default function MeatlessChallenge({ navigation }) {
                   <Text style={styles.lockEmoji}>🔒</Text>
                   <Text style={styles.lockedSub}>Unlocks in a future week</Text>
                 </View>
-              ) : isPast && weekMeals.length === 0 ? (
+              ) : isPast && weekMeals?.length === 0 ? (
                 /* Past week with no uploaded meals — show completed summary */
                 <View style={styles.pastSummary}>
                   <View style={styles.pastIconWrap}>
@@ -235,7 +361,7 @@ export default function MeatlessChallenge({ navigation }) {
               ) : (
                 <>
                   {/* Meal thumbnails */}
-                  {weekMeals.length > 0 && (
+                  {weekMeals?.length > 0 && (
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
@@ -250,14 +376,14 @@ export default function MeatlessChallenge({ navigation }) {
                           {isCurrent && (
                             <TouchableOpacity
                               style={styles.mealDelete}
-                              onPress={() => deleteMeal(wi, mi)}
+                              onPress={() => deleteMeal(weekKey, mi)}
                             >
                               <Text style={styles.mealDeleteText}>✕</Text>
                             </TouchableOpacity>
                           )}
                           <TextInput
-                            value={meal.label}
-                            onChangeText={t => updateLabel(wi, mi, t)}
+                            value={meal?.label}
+                            onChangeText={t => updateLabel(weekKey, mi, t)}
                             editable={isCurrent}
                             placeholder="Label…"
                             placeholderTextColor="rgba(255,255,255,0.3)"
@@ -269,31 +395,31 @@ export default function MeatlessChallenge({ navigation }) {
                   )}
 
                   {/* Past week with uploaded meals — show completion banner */}
-                  {isPast && weekMeals.length > 0 && (
+                  {isPast && weekMeals?.length > 0 && (
                     <View style={styles.mealsDoneBanner}>
                       <Text style={styles.mealsDoneText}>
-                        ✅ {weekMeals.length}/{MAX_MEALS} meals logged
+                        ✅ {weekMeals?.length}/{MAX_MEALS} meals logged
                       </Text>
                     </View>
                   )}
 
                   {/* Upload / add button */}
-                  {isCurrent && weekMeals.length < MAX_MEALS && (
+                  {isCurrent && weekMeals?.length < MAX_MEALS && (
                     <TouchableOpacity
                       style={styles.uploadBtn}
-                      onPress={() => addMeal(wi)}
+                      onPress={() => addMeal(weekKey)}
                       activeOpacity={0.8}
                     >
                       <CameraIcon />
                       <Text style={styles.uploadText}>
-                        {weekMeals.length === 0
+                        {weekMeals?.length === 0
                           ? 'Upload Meal Photo'
-                          : `+ Add Meal (${weekMeals.length}/${MAX_MEALS})`}
+                          : `+ Add Meal (${weekMeals?.length}/${MAX_MEALS})`}
                       </Text>
                     </TouchableOpacity>
                   )}
 
-                  {weekMeals.length >= MAX_MEALS && isCurrent && (
+                  {weekMeals?.length >= MAX_MEALS && isCurrent && (
                     <View style={styles.maxReachedRow}>
                       <Text style={styles.maxReachedText}>
                         ✅ All meals uploaded for this week

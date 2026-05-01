@@ -77,6 +77,7 @@ export default function Login({ navigation }) {
     email && password && isValidEmail(email) && isValidPassword(password);
 
   const handleLogin = async () => {
+    navigation.replace('Main');
     // Reset all errors
     setError({ email: '', password: '', general: '' });
 
@@ -123,8 +124,6 @@ export default function Login({ navigation }) {
       );
 
       console.log('User signed in:', userCredential.user);
-
-      navigation.replace('Main');
     } catch (err) {
       console.log(err);
 

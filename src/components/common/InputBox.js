@@ -64,17 +64,7 @@ export default function InputBox({
           placeholderTextColor={colors.white}
           {...otherProps}
         />
-        {errorMessage ? (
-          <Text
-            style={{
-              color: 'red',
-              marginTop: 4,
-              fontFamily: fontFamily.montserratMedium,
-            }}
-          >
-            {errorMessage}
-          </Text>
-        ) : null}
+
         {textIcon && (
           <TouchableOpacity
             onPress={onRightIconPress}
@@ -93,6 +83,19 @@ export default function InputBox({
           </TouchableOpacity>
         )}
       </View>
+      {errorMessage ? (
+        <Text
+          style={{
+            color: 'red',
+            marginTop: 4,
+            fontFamily: fontFamily.montserratMedium,
+          }}
+        >
+          {errorMessage}
+        </Text>
+      ) : (
+        <View />
+      )}
     </View>
   );
 }

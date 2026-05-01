@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,87 +8,114 @@ import {
   TouchableOpacity,
   StatusBar,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import firestore from '@react-native-firebase/firestore';
+
 import { colors, fontFamily } from '../../../constant';
 import { Wrapper } from '../../../components';
 
 const { height } = Dimensions.get('window');
-
 const HERO_HEIGHT = height * 0.46;
 
-const STATS = [
-  { label: 'Patients', value: '116+' },
-  { label: 'Experience', value: '8 Yrs' },
-  { label: 'Reviews', value: '4.9★' },
-  { label: 'Awards', value: '12' },
-];
+export default function BookAnAppointment({ navigation, route }) {
+  const { doctorId = '1' } = route.params || {};
 
-export default function BookAnAppointment({ navigation }) {
+  const [doctor, setDoctor] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = async () => {
+    setLoading(false);
+    try {
+      const snapshot = await firestore().collection('doctors').doc('1').get();
+
+      console.log('snapshot :>> ', snapshot.data());
+      setDoctor(snapshot?.data());
+    } catch (e) {
+      console.log('error :>> ', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.loader}>
+        <ActivityIndicator size="large" color={colors.secondary} />
+      </View>
+    );
+  }
+
+  if (!doctor) {
+    return (
+      <View style={styles.loader}>
+        <Text style={{ color: colors.white }}>Doctor not found</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
-      {/* Static hero image — sits behind everything */}
+      {/* HERO IMAGE */}
       <Image
-        source={{
-          uri: 'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-        }}
+        source={{ uri: doctor.image }}
         style={styles.heroImage}
         resizeMode="cover"
       />
 
-      {/* Scrollable content — starts below the hero, slides up over it */}
+      {/* CONTENT */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         style={styles.scroll}
       >
-        {/* Spacer so card starts at the bottom of the hero */}
         <View style={{ height: HERO_HEIGHT - 32 }} />
 
-        {/* Details card */}
         <View style={styles.card}>
           <Wrapper style={{ paddingHorizontal: 0 }}>
-            <Text style={styles.doctorName}>Dr. Smith Sras</Text>
-            <Text style={styles.specialty}>Senior Nutrition Specialist</Text>
+            {/* NAME */}
+            <Text style={styles.doctorName}>{doctor.name}</Text>
+            <Text style={styles.specialty}>{doctor.specialty}</Text>
 
-            {/* Stats */}
+            {/* STATS */}
             <View style={styles.statsRow}>
-              {STATS.map((item, index) => (
-                <View key={index} style={styles.statItem}>
-                  <Text style={styles.statValue}>{item.value}</Text>
-                  <Text style={styles.statLabel}>{item.label}</Text>
-                </View>
-              ))}
+              <Stat value={`${doctor.patients}+`} label="Patients" />
+              <Stat value={doctor.experience} label="Experience" />
+              <Stat value={`${doctor.rating}★`} label="Reviews" />
+              <Stat value={doctor.awards} label="Awards" />
             </View>
 
             <View style={styles.divider} />
 
-            {/* About */}
+            {/* ABOUT */}
             <Text style={styles.sectionTitle}>About Me</Text>
             <Text style={styles.aboutText}>
-              Dr. Smith Sras is a top-ranked nutrition specialist at Crist
-              Hospital in London, UK. She has received several awards for her
-              outstanding contribution to patient care and wellness coaching.{' '}
-              <Text style={styles.readMore}>Read More…</Text>
+              {doctor.about}
+              <Text style={styles.readMore}> Read More…</Text>
             </Text>
 
-            {/* Available days */}
+            {/* AVAILABLE DAYS */}
             <Text style={[styles.sectionTitle, { marginTop: 24 }]}>
               Available Days
             </Text>
+
             <View style={styles.daysRow}>
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(day => (
-                <View key={day} style={styles.dayChip}>
+              {doctor.availableDays?.map((day, index) => (
+                <View key={index} style={styles.dayChip}>
                   <Text style={styles.dayText}>{day}</Text>
                 </View>
               ))}
             </View>
 
-            {/* Book button */}
+            {/* BOOK BUTTON */}
             <TouchableOpacity
               style={styles.bookBtn}
-              onPress={() => navigation.navigate('SessionConfirmation')}
-              activeOpacity={0.85}
+              onPress={() =>
+                navigation.navigate('SessionConfirmation', { doctorId })
+              }
             >
               <Text style={styles.bookBtnText}>Book An Appointment</Text>
             </TouchableOpacity>
@@ -96,11 +123,10 @@ export default function BookAnAppointment({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* Back button — fixed over the hero, never scrolls */}
+      {/* BACK BUTTON */}
       <TouchableOpacity
         style={styles.backBtn}
         onPress={() => navigation.goBack()}
-        activeOpacity={0.8}
       >
         <Svg width={9} height={16} viewBox="0 0 9 16" fill="none">
           <Path
@@ -116,13 +142,27 @@ export default function BookAnAppointment({ navigation }) {
   );
 }
 
+/* 🔁 Reusable Stat Component */
+const Stat = ({ value, label }) => (
+  <View style={styles.statItem}>
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statLabel}>{label}</Text>
+  </View>
+);
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.dark,
   },
 
-  /* ── Hero (static, behind scroll) ── */
+  loader: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.dark,
+  },
+
   heroImage: {
     position: 'absolute',
     top: 0,
@@ -132,23 +172,21 @@ const styles = StyleSheet.create({
     width: '100%',
   },
 
-  /* ── ScrollView transparent so hero shows through ── */
   scroll: {
     flex: 1,
     backgroundColor: 'transparent',
   },
+
   scrollContent: {
     paddingBottom: 40,
   },
 
-  /* ── Card that slides up over the hero ── */
   card: {
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     backgroundColor: colors.dark,
     paddingTop: 28,
     minHeight: height * 0.6,
-    flex: 1,
   },
 
   doctorName: {
@@ -157,6 +195,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.montserratBold,
     marginBottom: 4,
   },
+
   specialty: {
     color: colors.secondary,
     fontSize: 13,
@@ -164,27 +203,22 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
 
-  /* ── Stats ── */
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+
   statItem: {
     alignItems: 'center',
     flex: 1,
   },
-  statCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: colors.bubbleDark,
-    marginBottom: 8,
-  },
+
   statValue: {
     color: colors.white,
     fontSize: 14,
     fontFamily: fontFamily.montserratSemiBold,
   },
+
   statLabel: {
     color: colors.grey,
     fontSize: 11,
@@ -198,31 +232,31 @@ const styles = StyleSheet.create({
     marginVertical: 24,
   },
 
-  /* ── About ── */
   sectionTitle: {
     color: colors.white,
     fontSize: 17,
     fontFamily: fontFamily.montserratSemiBold,
     marginBottom: 10,
   },
+
   aboutText: {
     color: colors.grey,
     fontSize: 13,
     fontFamily: fontFamily.montserratMedium,
     lineHeight: 21,
   },
+
   readMore: {
     color: colors.secondary,
-    fontFamily: fontFamily.montserratMedium,
   },
 
-  /* ── Days ── */
   daysRow: {
     flexDirection: 'row',
-    gap: 8,
     flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 32,
   },
+
   dayChip: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -231,28 +265,26 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(143,175,120,0.35)',
     backgroundColor: 'rgba(143,175,120,0.08)',
   },
+
   dayText: {
     color: colors.secondary,
     fontSize: 13,
     fontFamily: fontFamily.montserratMedium,
   },
 
-  /* ── Book button ── */
   bookBtn: {
     backgroundColor: colors.primary,
     paddingVertical: 14,
     borderRadius: 49,
     alignItems: 'center',
-    marginBottom: 8,
   },
+
   bookBtnText: {
     color: colors.white,
     fontSize: 15,
     fontFamily: fontFamily.montserratSemiBold,
-    letterSpacing: 0.3,
   },
 
-  /* ── Back button (fixed, over everything) ── */
   backBtn: {
     position: 'absolute',
     top: (StatusBar.currentHeight || 44) + 10,
@@ -265,10 +297,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#4D6644',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 6,
   },
 });

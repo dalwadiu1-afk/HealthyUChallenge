@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,42 +13,115 @@ import { launchCamera } from 'react-native-image-picker';
 import Svg, { Path } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
+import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
 import { Header, Wrapper } from '../../../components';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const TOTAL_DAYS = 28;
+const USER_ID = auth().currentUser?.uid;
+
+const getToday = () => new Date().toISOString().split('T')[0];
+const TOTAL_DAYS = 30;
 const CARD_SIZE = (SCREEN_WIDTH - 18 * 2 - 10) / 2;
 
 const HalfPlateFruitsVeggies = ({ navigation }) => {
   const [photos, setPhotos] = useState(Array(TOTAL_DAYS).fill(null));
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [startDate, setStartDate] = useState(null);
+
+  useEffect(() => {
+    if (!USER_ID) return;
+
+    const ref = database().ref(`users/${USER_ID}/logs/halfPlateChallenge`);
+
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (!data) return;
+
+      // restore start date
+      if (data.startDate) {
+        const sd = new Date(data.startDate);
+        setStartDate(sd);
+
+        const diff = Math.floor((new Date() - sd) / (1000 * 60 * 60 * 24));
+
+        setCurrentIndex(Math.min(diff, TOTAL_DAYS - 1));
+      }
+
+      // restore days safely
+      const serverDays = data?.days || {};
+      const restored = Array(TOTAL_DAYS).fill(null);
+
+      Object.entries(serverDays).forEach(([day, value]) => {
+        restored[Number(day) - 1] = value;
+      });
+
+      setPhotos(restored);
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
+
+  const saveDay = async (index, uri) => {
+    const ref = database().ref(`users/${USER_ID}/logs/halfPlateChallenge`);
+
+    const timestamp = new Date().toISOString();
+
+    await ref.update({
+      startDate: startDate?.toISOString() || new Date().toISOString(),
+
+      [`days/${index + 1}`]: {
+        uri,
+        timestamp,
+      },
+
+      updatedAt: database.ServerValue.TIMESTAMP,
+    });
+  };
 
   const pickImage = async index => {
     const granted = await requestCameraPermission();
     if (!granted) return;
 
-    launchCamera({ mediaType: 'photo', quality: 0.7 }, response => {
-      if (response.didCancel || response.errorCode) return;
-      if (response?.assets?.length > 0) {
-        const newPhotos = [...photos];
-        newPhotos[index] = {
-          uri: response.assets[0].uri,
-          timestamp: new Date().toLocaleString(),
-        };
-        setPhotos(newPhotos);
-        if (index === currentIndex && currentIndex < TOTAL_DAYS - 1) {
-          setCurrentIndex(prev => prev + 1);
-        }
-      }
+    launchCamera({ mediaType: 'photo', quality: 0.7 }, async res => {
+      if (res.didCancel || res.errorCode) return;
+
+      const uri = res?.assets?.[0]?.uri;
+      if (!uri) return;
+
+      const updated = [...photos];
+      updated[index] = {
+        uri,
+        timestamp: new Date().toISOString(),
+      };
+
+      setPhotos(updated);
+
+      await saveDay(index, uri);
     });
   };
 
-  const deletePhoto = index => {
+  const deletePhoto = async index => {
     const newPhotos = [...photos];
     newPhotos[index] = null;
     setPhotos(newPhotos);
-    if (index === currentIndex - 1)
-      setCurrentIndex(prev => Math.max(prev - 1, 0));
+
+    const docRef = doc(db, 'users', USER_ID);
+
+    await setDoc(
+      docRef,
+      {
+        logs: {
+          halfPlateChallenge: {
+            days: {
+              [index + 1]: null,
+            },
+          },
+        },
+      },
+      { merge: true },
+    );
   };
 
   const completed = photos.filter(Boolean).length;
