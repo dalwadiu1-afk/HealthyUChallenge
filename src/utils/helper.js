@@ -39,26 +39,53 @@ const generateDaysFromToday = (
 
 const requestCameraPermission = async () => {
   try {
-    const granted = await PermissionsAndroid.request(
+    const granted = await PermissionsAndroid.requestMultiple([
       PermissionsAndroid.PERMISSIONS.CAMERA,
       PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-      {
-        title: 'App Camera Permission',
-        message: 'App needs access to your camera ',
-        buttonNeutral: 'Ask Me Later',
-        buttonNegative: 'Cancel',
-        buttonPositive: 'OK',
-      },
-    );
-    if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+    ]);
+
+    if (granted['android.permission.CAMERA'] === 'granted') {
       return true;
     } else {
-      showError('Camera permission denied');
-      console.log('Camera permission denied');
+      console.log('Permission denied');
+      return false;
     }
   } catch (err) {
     console.warn(err);
+    return false;
   }
 };
 
-export { scale, generateDaysFromToday, requestCameraPermission };
+const getSmartTips = fiberData => {
+  if (!fiberData?.length) return [];
+
+  const avg = fiberData.reduce((sum, d) => sum + d.fiber, 0) / fiberData.length;
+
+  const lowDays = fiberData.filter(d => d.fiber < 25).length;
+
+  if (avg < 20 || lowDays > 3) {
+    return [
+      'You are below fiber target — increase vegetables daily',
+      'Eat oats or overnight oats for high fiber breakfast',
+      'Add chia or flax seeds to meals or smoothies',
+      'Eat apples with skin for extra fiber',
+      'Include lentils, beans, and other legumes regularly',
+      'Switch to whole grains instead of refined grains',
+      'Eat a variety of vegetables like broccoli and carrots daily',
+    ];
+  }
+
+  if (avg >= 25 && avg <= 35) {
+    return [
+      'Great consistency! Keep your fiber intake steady',
+      'Try adding variety with fruits and vegetables',
+    ];
+  }
+
+  return [
+    'Balance your fiber intake with hydration',
+    'Maintain daily vegetable intake',
+  ];
+};
+
+export { scale, generateDaysFromToday, requestCameraPermission, getSmartTips };

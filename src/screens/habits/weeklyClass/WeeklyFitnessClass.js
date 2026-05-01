@@ -5,16 +5,21 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
-  ScrollView,
   StatusBar,
   Animated,
 } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import storage from '@react-native-firebase/storage';
+import { launchCamera } from 'react-native-image-picker';
 
 const TOTAL = 4;
+const USER_ID = auth().currentUser?.uid;
 
+/* ICONS */
 function CameraIcon() {
   return (
     <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
@@ -22,8 +27,6 @@ function CameraIcon() {
         d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
         stroke="rgba(143,175,120,0.6)"
         strokeWidth={1.8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
       />
       <Circle
         cx={12}
@@ -44,96 +47,17 @@ function CheckIcon() {
         stroke="#fff"
         strokeWidth={2.5}
         strokeLinecap="round"
-        strokeLinejoin="round"
       />
     </Svg>
   );
 }
 
-function WorkoutCard({ index, photo, onUpload }) {
-  const anim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(anim, {
-      toValue: 1,
-      duration: 380,
-      delay: index * 90,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  const done = !!photo;
-
-  return (
-    <Animated.View
-      style={{
-        opacity: anim,
-        transform: [
-          {
-            translateY: anim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [24, 0],
-            }),
-          },
-        ],
-      }}
-    >
-      <View style={[styles.card, done && styles.cardDone]}>
-        {/* Card header */}
-        <View style={styles.cardHeader}>
-          <View style={[styles.numBadge, done && styles.numBadgeDone]}>
-            {done ? (
-              <CheckIcon />
-            ) : (
-              <Text style={styles.numText}>{index + 1}</Text>
-            )}
-          </View>
-          <View style={styles.cardHeaderText}>
-            <Text style={styles.cardTitle}>Workout #{index + 1}</Text>
-            <Text style={styles.cardSub}>
-              {done ? 'Photo uploaded ✓' : 'Tap to upload proof'}
-            </Text>
-          </View>
-          {done && (
-            <View style={styles.donePill}>
-              <Text style={styles.donePillText}>Done</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Upload area */}
-        <TouchableOpacity
-          style={[styles.uploadBox, done && styles.uploadBoxDone]}
-          onPress={() => onUpload(index)}
-          activeOpacity={0.8}
-        >
-          {photo ? (
-            <>
-              <Image source={{ uri: photo }} style={styles.uploadImage} />
-              <View style={styles.uploadOverlay}>
-                <TouchableOpacity
-                  style={styles.retakeBtn}
-                  onPress={() => onUpload(index)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.retakeText}>Retake</Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : (
-            <View style={styles.uploadPlaceholder}>
-              <CameraIcon />
-              <Text style={styles.uploadText}>+ Upload Photo</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-    </Animated.View>
+export default function FitnessClassUI() {
+  const [photos, setPhotos] = useState(() =>
+    Array.from({ length: TOTAL }, () => null),
   );
-}
+  const tempPhotos = useRef(Array.from({ length: TOTAL }, () => null)).current;
 
-export default function FitnessClassUI({ navigation }) {
-  const [photos, setPhotos] = useState(Array(TOTAL).fill(null));
   const headerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -144,35 +68,195 @@ export default function FitnessClassUI({ navigation }) {
     }).start();
   }, []);
 
-  const handleUpload = index => {
-    const updated = [...photos];
-    updated[index] =
-      'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg';
-    setPhotos(updated);
+  /* FIRESTORE LISTENER */
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+
+    const unsubscribe = firestore()
+      .collection('users')
+      .doc(USER_ID)
+      .onSnapshot(doc => {
+        const data = doc.data();
+        const todayLog = data?.logs?.[today];
+
+        if (todayLog?.workoutPhotos) {
+          setPhotos(todayLog.workoutPhotos);
+        }
+      });
+
+    return () => unsubscribe();
+  }, []);
+
+  /* 📸 PICK IMAGE (INSTANT UI UPDATE) */
+  const handleUpload = async index => {
+    const result = await launchCamera({
+      mediaType: 'photo',
+      quality: 0.7,
+    });
+
+    if (result.didCancel) return;
+
+    const uri = result.assets[0].uri;
+
+    tempPhotos[index] = uri;
+
+    // 🔥 instant UI update (NO delay feel)
+    setPhotos(prev => {
+      const updated = [...prev];
+      updated[index] = uri;
+      return updated;
+    });
+  };
+
+  /* 🔥 DONE UPLOAD (FIXED + STABLE) */
+  const handleDone = async index => {
+    try {
+      const uri = tempPhotos[index];
+      if (!uri) return;
+
+      const today = new Date().toISOString().split('T')[0];
+
+      // const fileName = `workouts/${USER_ID}/${today}_${index}.jpg`;
+
+      // const ref = storage().ref(fileName);
+
+      // // upload image
+      // await ref.putFile(uri);
+
+      // // get download URL
+      // const downloadURL = await ref.getDownloadURL();
+
+      const userRef = firestore().collection('users').doc(USER_ID);
+
+      const snap = await userRef.get();
+      const data = snap.data();
+
+      const logs = data?.logs || {};
+      const todayLog = logs[today] || {};
+
+      const workoutPhotos = todayLog.workoutPhotos
+        ? [...todayLog.workoutPhotos]
+        : Array(TOTAL).fill(null);
+
+      workoutPhotos[index] = tempPhotos[index];
+
+      await userRef.set(
+        {
+          logs: {
+            ...logs,
+            [today]: {
+              ...todayLog,
+              workout: 1,
+              workoutPhotos,
+            },
+          },
+        },
+        { merge: true },
+      );
+
+      // 🔥 safe UI update
+      setPhotos(prev => {
+        const updated = [...prev];
+        updated[index] = tempPhotos[index];
+        return updated;
+      });
+
+      tempPhotos[index] = null;
+    } catch (e) {
+      console.log('Upload error:', e);
+    }
   };
 
   const done = photos.filter(Boolean).length;
   const progress = done / TOTAL;
 
-  return (
-    <View style={styles.root}>
-      <Header
-        header="Weekly Classes"
-        headerContainer={{
-          marginTop: StatusBar.currentHeight,
-          paddingHorizontal: 24,
-        }}
-      />
+  /* CARD COMPONENT */
+  const WorkoutCard = ({ index, photo }) => {
+    const anim = useRef(new Animated.Value(0)).current;
 
-      <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
-        {/* Hero section */}
+    useEffect(() => {
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 380,
+        delay: index * 90,
+        useNativeDriver: true,
+      }).start();
+    }, []);
+
+    const isDone = !!photo;
+
+    return (
+      <Animated.View
+        style={{
+          opacity: anim,
+          transform: [
+            {
+              translateY: anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [24, 0],
+              }),
+            },
+          ],
+        }}
+      >
+        <View style={[styles.card, isDone && styles.cardDone]}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.numBadge, isDone && styles.numBadgeDone]}>
+              {isDone ? (
+                <CheckIcon />
+              ) : (
+                <Text style={styles.numText}>{index + 1}</Text>
+              )}
+            </View>
+
+            <View style={styles.cardHeaderText}>
+              <Text style={styles.cardTitle}>Workout #{index + 1}</Text>
+              <Text style={styles.cardSub}>
+                {isDone ? 'Photo uploaded ✓' : 'Tap to upload proof'}
+              </Text>
+            </View>
+
+            {isDone && (
+              <TouchableOpacity
+                onPress={() => handleDone(index)}
+                style={styles.donePill}
+              >
+                <Text style={styles.donePillText}>Done</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.uploadBox, isDone && styles.uploadBoxDone]}
+            onPress={() => handleUpload(index)}
+            activeOpacity={0.8}
+          >
+            {photo ? (
+              <Image source={{ uri: photo }} style={styles.uploadImage} />
+            ) : (
+              <View style={styles.uploadPlaceholder}>
+                <CameraIcon />
+                <Text style={styles.uploadText}>+ Upload Photo</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    );
+  };
+
+  return (
+    <Wrapper isForgot>
+      <View style={styles.root}>
+        <Header header="Weekly Classes" />
+
         <Animated.View style={{ opacity: headerAnim }}>
           <Text style={styles.heroTitle}>🏋️ Weekly Fitness Class</Text>
+
           <Text style={styles.heroSub}>
             Complete 4 workouts and upload your proof
           </Text>
 
-          {/* Progress bar */}
           <View style={styles.progressCard}>
             <View style={styles.progressLabelRow}>
               <Text style={styles.progressLabel}>Progress</Text>
@@ -196,22 +280,15 @@ export default function FitnessClassUI({ navigation }) {
           </View>
         </Animated.View>
 
-        {/* Workout cards */}
         {photos.map((photo, index) => (
-          <WorkoutCard
-            key={index}
-            index={index}
-            photo={photo}
-            onUpload={handleUpload}
-          />
+          <WorkoutCard key={index} index={index} photo={photo} />
         ))}
 
-        {/* CTA */}
-        <TouchableOpacity style={styles.ctaBtn} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.ctaBtn}>
           <Text style={styles.ctaText}>Join Weekly Fitness Class</Text>
         </TouchableOpacity>
-      </Wrapper>
-    </View>
+      </View>
+    </Wrapper>
   );
 }
 

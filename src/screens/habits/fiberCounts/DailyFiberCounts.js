@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,9 @@ import Svg, {
   Path,
 } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import { getSmartTips } from '../../../utils/helper';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -25,38 +28,8 @@ const PADDING = 20;
 const BAR_WIDTH = 14;
 const ITEM_WIDTH = 30;
 
-const START_DATE = new Date('2026-03-25');
-
-const RAW_DATA = [
-  { dayIndex: 0, fiber: 12 },
-  { dayIndex: 1, fiber: 18 },
-  { dayIndex: 2, fiber: 22 },
-  { dayIndex: 3, fiber: 15 },
-  { dayIndex: 4, fiber: 10 },
-  { dayIndex: 5, fiber: 28 },
-  { dayIndex: 6, fiber: 30 },
-  { dayIndex: 7, fiber: 26 },
-  { dayIndex: 8, fiber: 18 },
-  { dayIndex: 10, fiber: 35 },
-  { dayIndex: 12, fiber: 40 },
-  { dayIndex: 14, fiber: 20 },
-  { dayIndex: 16, fiber: 27 },
-  { dayIndex: 18, fiber: 32 },
-  { dayIndex: 20, fiber: 25 },
-  { dayIndex: 22, fiber: 29 },
-  { dayIndex: 25, fiber: 38 },
-  { dayIndex: 27, fiber: 31 },
-  { dayIndex: 29, fiber: 26 },
-];
-
-const TIPS = [
-  'Eat oats or overnight oats',
-  'Add chia or flax seeds',
-  'Eat apples with skin',
-  'Include lentils or beans',
-  'Switch to whole grains',
-  'Eat broccoli, carrots daily',
-];
+const START_DATE = new Date('2026-04-15');
+const USER_ID = auth().currentUser?.uid;
 
 const GOAL_MIN = 25;
 const GOAL_MAX = 38;
@@ -90,18 +63,60 @@ function StatRow({ emoji, label, value, last }) {
   );
 }
 
+const getTodayIndex = () => {
+  const today = new Date();
+
+  // normalize time (important to avoid timezone issues)
+  const start = new Date(START_DATE);
+  start.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.floor((today - start) / (1000 * 60 * 60 * 24));
+
+  // clamp between 0 and 29 (since you only generate 30 days)
+  return Math.max(0, Math.min(29, diffDays));
+};
+
 export default function FiberChartDays({ navigation }) {
+  const [tips, setTips] = useState([]);
   const [input, setInput] = useState('');
   const [selected, setSelected] = useState(10);
-  const [fiberData, setFiberData] = useState(() =>
-    Array.from({ length: 30 }, (_, i) => {
-      const found = RAW_DATA.find(d => d.dayIndex === i);
-      const date = new Date(START_DATE);
-      date.setDate(START_DATE.getDate() + i);
-      return { dayIndex: i, fiber: found?.fiber || 0, date };
-    }),
-  );
+  const [fiberData, setFiberData] = useState([]);
 
+  /* ───────── FIRESTORE LIVE DATA ───────── */
+  useEffect(() => {
+    const unsub = firestore()
+      .collection('users')
+      .doc(USER_ID)
+      .onSnapshot(doc => {
+        const data = doc.data();
+        const logs = data?.logs || {};
+        const start = data?.goal?.startDate
+          ? new Date(data?.goal?.startDate)
+          : new Date(); // fallback
+
+        const formatted = Array.from({ length: 30 }, (_, i) => {
+          const date = new Date(start);
+          date.setDate(start.getDate() + i);
+
+          const key = date.toISOString().split('T')[0];
+
+          return {
+            dayIndex: i,
+            fiber: logs[key]?.fiber || 0,
+            date,
+          };
+        });
+
+        setFiberData(formatted);
+        setTips(getSmartTips(formatted));
+        console.log('getSmartTips(formatted) :>> ', getSmartTips(formatted));
+        // set today automatically
+        setSelected(getTodayIndex(start));
+      });
+
+    return () => unsub();
+  }, []);
   const max = Math.max(...fiberData.map(d => d.fiber), 40);
   const graphHeight = CHART_HEIGHT - PADDING * 2;
   const getBarH = val => (val / max) * graphHeight;
@@ -109,22 +124,58 @@ export default function FiberChartDays({ navigation }) {
   const formatDate = date =>
     date.toLocaleDateString('en-US', { day: 'numeric' });
 
-  const addFiber = () => {
+  /* ───────── ADD FIBER ───────── */
+  const addFiber = async () => {
     const val = Number(input || 0);
     if (!val) return;
-    const updated = [...fiberData];
-    updated[selected] = {
-      ...updated[selected],
-      fiber: updated[selected].fiber + val,
-    };
-    setFiberData(updated);
+
     setInput('');
+
+    const today = new Date();
+    const todayKey = today.toISOString().split('T')[0];
+
+    const currentTodayData = fiberData.find(
+      d => d.date.toISOString().split('T')[0] === todayKey,
+    );
+
+    const newFiber = (currentTodayData?.fiber || 0) + val;
+
+    // update local state (ONLY today's entry)
+    const updated = fiberData.map(item => {
+      const key = item.date.toISOString().split('T')[0];
+
+      if (key === todayKey) {
+        return {
+          ...item,
+          fiber: newFiber,
+        };
+      }
+
+      return item;
+    });
+
+    setFiberData(updated);
+
+    // write ONLY today's log in Firestore
+    await firestore()
+      .collection('users')
+      .doc(USER_ID)
+      .set(
+        {
+          logs: {
+            [todayKey]: {
+              fiber: newFiber,
+            },
+          },
+        },
+        { merge: true },
+      );
   };
 
-  // Stats
   const pastData = fiberData.slice(0, selected + 1);
   const total = pastData.reduce((s, d) => s + d.fiber, 0);
   const avg = total / (selected + 1);
+
   const remainingDays = 30 - (selected + 1);
   const requiredAvg =
     remainingDays > 0 ? (GOAL_MIN * 30 - total) / remainingDays : 0;
@@ -158,7 +209,6 @@ export default function FiberChartDays({ navigation }) {
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => navigation?.goBack()}
-          activeOpacity={0.8}
         >
           <BackIcon />
         </TouchableOpacity>
@@ -166,29 +216,25 @@ export default function FiberChartDays({ navigation }) {
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
-      >
-        {/* Selected day pill */}
+      <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.selectedPill}>
           <Text style={styles.selectedPillText}>
-            Day {selected + 1} · {fiberData[selected].fiber}g fiber
+            Day {selected + 1} · {fiberData[selected]?.fiber || 0}g fiber
           </Text>
         </View>
 
-        {/* ── Chart ── */}
+        {/* Chart */}
         <View style={styles.chartCard}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={{ width: ITEM_WIDTH * 30, height: CHART_HEIGHT }}>
-              {/* Bars */}
               {fiberData.map((item, index) => {
                 const barHeight = getBarH(item.fiber);
                 const inRange =
                   item.fiber >= GOAL_MIN && item.fiber <= GOAL_MAX;
+
                 return (
                   <View
-                    key={item.dayIndex}
+                    key={index}
                     style={{
                       position: 'absolute',
                       left: index * ITEM_WIDTH,
@@ -213,6 +259,7 @@ export default function FiberChartDays({ navigation }) {
                           }
                           rx={5}
                         />
+
                         <Rect
                           x={0}
                           y={PADDING}
@@ -221,18 +268,7 @@ export default function FiberChartDays({ navigation }) {
                           fill="transparent"
                           onPress={() => setSelected(index)}
                         />
-                        {selected === index && item.fiber > 0 && (
-                          <SvgText
-                            x={ITEM_WIDTH / 2}
-                            y={CHART_HEIGHT - PADDING - barHeight - 8}
-                            fontSize="10"
-                            fill="#FFFFFF"
-                            textAnchor="middle"
-                            fontFamily={fontFamily.montserratSemiBold}
-                          >
-                            {item.fiber}g
-                          </SvgText>
-                        )}
+
                         <SvgText
                           x={ITEM_WIDTH / 2}
                           y={CHART_HEIGHT - 5}
@@ -249,12 +285,11 @@ export default function FiberChartDays({ navigation }) {
                 );
               })}
 
-              {/* Trend line overlay */}
               <Svg
                 pointerEvents="none"
                 height={CHART_HEIGHT}
                 width={ITEM_WIDTH * 30}
-                style={{ position: 'absolute', top: 0, left: 0 }}
+                style={{ position: 'absolute' }}
               >
                 <Polyline
                   points={trendPoints}
@@ -268,14 +303,13 @@ export default function FiberChartDays({ navigation }) {
           </ScrollView>
         </View>
 
-        {/* Warning */}
         {warning && (
           <View style={styles.warningBox}>
             <Text style={styles.warningText}>{warning}</Text>
           </View>
         )}
 
-        {/* ── Stats card ── */}
+        {/* Stats */}
         <View style={styles.statsCard}>
           <StatRow emoji="📊" label="Avg Fiber" value={`${avg.toFixed(1)}g`} />
           <StatRow emoji="🎯" label="Target Range" value="25g – 38g" />
@@ -287,38 +321,38 @@ export default function FiberChartDays({ navigation }) {
           />
         </View>
 
-        {/* ── Tips card ── */}
+        {/* Tips */}
         <View style={styles.tipsCard}>
           <Text style={styles.tipsTitle}>💡 Fiber Tips</Text>
-          {TIPS.map((t, i) => (
+          {tips.map((t, i) => (
             <Text key={i} style={styles.tipText}>
               • {t}
             </Text>
           ))}
         </View>
 
-        {/* ── Add Fiber ── */}
-        <View style={styles.addCard}>
-          <Text style={styles.addLabel}>🍽 Add Fiber (g)</Text>
-          <TextInput
-            style={styles.addInput}
-            value={input}
-            onChangeText={setInput}
-            keyboardType="numeric"
-            placeholder="e.g. 10"
-            placeholderTextColor="rgba(255,255,255,0.25)"
-          />
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={addFiber}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.addBtnText}>Add</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Add */}
+        {selected ? (
+          <View style={styles.addCard}>
+            <Text style={styles.addLabel}>🍽 Add Fiber (g)</Text>
+            <TextInput
+              style={styles.addInput}
+              value={input}
+              onChangeText={setInput}
+              keyboardType="numeric"
+              placeholder="e.g. 10"
+              placeholderTextColor="rgba(255,255,255,0.25)"
+            />
 
-        {/* Share */}
-        <TouchableOpacity style={styles.shareBtn} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.addBtn} onPress={addFiber}>
+              <Text style={styles.addBtnText}>Add</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View />
+        )}
+
+        <TouchableOpacity style={styles.shareBtn}>
           <Text style={styles.shareBtnText}>Share Progress</Text>
         </TouchableOpacity>
       </ScrollView>

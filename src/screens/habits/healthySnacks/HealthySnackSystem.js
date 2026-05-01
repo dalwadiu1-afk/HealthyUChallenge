@@ -329,22 +329,22 @@
 // // ---------------- STYLES ----------------
 
 // const styles = StyleSheet.create({
-//   tabRow: {
-//     flexDirection: 'row',
-//     backgroundColor: '#DBD9EC',
-//     borderRadius: 50,
-//     padding: 5,
-//     marginBottom: 10,
-//   },
-//   tab: { flex: 1, padding: 10, borderRadius: 50 },
-//   activeTab: { backgroundColor: colors.primary },
+// tabRow: {
+//   flexDirection: 'row',
+//   backgroundColor: '#DBD9EC',
+//   borderRadius: 50,
+//   padding: 5,
+//   marginBottom: 10,
+// },
+// tab: { flex: 1, padding: 10, borderRadius: 50 },
+// activeTab: { backgroundColor: colors.primary },
 
-//   tabText: {
-//     textAlign: 'center',
-//     color: colors.primary,
-//     fontFamily: fontFamily.montserratBold,
-//   },
-//   activeText: { color: '#fff' },
+// tabText: {
+//   textAlign: 'center',
+//   color: colors.primary,
+//   fontFamily: fontFamily.montserratBold,
+// },
+// activeText: { color: '#fff' },
 
 //   card: {
 //     backgroundColor: 'rgba(143, 175, 120,0.16)',

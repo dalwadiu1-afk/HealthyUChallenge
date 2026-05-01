@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,22 @@ import { LineChart } from 'react-native-chart-kit';
 import Svg, { Path } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  onSnapshot,
+  serverTimestamp,
+} from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const USER_ID = auth().currentUser?.uid;
+
+console.log('USER_ID :>> ', USER_ID);
+
+const today = new Date().toISOString().split('T')[0];
+const db = getFirestore();
 
 const LABELS = [
   { key: 'start', label: 'Start Weight' },
@@ -34,6 +48,7 @@ const safeToFixed = num => (!num || isNaN(num) ? '0.0' : num.toFixed(1));
 
 export default function WeightChallengeUI({ navigation }) {
   const [step, setStep] = useState(0);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [weights, setWeights] = useState({
     start: '',
     week1: '',
@@ -42,7 +57,8 @@ export default function WeightChallengeUI({ navigation }) {
     week4: '',
     end: '',
   });
-
+  const userRef = doc(db, 'users', USER_ID);
+  const saveTimeout = useRef(null);
   const weightArray = LABELS.map(item => parseWeight(weights[item.key]));
   const validWeights = weightArray.filter(w => w > 0);
 
@@ -52,6 +68,77 @@ export default function WeightChallengeUI({ navigation }) {
     const weeksTracked = validWeights.length - 1;
     avgLoss = totalLoss / weeksTracked;
   }
+
+  // const save = async () => {
+  //   try {
+  //     await setDoc(
+  //       doc(db, 'users', USER_ID),
+  //       {
+  //         [`logs.${today}.weightChallenge`]: {
+  //           start: weights.start,
+  //           week1: weights.week1,
+  //           week2: weights.week2,
+  //           week3: weights.week3,
+  //           week4: weights.week4,
+  //           end: weights.end,
+  //         },
+  //         [`logs.${today}.updatedAt`]: serverTimestamp(),
+  //       },
+  //       { merge: true },
+  //     );
+  //   } catch (e) {
+  //     console.log('save error', e);
+  //   }
+  // };
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(userRef, docSnap => {
+      const data = docSnap.data();
+      if (!data) return;
+
+      const serverWeights = data?.logs?.[today]?.weightChallenge;
+
+      if (serverWeights) {
+        setWeights(serverWeights);
+      }
+
+      setIsLoaded(true); // ✅ mark as loaded
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!isLoaded) return; // 🚫 prevent overwrite
+    weightFun();
+  }, [weights]);
+
+  const weightFun = async () => {
+    try {
+      await setDoc(
+        userRef,
+        {
+          logs: {
+            [today]: {
+              weightChallenge: weights,
+              updatedAt: serverTimestamp(),
+            },
+          },
+        },
+        { merge: true },
+      );
+    } catch (e) {
+      console.log('Firestore save error:', e);
+    }
+  };
+
+  const getCurrentEditableStep = () => {
+    const filled = LABELS.filter(l => parseWeight(weights[l.key]) > 0).length;
+    return Math.min(filled, LABELS.length - 1);
+  };
+
+  const currentEditableStep = getCurrentEditableStep();
+  const isLocked = step > currentEditableStep + 1;
 
   const getFeedback = () => {
     if (avgLoss === 0)
@@ -185,9 +272,16 @@ export default function WeightChallengeUI({ navigation }) {
 
           <TextInput
             value={weights[LABELS[step].key]}
-            onChangeText={val => updateWeight(LABELS[step].key, val)}
+            onChangeText={val => {
+              if (step > currentEditableStep + 1) return; // 🔒 block future edits
+              updateWeight(LABELS[step].key, val);
+            }}
+            editable={step <= currentEditableStep + 1}
             keyboardType="numeric"
-            style={styles.input}
+            style={[
+              styles.input,
+              step > currentEditableStep + 1 && { opacity: 0.4 },
+            ]}
             placeholder={`Enter ${LABELS[step].label} (lbs)`}
             placeholderTextColor="rgba(255,255,255,0.25)"
           />
@@ -205,6 +299,7 @@ export default function WeightChallengeUI({ navigation }) {
             <TouchableOpacity
               style={styles.nextBtn}
               onPress={() => {
+                if (step > currentEditableStep + 1) return; // 🔒 block skip
                 if (step < LABELS.length - 1) setStep(s => s + 1);
               }}
               activeOpacity={0.85}

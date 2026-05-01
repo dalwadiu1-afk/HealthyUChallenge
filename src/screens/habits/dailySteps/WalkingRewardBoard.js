@@ -1,26 +1,30 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
   Dimensions,
   StyleSheet,
   Image,
-  ScrollView,
   StatusBar,
-  TouchableOpacity,
   Animated,
 } from 'react-native';
+
 import { SvgImg, Wrapper } from '../../../components';
 import { badgeIcon, rewardIcon } from '../../../assets/images';
 import { colors, fontFamily } from '../../../constant';
-import Svg, {
-  Path,
-  Circle,
-  Defs,
-  LinearGradient,
-  Stop,
-} from 'react-native-svg';
+
+import Svg, { Path } from 'react-native-svg';
+
 import ProfileHeader from '../../../components/profile/ProfileHeader';
+
+/* 🔥 Firebase */
+import {
+  getDatabase,
+  ref,
+  onValue,
+  off,
+} from '@react-native-firebase/database';
+import { get } from 'react-native/Libraries/NativeComponent/NativeComponentRegistry';
 
 const { height, width } = Dimensions.get('window');
 
@@ -92,7 +96,7 @@ function FootprintIcon() {
 
 function WeekWinnerCard({ item, index }) {
   const anim = useRef(new Animated.Value(0)).current;
-  const rc = RANK_COLORS[item.rank];
+  const rc = RANK_COLORS[item?.rank];
 
   useEffect(() => {
     Animated.timing(anim, {
@@ -123,31 +127,26 @@ function WeekWinnerCard({ item, index }) {
           { borderColor: rc.border, backgroundColor: rc.bg },
         ]}
       >
-        {/* Rank badge */}
         <View style={[styles.rankBadge, { borderColor: rc.border }]}>
-          <Text style={[styles.rankNum, { color: rc.text }]}>{item.rank}</Text>
+          <Text style={[styles.rankNum, { color: rc.text }]}>{item?.rank}</Text>
         </View>
 
-        {/* Avatar */}
         <Image
-          source={{ uri: item.profile }}
+          source={{ uri: item?.profile }}
           style={[styles.winnerAvatar, { borderColor: rc.text }]}
-          resizeMode="cover"
         />
 
-        {/* Info */}
         <View style={styles.winnerInfo}>
-          <Text style={styles.winnerName}>{item.name}</Text>
-          <Text style={styles.winnerWorkouts}>{item.workouts}</Text>
+          <Text style={styles.winnerName}>{item?.name}</Text>
+          <Text style={styles.winnerWorkouts}>{item?.workouts}</Text>
         </View>
 
-        {/* Steps */}
         <View style={styles.winnerRight}>
           <SvgImg
             iconName={badgeIcon(
-              item.rank === 1
+              item?.rank === 1
                 ? 'gold'
-                : item.rank === 2
+                : item?.rank === 2
                 ? colors.gray
                 : 'brown',
             )}
@@ -155,7 +154,7 @@ function WeekWinnerCard({ item, index }) {
             width={14}
           />
           <Text style={[styles.winnerSteps, { color: rc.text }]}>
-            {item.steps}
+            {item?.steps}
           </Text>
           <Text style={styles.winnerStepsLabel}> Steps</Text>
         </View>
@@ -167,6 +166,10 @@ function WeekWinnerCard({ item, index }) {
 export default function WalkingRewardBoard({ navigation }) {
   const headerAnim = useRef(new Animated.Value(0)).current;
   const cardsAnim = useRef(new Animated.Value(0)).current;
+
+  /* 🔥 Firebase state */
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     Animated.stagger(120, [
@@ -183,67 +186,106 @@ export default function WalkingRewardBoard({ navigation }) {
     ]).start();
   }, []);
 
+  useEffect(() => {
+    const db = getDatabase(
+      undefined,
+      'https://healthyuchallenge-45ec6-default-rtdb.firebaseio.com/',
+    );
+
+    const dbRef = ref(db, 'users/1');
+
+    const unsubscribe = onValue(
+      dbRef,
+      snapshot => {
+        console.log('EXISTS:', snapshot.exists());
+        console.log('DATA:', snapshot.val());
+
+        if (snapshot.exists()) {
+          setUserData(snapshot.val());
+        } else {
+          setUserData(null);
+        }
+
+        setLoading(false);
+      },
+      error => {
+        console.log('FIREBASE ERROR:', error);
+        setLoading(false);
+      },
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  /* 🔥 derived values */
+  const percent = userData?.stepsToday
+    ? Math.min((userData.stepsToday / 5000) * 100, 100)
+    : 0;
+
   return (
     <View style={styles.root}>
-      {/* ── Header ── */}
+      {/* HEADER */}
       <View
         style={{ marginTop: StatusBar.currentHeight, paddingHorizontal: 24 }}
       >
         <ProfileHeader onPress={() => navigation.navigate('AvgSteps')} />
       </View>
+
       <Wrapper safeAreaPops={{ edges: [''] }}>
-        {/* ── Mini stats strip ── */}
+        {/* STATS */}
         <Animated.View style={[styles.statsStrip, { opacity: cardsAnim }]}>
           {[
-            { label: 'Today', value: '2,000', unit: 'steps' },
-            { label: 'This Week', value: '14,320', unit: 'steps' },
-            { label: 'Streak', value: '7', unit: 'days' },
+            {
+              label: 'Today',
+              value: userData?.stepsToday || 2000,
+              unit: 'steps',
+            },
+            {
+              label: 'This Week',
+              value: userData?.stepsWeek || 14320,
+              unit: 'steps',
+            },
+            {
+              label: 'Streak',
+              value: userData?.streak || 7,
+              unit: 'days',
+            },
           ].map((s, i) => (
             <View
               key={i}
               style={[styles.statPill, i < 2 && styles.statPillBorder]}
             >
-              <Text style={styles.statPillValue}>{s.value}</Text>
-              <Text style={styles.statPillUnit}>{s.unit}</Text>
-              <Text style={styles.statPillLabel}>{s.label}</Text>
+              <Text style={styles.statPillValue}>{s?.value}</Text>
+              <Text style={styles.statPillUnit}>{s?.unit}</Text>
+              <Text style={styles.statPillLabel}>{s?.label}</Text>
             </View>
           ))}
         </Animated.View>
 
-        {/* ── Steps card ── */}
-        <Animated.View
-          style={[
-            styles.stepsCard,
-            {
-              opacity: cardsAnim,
-              transform: [
-                {
-                  translateY: cardsAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [20, 0],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
+        {/* STEPS */}
+        <Animated.View style={[styles.stepsCard, { opacity: cardsAnim }]}>
           <View style={styles.stepsIconWrap}>
             <FootprintIcon />
           </View>
+
           <View style={styles.stepsCardBody}>
             <Text style={styles.stepsLabel}>Steps</Text>
-            <Text style={styles.stepsValue}>2,000 +</Text>
-          </View>
-          <View style={styles.stepsGoalWrap}>
-            <Text style={styles.stepsGoalPct}>40%</Text>
-            <Text style={styles.stepsGoalLabel}>of daily goal</Text>
-          </View>
-          {/* mini progress bar at bottom */}
-          <View style={styles.stepsProgressBg}>
-            <View style={[styles.stepsProgressFill, { width: '40%' }]} />
+            <Text style={styles.stepsValue}>
+              {userData?.stepsToday || 2000} +
+            </Text>
           </View>
 
-          {/* message row */}
+          <View style={styles.stepsGoalWrap}>
+            <Text style={styles.stepsGoalPct}>{Math.round(percent)}%</Text>
+            <Text style={styles.stepsGoalLabel}>of daily goal</Text>
+          </View>
+
+          <View style={styles.stepsProgressBg}>
+            <View
+              style={[styles.stepsProgressFill, { width: `${percent}%` }]}
+            />
+          </View>
+
           <View style={styles.stepsMsgRow}>
             <Text style={styles.stepsMsgTitle}>Let's keep going 🔥</Text>
             <Text style={styles.stepsMsgSub}>
@@ -252,69 +294,42 @@ export default function WalkingRewardBoard({ navigation }) {
           </View>
         </Animated.View>
 
-        {/* ── Points card ── */}
-        <Animated.View
-          style={[
-            styles.pointsCard,
-            {
-              opacity: cardsAnim,
-              transform: [
-                {
-                  translateY: cardsAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [28, 0],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
-          {/* Top row */}
+        {/* POINTS */}
+        <Animated.View style={[styles.pointsCard, { opacity: cardsAnim }]}>
           <View style={styles.pointsTopRow}>
             <View>
               <Text style={styles.pointsLabel}>Your Available Points</Text>
               <Text style={styles.pointsValue}>
-                8,951 <Text style={styles.pointsPts}>pts.</Text>
+                {userData?.points || 8951}{' '}
+                <Text style={styles.pointsPts}>pts.</Text>
               </Text>
             </View>
+
             <SvgImg iconName={rewardIcon} height={90} width={120} />
           </View>
 
-          {/* Divider */}
           <View style={styles.pointsDivider} />
 
-          {/* Progress */}
           <View style={styles.progressLabelRow}>
             <Text style={styles.progressLabel}>The week points</Text>
-            <Text style={styles.progressCount}>25 / 50</Text>
+            <Text style={styles.progressCount}>
+              {userData?.weeklyPoints || 25} / 50
+            </Text>
           </View>
+
           <View style={styles.progressBg}>
             <View style={styles.progressFill} />
             <View style={styles.progressThumb} />
           </View>
 
-          {/* Bottom tags */}
           <View style={styles.pointsTags}>
             <View style={styles.pointsTag}>
               <Text style={styles.pointsTagText}>🏅 Top 20%</Text>
             </View>
-            <View
-              style={[
-                styles.pointsTag,
-                {
-                  borderColor: 'rgba(255,215,0,0.3)',
-                  backgroundColor: 'rgba(255,215,0,0.07)',
-                },
-              ]}
-            >
-              <Text style={[styles.pointsTagText, { color: '#FFD700' }]}>
-                ⚡ On streak
-              </Text>
-            </View>
           </View>
         </Animated.View>
 
-        {/* ── Week Winners ── */}
+        {/* WINNERS (UNCHANGED) */}
         <View style={styles.sectionRow}>
           <Text style={styles.sectionTitle}>Week Winner</Text>
           <View style={styles.sectionBadge}>
