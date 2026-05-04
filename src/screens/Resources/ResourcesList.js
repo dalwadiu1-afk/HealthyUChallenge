@@ -12,6 +12,7 @@ import {
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors, fontFamily } from '../../constant';
 import { Wrapper } from '../../components';
+import firestore from '@react-native-firebase/firestore';
 
 const { width } = Dimensions.get('window');
 
@@ -148,6 +149,8 @@ function ResourceCard({ item, index }) {
 
 export default function ResourcesList() {
   const [activeCategory, setActiveCategory] = useState('All');
+  const [resources, setResources] = useState([]);
+  const [featured, setFeatured] = useState(null);
   const headerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -158,17 +161,52 @@ export default function ResourcesList() {
     }).start();
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = firestore()
+      .collection('resources')
+      .onSnapshot(snapshot => {
+        let allResources = [];
+        let featuredData = null;
+
+        snapshot.forEach(doc => {
+          const data = doc.data();
+
+          // 👇 HANDLE FEATURED CARD
+          if (doc.id === 'featured') {
+            featuredData = data;
+            return;
+          }
+
+          // 👇 HANDLE CATEGORY ITEMS
+          if (data.items && Array.isArray(data.items)) {
+            const itemsWithCategory = data.items.map((item, index) => ({
+              ...item,
+              category: doc.id,
+              id: `${doc.id}-${index}`,
+            }));
+
+            allResources = [...allResources, ...itemsWithCategory];
+          }
+        });
+
+        setResources(allResources);
+        setFeatured(featuredData);
+      });
+
+    return () => unsubscribe();
+  }, []);
+
   const filtered =
     activeCategory === 'All'
-      ? RESOURCES
-      : RESOURCES.filter(r => r.category === activeCategory);
+      ? resources
+      : resources.filter(r => r.category === activeCategory);
 
   return (
     <View style={styles.container}>
       <Wrapper>
         <FlatList
           data={filtered}
-          keyExtractor={item => item.id.toString()}
+          keyExtractor={item => item?.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
@@ -183,27 +221,32 @@ export default function ResourcesList() {
               </View>
 
               {/* Featured card */}
-              <TouchableOpacity
-                style={styles.featuredCard}
-                activeOpacity={0.88}
-              >
-                <View style={styles.featuredBadge}>
-                  <Text style={styles.featuredBadgeText}>⭐ Featured</Text>
-                </View>
-                <Text style={styles.featuredTitle}>
-                  Building Healthy Habits{'\n'}That Actually Stick
-                </Text>
-                <Text style={styles.featuredDesc}>
-                  Backed by behavioral science — the proven 3-step framework for
-                  lasting change.
-                </Text>
-                <View style={styles.featuredMeta}>
-                  <Text style={styles.featuredMetaText}>📖 8 min read</Text>
-                  <View style={styles.featuredBtn}>
-                    <Text style={styles.featuredBtnText}>Read →</Text>
+              {featured && (
+                <TouchableOpacity
+                  style={styles.featuredCard}
+                  activeOpacity={0.88}
+                >
+                  <View style={styles.featuredBadge}>
+                    <Text style={styles.featuredBadgeText}>
+                      {featured.badge || '⭐ Featured'}
+                    </Text>
                   </View>
-                </View>
-              </TouchableOpacity>
+
+                  <Text style={styles.featuredTitle}>{featured.title}</Text>
+
+                  <Text style={styles.featuredDesc}>{featured.desc}</Text>
+
+                  <View style={styles.featuredMeta}>
+                    <Text style={styles.featuredMetaText}>
+                      📖 {featured.readTime}
+                    </Text>
+
+                    <View style={styles.featuredBtn}>
+                      <Text style={styles.featuredBtnText}>Read →</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              )}
 
               {/* Category filter */}
               <FlatList

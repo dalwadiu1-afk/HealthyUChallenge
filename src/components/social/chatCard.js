@@ -29,7 +29,19 @@ export default function ChatCard({ item, index, onCardPress }) {
       {/* Header row */}
       <View style={styles.headerRow}>
         <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
-          <Text style={styles.avatarText}>{initials}</Text>
+          {item?.avatar ? (
+            <Image
+              source={{
+                uri:
+                  item.picture ||
+                  'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
+              }}
+              style={{ height: '100%', width: '100%' }}
+              resizeMode="cover"
+            />
+          ) : (
+            <Text style={styles.avatarText}>{initials}</Text>
+          )}
         </View>
         <View style={styles.userInfo}>
           <Text style={styles.userName}>{item?.name}</Text>
@@ -46,13 +58,17 @@ export default function ChatCard({ item, index, onCardPress }) {
       </Text>
 
       {/* Image */}
-      {item?.picture && (
-        <Image
-          source={{ uri: item.picture }}
-          style={styles.postImage}
-          resizeMode="cover"
-        />
-      )}
+      {/* {item?.picture && ( */}
+      <Image
+        source={{
+          uri:
+            item.picture ||
+            'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
+        }}
+        style={styles.postImage}
+        resizeMode="cover"
+      />
+      {/* )} */}
 
       {/* Footer actions */}
       <View style={styles.footer}>
@@ -103,6 +119,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   avatarText: {
     color: colors.white,

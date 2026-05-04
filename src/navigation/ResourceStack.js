@@ -7,6 +7,7 @@ const Stack = createNativeStackNavigator();
 export default function ResourceStack() {
   return (
     <Stack.Navigator
+      initialRouteName="ResourcesList"
       screenOptions={{ headerShown: false, unmountOnBlur: true }}
     >
       <Stack.Screen name="ResourcesList" component={Resources} />

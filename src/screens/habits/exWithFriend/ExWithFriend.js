@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,17 @@ import Share from 'react-native-share';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
+import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
+const user = auth().currentUser;
+const USER_ID = user?.uid;
+const getDateKey = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`; // "2026-04-01"
+};
 
 function GradientBg({ id, c1, c2, r = 20 }) {
   return (
@@ -68,37 +79,89 @@ export default function FriendWorkoutChallenge({ navigation }) {
     { photo: null, friend: '', timestamp: '' },
   ]);
 
+  useEffect(() => {
+    if (!USER_ID) return;
+
+    const dateKey = getDateKey();
+
+    const ref = database().ref(
+      `users/${USER_ID}/logs/friendWorkout/${dateKey}/entries`,
+    );
+
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (!data) return;
+
+      const updated = [...entries];
+
+      Object.keys(data).forEach(index => {
+        updated[index] = data[index];
+      });
+
+      setEntries(updated);
+    });
+
+    return () => ref.off('value', listener);
+  }, [USER_ID]);
+
   const handleCamera = async index => {
     const granted = await requestCameraPermission();
     if (!granted) return;
 
-    launchCamera({ mediaType: 'photo', quality: 0.7 }, response => {
+    launchCamera({ mediaType: 'photo', quality: 0.7 }, async response => {
       if (response.didCancel || response.errorCode) return;
+
       const uri = response?.assets?.[0]?.uri;
       if (!uri) return;
 
+      const newEntry = {
+        ...entries[index],
+        photo: uri,
+        timestamp: new Date().toLocaleString(),
+      };
+
       setEntries(prev => {
         const updated = [...prev];
-        updated[index] = {
-          ...updated[index],
-          photo: uri,
-          timestamp: new Date().toLocaleString(),
-        };
+        updated[index] = newEntry;
         return updated;
       });
+
+      // 🔥 SAVE instantly
+      await saveEntryRealtime(index, newEntry);
     });
   };
 
   const handleFriendChange = (index, name) => {
+    const newEntry = {
+      ...entries[index],
+      friend: name,
+    };
+
     setEntries(prev => {
       const updated = [...prev];
-      updated[index] = { ...updated[index], friend: name };
+      updated[index] = newEntry;
       return updated;
     });
+
+    // 🔥 SAVE instantly
+    saveEntryRealtime(index, newEntry);
+  };
+  const saveEntryRealtime = async (index, entry) => {
+    try {
+      const dateKey = getDateKey();
+
+      await database()
+        .ref(`users/${USER_ID}/logs/friendWorkout/${dateKey}/entries/${index}`)
+        .set(entry);
+    } catch (e) {
+      console.log('Realtime save error:', e);
+    }
   };
 
   const handleShare = async index => {
     const item = entries[index];
+
     if (!item.photo) {
       Alert.alert('Please take a photo first 📸');
       return;
@@ -116,9 +179,40 @@ export default function FriendWorkoutChallenge({ navigation }) {
       if (Platform.OS === 'android' && !imagePath.startsWith('file://')) {
         imagePath = 'file://' + imagePath;
       }
-      await Share.open({ message, url: imagePath, type: 'image/jpeg' });
+
+      await Share.open({
+        message,
+        url: imagePath,
+        type: 'image/jpeg',
+      });
     } catch (error) {
       console.log(error);
+    }
+  };
+
+  const saveWorkoutEntry = async entry => {
+    try {
+      const dateKey = getDateKey(); // same function you already have
+
+      const ref = database().ref(
+        `users/${USER_ID}/logs/friendWorkout/${dateKey}`,
+      );
+
+      const snapshot = await ref.once('value');
+      const existing = snapshot.val();
+
+      if (existing) {
+        await ref.update({
+          entries: [...(existing.entries || []), entry],
+        });
+      } else {
+        await ref.set({
+          date: dateKey,
+          entries: [entry],
+        });
+      }
+    } catch (e) {
+      console.log('Save error:', e);
     }
   };
 

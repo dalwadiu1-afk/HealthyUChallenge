@@ -51,7 +51,7 @@ export default function SugarChart30Days({ navigation }) {
   const gender = 'female';
   const goal = gender === 'female' ? 24 : 36;
   const todayKey = getDateKey();
-  const selectedKey = data[selected]?.key;
+  const selectedKey = data?.[selected]?.key;
   const isToday = selectedKey === todayKey;
   const todayDate = new Date();
   todayDate.setHours(0, 0, 0, 0);
@@ -122,7 +122,7 @@ export default function SugarChart30Days({ navigation }) {
     date.toLocaleDateString('en-US', { day: 'numeric' });
 
   const data = useMemo(() => {
-    if (!startDate) return [];
+    if (!startDate) return []; // already good
 
     const base = new Date(cycleStart);
     base.setHours(0, 0, 0, 0);

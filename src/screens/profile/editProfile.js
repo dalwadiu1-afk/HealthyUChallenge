@@ -1,20 +1,23 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import ActionSheet from 'react-native-actions-sheet';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
-
+import database from '@react-native-firebase/database';
 import { colors, fontFamily } from '../../constant';
-import { Header, Wrapper } from '../../components';
+import { Header, RadioBtn, Wrapper } from '../../components';
 import InputBox from '../../components/common/InputBox';
+import { requestCameraPermission } from '../../utils/helper';
 
 export default function EditProfile({ navigation }) {
   const actionSheetRef = useRef(null);
-
-  const [name, setName] = useState('Linh Nguyen');
-  const [username, setUsername] = useState('linh.nguyen');
-  const [image, setImage] = useState(
-    'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-  );
+  const [selected, setSelected] = useState('');
+  const [form, setForm] = useState({
+    name: '',
+    username: '',
+    image:
+      'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
+    gender: '',
+  });
 
   // OPEN ACTION SHEET
   const handleChangePhoto = () => {
@@ -22,7 +25,14 @@ export default function EditProfile({ navigation }) {
   };
 
   // CAMERA
-  const handleCamera = () => {
+  const handleCamera = async () => {
+    const hasPermission = await requestCameraPermission();
+
+    if (!hasPermission) {
+      console.log('Camera permission denied');
+      return;
+    }
+
     const options = {
       mediaType: 'photo',
       quality: 0.8,
@@ -30,6 +40,8 @@ export default function EditProfile({ navigation }) {
     };
 
     launchCamera(options, response => {
+      console.log('Camera Response:', response); // 🔥 DEBUG
+
       if (response.didCancel) return;
       if (response.errorCode) {
         console.log('Camera Error:', response.errorMessage);
@@ -37,11 +49,19 @@ export default function EditProfile({ navigation }) {
       }
 
       const uri = response.assets?.[0]?.uri;
+
       if (uri) {
-        setImage(uri);
+        updateField('image', uri);
         actionSheetRef.current?.hide();
       }
     });
+  };
+
+  const updateField = (key, value) => {
+    setForm(prev => ({
+      ...prev,
+      [key]: value,
+    }));
   };
 
   // GALLERY
@@ -60,23 +80,52 @@ export default function EditProfile({ navigation }) {
 
       const uri = response.assets?.[0]?.uri;
       if (uri) {
-        setImage(uri);
+        updateField('image', uri);
         actionSheetRef.current?.hide();
       }
     });
   };
 
   // SAVE
-  const handleSave = () => {
-    // TODO: API / AsyncStorage logic
-    console.log({
-      name,
-      username,
-      image,
+  const handleSave = async () => {
+    try {
+      const userId = 'USER_UID';
+
+      await database().ref(`users/${userId}/profile`).update({
+        name: form?.name,
+        username: form?.username,
+        avatar: form?.image,
+        gender: form?.gender,
+      });
+
+      console.log('Profile updated successfully');
+
+      navigation.goBack();
+    } catch (error) {
+      console.log('Firebase Save Error:', error);
+    }
+  };
+
+  useEffect(() => {
+    const userId = 'USER_UID'; // or auth().currentUser.uid
+
+    const ref = database().ref(`users/${userId}/profile`);
+
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (data) {
+        setForm({
+          name: data.name || '',
+          username: data.username || '',
+          avatar: data.avatar || '',
+          gender: data.gender || '',
+        });
+      }
     });
 
-    navigation.goBack();
-  };
+    return () => ref.off('value', listener);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -87,7 +136,14 @@ export default function EditProfile({ navigation }) {
 
         {/* AVATAR */}
         <View style={styles.avatarContainer}>
-          <Image source={{ uri: image }} style={styles.avatar} />
+          <Image
+            source={{
+              uri:
+                form?.image ||
+                'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
+            }}
+            style={styles.avatar}
+          />
 
           <TouchableOpacity
             style={styles.changePhotoBtn}
@@ -102,8 +158,8 @@ export default function EditProfile({ navigation }) {
         <View style={styles.inputGroup}>
           <InputBox
             label="Full Name"
-            value={name}
-            onChangeText={setName}
+            value={form?.name}
+            onChangeText={text => updateField('name', text)}
             placeholder="Enter your name"
           />
         </View>
@@ -112,9 +168,16 @@ export default function EditProfile({ navigation }) {
         <View style={styles.inputGroup}>
           <InputBox
             label="Username"
-            value={username}
-            onChangeText={setUsername}
+            value={form?.username}
+            onChangeText={text => updateField('username', text)}
             placeholder="@username"
+          />
+        </View>
+
+        <View>
+          <RadioBtn
+            selected={form?.gender}
+            onPress={item => updateField('gender', item?.value)}
           />
         </View>
 

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,20 +6,33 @@ import {
   Image,
   Dimensions,
   TouchableOpacity,
+  ScrollView,
+  StatusBar,
   Animated,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import auth from '@react-native-firebase/auth';
+import database from '@react-native-firebase/database';
+
 import { colors, fontFamily } from '../../constant';
 import { Wrapper } from '../../components';
-import auth from '@react-native-firebase/auth';
 
 const { width, height } = Dimensions.get('window');
 
+const userId = auth().currentUser?.uid || 'USER_UID';
 const MENU_ITEMS = [
+  {
+    emoji: '🪪',
+    title: 'Profile Details',
+    subtitle: 'Your personalized health overview',
+    screenName: 'ProfileDetails',
+    badge: 'Active',
+  },
   {
     emoji: '🎯',
     title: 'Goals',
-    subtitle: 'View your health goals',
+    subtitle: 'View & edit your health goals',
     screenName: 'ProfileDetails',
     badge: null,
   },
@@ -51,12 +64,6 @@ const MENU_ITEMS = [
     screenName: 'ProfileDetails',
     badge: null,
   },
-];
-
-const STATS = [
-  { label: 'Day Streak', value: '14', emoji: '🔥' },
-  { label: 'Habits Done', value: '87', emoji: '✅' },
-  { label: 'Active Days', value: '31', emoji: '📅' },
 ];
 
 function MenuItem({ item, onPress, index }) {
@@ -129,8 +136,40 @@ function MenuItem({ item, onPress, index }) {
 }
 
 export default function Profile({ navigation }) {
+  const [profile, setProfile] = useState({});
+  const userRef = database().ref(`users/${userId}/profile`);
   const headerAnim = useRef(new Animated.Value(0)).current;
   const avatarScale = useRef(new Animated.Value(0.85)).current;
+
+  const calculateStreak = habit => {
+    if (!habit) return 0;
+
+    const allDays = [];
+
+    Object.values(habit).forEach(month => {
+      if (month?.days) {
+        Object.entries(month?.days).forEach(([day, data]) => {
+          if (data?.completed) {
+            allDays.push(day);
+          }
+        });
+      }
+    });
+
+    return allDays.length; // simple version (can upgrade later)
+  };
+
+  useEffect(() => {
+    const listener = userRef.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (data) {
+        setProfile(data);
+      }
+    });
+
+    return () => userRef.off('value', listener);
+  }, []);
 
   useEffect(() => {
     Animated.parallel([
@@ -146,15 +185,52 @@ export default function Profile({ navigation }) {
       }),
     ]).start();
   }, []);
+  const currentMonth = new Date().toLocaleString('default', { month: 'short' });
+  const year = new Date().getFullYear();
+  const monthKey = `${currentMonth}_${year}`;
 
-  const handleLogout = async () => {
-    try {
-      await auth().signOut();
-      console.log('✅ User signed out');
-    } catch (e) {
-      console.log('❌ Logout error:', e);
-    }
-  };
+  const days = profile?.habit?.[monthKey]?.days || {};
+
+  const activeDays = Object.keys(days).length;
+
+  const streak = calculateStreak(profile?.habit);
+  const today = String(new Date().getDate()).padStart(2, '0');
+
+  const currentHabit = profile?.habit?.[monthKey] || {};
+  const todayData = currentHabit?.days?.[today] || {};
+
+  const STATS = [
+    {
+      label: 'Streak',
+      value: streak || 0,
+      emoji: '🔥',
+    },
+    {
+      label: 'Active Days',
+      value: activeDays || 0,
+      emoji: '📅',
+    },
+    // {
+    //   label: 'Habit',
+    //   value: currentHabit?.title || 'None',
+    //   emoji: '🎯',
+    // },
+    // {
+    //   label: 'Target',
+    //   value: currentHabit?.target || '--',
+    //   emoji: '🥅',
+    // },
+    {
+      label: 'Today',
+      value: todayData?.progress || '0',
+      emoji: '📊',
+    },
+    // {
+    //   label: 'Done',
+    //   value: todayData?.completed ? 'Yes' : 'No',
+    //   emoji: '✅',
+    // },
+  ];
 
   return (
     <View style={styles.container}>
@@ -177,47 +253,38 @@ export default function Profile({ navigation }) {
           >
             <Image
               style={styles.avatar}
-              resizeMode="cover"
               source={{
-                uri: 'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
+                uri:
+                  profile?.avatar ||
+                  'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
               }}
             />
-            <TouchableOpacity
-              style={styles.editAvatarBtn}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate('EditProfile')}
-            >
-              <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"
-                  stroke="#8FAF78"
-                  strokeWidth={2.2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <Path
-                  d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
-                  stroke="#8FAF78"
-                  strokeWidth={2.2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
-            </TouchableOpacity>
           </Animated.View>
 
-          <Text style={styles.userName}>Linh Nguyen</Text>
+          <Text style={styles.userName}>{profile?.name || 'User'}</Text>
+
+          <Text style={{ ...styles.userHandle, marginBottom: 0 }}>
+            {profile?.habit?.[monthKey]?.title || 'No habit set'}
+          </Text>
+
           <Text style={styles.userHandle}>
-            @linh.nguyen · Member since 2024
+            {profile?.username || '@username'} · Member since{' '}
+            {profile?.memberSince || '2024'}
           </Text>
 
           {/* Stats row */}
           <View style={styles.statsRow}>
             {STATS.map((s, i) => (
               <View key={i} style={styles.statItem}>
-                <Text style={styles.statEmoji}>{s.emoji}</Text>
-                <Text style={styles.statValue}>{s.value}</Text>
-                <Text style={styles.statLabel}>{s.label}</Text>
+                <Text style={styles.statEmoji}>{s?.emoji}</Text>
+                <Text
+                  style={styles.statValue}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {s.value}
+                </Text>
+                <Text style={styles.statLabel}>{s?.label}</Text>
               </View>
             ))}
           </View>
@@ -245,11 +312,7 @@ export default function Profile({ navigation }) {
         </View>
 
         {/* Logout */}
-        <TouchableOpacity
-          style={styles.logoutBtn}
-          activeOpacity={0.8}
-          onPress={handleLogout}
-        >
+        <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.8}>
           <Text style={styles.logoutIcon}>🚪</Text>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
