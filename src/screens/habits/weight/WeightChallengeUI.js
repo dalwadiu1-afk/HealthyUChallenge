@@ -22,16 +22,6 @@ const USER_ID = auth().currentUser?.uid;
 
 const getToday = () => new Date().toISOString().split('T')[0];
 
-const getWeeksPassed = startDate => {
-  if (!startDate) return 0;
-
-  const start = new Date(startDate);
-  const now = new Date();
-
-  const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
-  return Math.max(0, Math.floor(diffDays / 7));
-};
-
 const LABELS = [
   { key: 'start', label: 'Start Weight' },
   { key: 'week1', label: 'Week 1' },
@@ -51,6 +41,8 @@ const safeToFixed = num => (!num || isNaN(num) ? '0.0' : num.toFixed(1));
 export default function WeightChallengeUI({ navigation }) {
   const [step, setStep] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [startDate, setStartDate] = useState(null);
+  const isRemoteUpdate = useRef(false);
 
   const [weights, setWeights] = useState({
     start: '',
@@ -61,8 +53,12 @@ export default function WeightChallengeUI({ navigation }) {
     end: '',
   });
 
+  // 1. Derived values FIRST
   const today = getToday();
-  const userRef = database().ref(`users/${USER_ID}/logs/${today}`);
+
+  const userRef = database().ref(`users/${USER_ID}/logs/weightChallenge`);
+
+  // 2. State calculations
   const weightArray = LABELS.map(item => parseWeight(weights[item.key]));
   const validWeights = weightArray.filter(w => w > 0);
 
@@ -72,26 +68,55 @@ export default function WeightChallengeUI({ navigation }) {
     const weeksTracked = validWeights.length - 1;
     avgLoss = totalLoss / weeksTracked;
   }
+
+  // 3. READ from Firebase (runs when today changes)
   useEffect(() => {
-    const ref = database().ref(`users/${USER_ID}/logs/${today}`);
+    const ref = database().ref(`users/${USER_ID}/logs/weightChallenge`);
+    const goalRef = database().ref(`users/${USER_ID}/goal`);
+
+    const goalListener = goalRef.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (data?.startDate) {
+        setStartDate(data.startDate);
+      }
+    });
 
     const listener = ref.on('value', snapshot => {
       const data = snapshot.val();
 
-      if (data?.weightChallenge) {
-        setWeights(data.weightChallenge);
+      if (data) {
+        isRemoteUpdate.current = true; // 🚨 mark as server update
+
+        setWeights(data);
+
+        let nextStep = 0;
+        for (let i = 0; i < LABELS.length; i++) {
+          if (!data[LABELS[i].key]) {
+            nextStep = i;
+            break;
+          }
+          nextStep = i + 1;
+        }
+
+        setStep(Math.min(nextStep, LABELS.length - 1));
       }
 
       setIsLoaded(true);
     });
 
-    return () => ref.off('value', listener);
+    return () => {
+      goalRef.off('value', goalListener);
+      ref.off('value', listener);
+    };
   }, [today]);
 
+  // 4. WRITE function
   const weightFun = async updatedWeights => {
+    if (!updatedWeights) return;
     try {
       await userRef.update({
-        weightChallenge: updatedWeights,
+        ...updatedWeights,
         updatedAt: database.ServerValue.TIMESTAMP,
       });
     } catch (e) {
@@ -99,23 +124,35 @@ export default function WeightChallengeUI({ navigation }) {
     }
   };
 
-  useEffect(() => {
-    if (!isLoaded) return;
+  const getAllowedStepByDate = () => {
+    if (!startDate) return 0;
 
-    const timeout = setTimeout(() => {
-      weightFun(weights);
-    }, 500);
+    const start = new Date(startDate);
+    const now = new Date();
 
-    return () => clearTimeout(timeout);
-  }, [step, isLoaded]);
+    const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
 
+    const weekIndex = Math.floor(diffDays / 7);
+
+    // 0 = start, 1 = week1, etc.
+    return Math.min(weekIndex, LABELS.length - 1);
+  };
+
+  // 5. AUTO SAVE effect (runs AFTER data is loaded + step changes)
   const getCurrentEditableStep = () => {
-    const filled = LABELS.filter(l => parseWeight(weights[l.key]) > 0).length;
-    return Math.min(filled, LABELS.length - 1);
+    for (let i = 0; i < LABELS.length; i++) {
+      if (!weights[LABELS[i].key]) {
+        return i;
+      }
+    }
+    return LABELS.length - 1;
   };
 
   const currentEditableStep = getCurrentEditableStep();
-  const isLocked = step > currentEditableStep + 1;
+  const allowedStep = getAllowedStepByDate();
+  const currentKey = LABELS[step].key;
+  const isSaved = !!weights[currentKey];
+  const isLocked = step >= allowedStep;
 
   const getFeedback = () => {
     if (avgLoss === 0)
@@ -255,21 +292,21 @@ export default function WeightChallengeUI({ navigation }) {
           <TextInput
             value={weights[LABELS[step].key]}
             onChangeText={val => {
-              if (step > currentEditableStep + 1) return; // 🔒 block future edits
+              if (step > allowedStep) return;
               updateWeight(LABELS[step].key, val);
             }}
-            editable={step <= currentEditableStep + 1}
+            editable={step <= allowedStep}
             keyboardType="numeric"
             style={[
               styles.input,
-              step > currentEditableStep + 1 && { opacity: 0.4 },
+              step > currentEditableStep && { opacity: 0.4 },
             ]}
             placeholder={`Enter ${LABELS[step].label} (lbs)`}
             placeholderTextColor="rgba(255,255,255,0.25)"
           />
 
           <View style={styles.btnRow}>
-            {step > 0 && (
+            {/* {step > 0 && (
               <TouchableOpacity
                 style={styles.backStepBtn}
                 onPress={() => setStep(s => s - 1)}
@@ -277,17 +314,35 @@ export default function WeightChallengeUI({ navigation }) {
               >
                 <Text style={styles.backStepText}>Back</Text>
               </TouchableOpacity>
-            )}
+            )} */}
             <TouchableOpacity
-              style={styles.nextBtn}
+              style={[styles.nextBtn, isLocked && { opacity: 0.5 }]}
+              disabled={isLocked}
               onPress={() => {
-                if (step > currentEditableStep + 1) return; // 🔒 block skip
-                if (step < LABELS.length - 1) setStep(s => s + 1);
+                const currentKey = LABELS[step].key;
+
+                if (!weights[currentKey]) return;
+
+                // 🚨 SAVE ONLY HERE
+                weightFun({
+                  ...weights,
+                  updatedAt: database.ServerValue.TIMESTAMP,
+                });
+
+                if (step < LABELS.length - 1) {
+                  setStep(s => s + 1);
+                }
               }}
               activeOpacity={0.85}
             >
               <Text style={styles.nextBtnText}>
-                {step === LABELS.length - 1 ? 'Done ✓' : 'Next'}
+                {isLocked
+                  ? '🔒 Unlock Next Week'
+                  : !isSaved
+                  ? 'Save'
+                  : step === LABELS.length - 1
+                  ? 'Done ✓'
+                  : 'Next'}
               </Text>
             </TouchableOpacity>
           </View>

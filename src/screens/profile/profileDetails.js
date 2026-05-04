@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -23,64 +23,18 @@ import {
   GestureDetector,
   GestureHandlerRootView,
 } from 'react-native-gesture-handler';
-
+import database from '@react-native-firebase/database';
 import ChatCard from '../../components/social/chatCard';
+import { seedUserData } from '../../../seedUserData';
+import Svg, { Path } from 'react-native-svg';
+import { Header } from '../../components';
 
 const { height, width } = Dimensions.get('window');
 
-const SHEET_MIN = height * 0.47;
+const SHEET_MIN = height * 0.55;
 const SHEET_MAX = height * 0.81;
 
-const PROFILE_STATS = [
-  { label: 'Posts', value: '24' },
-  { label: 'Followers', value: '1.2K' },
-  { label: 'Following', value: '318' },
-];
-
 const TAB_OPTIONS = ['Feeds', 'Stats', 'Progress'];
-
-const CHATS = [
-  {
-    id: 1,
-    name: 'Linh Nguyen',
-    message:
-      'I am very happy to be with Cafit in training sessions and how about you?',
-    time: '10:30 AM · 2 min ago',
-    picture:
-      'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-    likes: 20,
-    comments: 10,
-  },
-  {
-    id: 2,
-    name: 'Linh Nguyen',
-    message: 'Just finished a 5K run! Feeling amazing today 🏃‍♀️',
-    time: '10:30 AM · 2 min ago',
-    picture:
-      'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-    likes: 14,
-    comments: 6,
-  },
-  {
-    id: 3,
-    name: 'Linh Nguyen',
-    message: 'Hit my weekly fiber goal for the third week in a row! 🥦',
-    time: 'Yesterday',
-    picture:
-      'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-    likes: 9,
-    comments: 3,
-  },
-];
-
-const ACTIVITY_STATS = [
-  { emoji: '🔥', label: 'Day Streak', value: '14 days' },
-  { emoji: '✅', label: 'Habits Done', value: '87 total' },
-  { emoji: '📅', label: 'Active Days', value: '31 days' },
-  { emoji: '🏃', label: 'Steps Avg', value: '8,240 / day' },
-  { emoji: '💤', label: 'Sleep Avg', value: '7.2 hrs' },
-  { emoji: '🥦', label: 'Fiber Goal', value: '3× streak' },
-];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -115,10 +69,10 @@ function TabBar({ currentIndex, onPress }) {
   );
 }
 
-function StatsTab() {
+function StatsTab({ statsData = [] }) {
   return (
     <View style={styles.statsGrid}>
-      {ACTIVITY_STATS.map((s, i) => (
+      {statsData.map((s, i) => (
         <View key={i} style={styles.statsCard}>
           <Text style={styles.statsEmoji}>{s.emoji}</Text>
           <Text style={styles.statsCardValue}>{s.value}</Text>
@@ -129,14 +83,20 @@ function StatsTab() {
   );
 }
 
-function ProgressTab() {
-  const WEEKS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const DATA = [60, 85, 40, 100, 75, 90, 55];
+function ProgressTab({ weeklyData = [], badges = [] }) {
+  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  const DATA = DAYS.map((_, i) => {
+    const value = weeklyData[i]?.done || 0;
+    return Math.min(value * 20, 100);
+  });
+
   return (
     <View style={{ paddingTop: 4 }}>
       <Text style={styles.progressTitle}>Weekly Activity</Text>
+
       <View style={styles.barChart}>
-        {WEEKS.map((day, i) => (
+        {DAYS.map((day, i) => (
           <View key={i} style={styles.barCol}>
             <View style={styles.barTrack}>
               <View style={[styles.barFill, { height: `${DATA[i]}%` }]} />
@@ -145,12 +105,17 @@ function ProgressTab() {
           </View>
         ))}
       </View>
+
       <View style={styles.progressBadgesRow}>
-        {['🥇 14-day streak', '💪 Top 10%', '🏆 Level 5'].map((badge, i) => (
-          <View key={i} style={styles.progressBadge}>
-            <Text style={styles.progressBadgeText}>{badge}</Text>
-          </View>
-        ))}
+        {badges
+          .filter(b => b.show)
+          .map((badge, i) => (
+            <View key={i} style={styles.progressBadge}>
+              <Text style={styles.progressBadgeText}>
+                {badge.emoji} {badge.label}
+              </Text>
+            </View>
+          ))}
       </View>
     </View>
   );
@@ -160,6 +125,11 @@ function ProgressTab() {
 
 export default function ProfileDetails({ navigation }) {
   const [currentTabIndex, setCurrentTabIndex] = useState(0);
+  const [profile, setProfile] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [weeklyData, setWeeklyData] = useState([]);
+
   const translateY = useSharedValue(0);
 
   const panGesture = Gesture.Pan()
@@ -193,6 +163,121 @@ export default function ProfileDetails({ navigation }) {
     };
   });
 
+  useEffect(() => {
+    const userId = 'USER_UID'; // 🔥 replace with auth uid
+
+    // 🔹 Profile + stats + activities
+    const userRef = database().ref(`users/${userId}`);
+
+    const userListener = userRef.on('value', snapshot => {
+      const data = snapshot.val();
+      if (!data) return;
+
+      setProfile(data.profile);
+      setStats(data.stats);
+
+      // weekly progress
+      const weekly = data?.activities?.workout?.weeklyProgress || {};
+      const formatted = Object.keys(weekly).map(key => ({
+        week: key,
+        done: weekly[key].done,
+      }));
+
+      setWeeklyData(formatted);
+    });
+
+    // 🔹 Posts (GLOBAL)
+    const postRef = database()
+      .ref('posts')
+      .orderByChild('userId')
+      .equalTo(userId);
+
+    const postListener = postRef.on('value', snapshot => {
+      const data = snapshot.val();
+      if (!data) return setPosts([]);
+
+      const formatted = Object.keys(data)
+        .map(key => ({
+          id: key,
+          ...data[key],
+        }))
+        .sort((a, b) => b.createdAt - a.createdAt);
+
+      setPosts(formatted);
+    });
+
+    return () => {
+      userRef.off('value', userListener);
+      postRef.off('value', postListener);
+    };
+  }, []);
+
+  const PROFILE_STATS = [
+    {
+      label: 'Streak',
+      value: `${stats?.streak || 0} 🔥`,
+    },
+    {
+      label: 'Active Days',
+      value: `${stats?.activeDays || 0} 📅`,
+    },
+    {
+      label: 'Completion',
+      value: `${stats?.completionRate || 0}% ✅`,
+    },
+  ];
+
+  const ACTIVITY_STATS_DYNAMIC = [
+    {
+      emoji: '🔥',
+      label: 'Day Streak',
+      value: `${stats?.streak || 0} days`,
+    },
+    {
+      emoji: '✅',
+      label: 'Habits Done',
+      value: `${stats?.totalHabitsDone || 0} total`,
+    },
+    {
+      emoji: '📅',
+      label: 'Active Days',
+      value: `${stats?.activeDays || 0} days`,
+    },
+    {
+      emoji: '🏃',
+      label: 'Steps Avg',
+      value: `${stats?.stepsAvg || 0} / day`, // optional field
+    },
+    {
+      emoji: '💤',
+      label: 'Sleep Avg',
+      value: `${stats?.sleepAvg || 0} hrs`, // optional field
+    },
+    {
+      emoji: '🥦',
+      label: 'Fiber Goal',
+      value: `${stats?.fiberStreak || 0}× streak`, // optional field
+    },
+  ];
+
+  const PROGRESS_BADGES = [
+    {
+      emoji: '🥇',
+      label: `${stats?.streak || 0}-day streak`,
+      show: stats?.streak >= 1,
+    },
+    {
+      emoji: '💪',
+      label: 'Top 10%',
+      show: stats?.completionRate >= 90,
+    },
+    {
+      emoji: '🏆',
+      label: `Level ${Math.floor((stats?.totalHabitsDone || 0) / 20)}`,
+      show: stats?.totalHabitsDone > 0,
+    },
+  ];
+
   // Name: slides straight up into the nav bar + font shrinks
   const nameStyle = useAnimatedStyle(() => {
     const fs = interpolate(translateY.value, [-300, 0], [16, 22], 'clamp');
@@ -213,8 +298,19 @@ export default function ProfileDetails({ navigation }) {
 
   // Hero info (handle + stats + buttons): fades out as sheet rises
   const heroInfoStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(translateY.value, [-100, 0], [0, 1], 'clamp');
-    return { opacity };
+    const opacity = interpolate(translateY.value, [-120, 0], [0, 1], 'clamp');
+
+    const translateYAnim = interpolate(
+      translateY.value,
+      [-300, 0],
+      [-80, 0], // move up when collapsing
+      'clamp',
+    );
+
+    return {
+      opacity,
+      transform: [{ translateY: translateYAnim }],
+    };
   });
 
   // Sheet height
@@ -240,48 +336,60 @@ export default function ProfileDetails({ navigation }) {
         barStyle="light-content"
       />
 
-      {/* ── Hero background ── */}
-      <View style={styles.heroBg} />
-
-      {/* ── Top nav ── */}
-      <View style={styles.topNav}>
-        <TouchableOpacity
-          style={styles.navBtn}
-          onPress={() => navigation?.goBack()}
-          activeOpacity={0.75}
-        >
-          <Text style={styles.navIcon}>‹</Text>
-        </TouchableOpacity>
-        <Animated.Text style={[styles.navTitle, navTitleStyle]}>
-          Profile
-        </Animated.Text>
-        <TouchableOpacity style={styles.navBtn} activeOpacity={0.75}>
-          <Text style={styles.navIcon}>⋯</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ── Hero content ── */}
       <View style={styles.heroContent}>
         {/* Avatar */}
+        <Header
+          header={'Profile Details'}
+          headerContainer={{
+            marginTop: StatusBar.currentHeight,
+          }}
+          textStyle={[styles.navTitle, navTitleStyle]}
+          showRightBtn
+        />
+
         <Animated.View style={[styles.avatarWrap, avatarStyle]}>
           <Image
             source={{
-              uri: 'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
+              uri:
+                profile?.avatar ||
+                'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
             }}
             style={{ width: '100%', height: '100%', borderRadius: 999 }}
             resizeMode="cover"
           />
+          <TouchableOpacity
+            style={styles.editAvatarBtn}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('EditProfile')}
+          >
+            <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+              <Path
+                d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"
+                stroke="#8FAF78"
+                strokeWidth={2.2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <Path
+                d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
+                stroke="#8FAF78"
+                strokeWidth={2.2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+          </TouchableOpacity>
         </Animated.View>
 
         {/* Name */}
         <Animated.Text style={[styles.heroName, nameStyle]}>
-          Linh Nguyen
+          {profile?.name || 'User'}
         </Animated.Text>
 
         {/* Handle + stats + buttons — fade out when sheet rises */}
         <Animated.View style={[styles.heroInfo, heroInfoStyle]}>
           <Text style={styles.heroHandle}>
-            @linh.nguyen · Member since 2024
+            {profile?.username} · Member since {profile?.memberSince}
           </Text>
 
           {/* Stat pills */}
@@ -297,14 +405,14 @@ export default function ProfileDetails({ navigation }) {
           </View>
 
           {/* CTA buttons */}
-          <View style={styles.ctaRow}>
+          {/* <View style={styles.ctaRow}>
             <TouchableOpacity style={styles.btnFollow} activeOpacity={0.82}>
               <Text style={styles.btnFollowText}>Follow</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.btnMessage} activeOpacity={0.82}>
               <Text style={styles.btnMessageText}>Message</Text>
             </TouchableOpacity>
-          </View>
+          </View> */}
         </Animated.View>
       </View>
 
@@ -323,7 +431,7 @@ export default function ProfileDetails({ navigation }) {
         {/* Content */}
         {currentTabIndex === 0 && (
           <FlatList
-            data={CHATS}
+            data={posts}
             renderItem={renderFeed}
             keyExtractor={item => item.id.toString()}
             showsVerticalScrollIndicator={false}
@@ -333,7 +441,7 @@ export default function ProfileDetails({ navigation }) {
         {currentTabIndex === 1 && (
           <FlatList
             data={[{ key: 'stats' }]}
-            renderItem={() => <StatsTab />}
+            renderItem={() => <StatsTab statsData={ACTIVITY_STATS_DYNAMIC} />}
             keyExtractor={item => item.key}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.feedList}
@@ -342,7 +450,9 @@ export default function ProfileDetails({ navigation }) {
         {currentTabIndex === 2 && (
           <FlatList
             data={[{ key: 'progress' }]}
-            renderItem={() => <ProgressTab />}
+            renderItem={() => (
+              <ProgressTab weeklyData={weeklyData} badges={PROGRESS_BADGES} />
+            )}
             keyExtractor={item => item.key}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.feedList}
@@ -378,6 +488,19 @@ const styles = StyleSheet.create({
     paddingTop: 52,
     paddingBottom: 8,
   },
+  editAvatarBtn: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    backgroundColor: colors.dark,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   navBtn: {
     width: 38,
     height: 38,
@@ -410,7 +533,6 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: colors.secondary,
     marginBottom: 8,
-    overflow: 'hidden',
   },
   heroName: {
     color: colors.white,

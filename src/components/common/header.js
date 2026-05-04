@@ -1,25 +1,14 @@
-import React, { useEffect } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StatusBar,
-  StyleSheet,
-  Dimensions,
-} from 'react-native';
+import React from 'react';
+import { View, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { backBtn, moreIcon } from '../../assets/images';
 import { colors } from '../../constant/colors';
 import { useNavigation } from '@react-navigation/native';
 import { SvgImg } from './SvgImg';
 import { fontFamily } from '../../constant';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
+
 export function Header({
   header = '',
   disableLeft = false,
@@ -34,76 +23,62 @@ export function Header({
   leftImg = backBtn,
   rightImg = moreIcon,
 }) {
-  const headerOpacity = useSharedValue(0);
-  const headerY = useSharedValue(-20);
-  useEffect(() => {
-    headerOpacity.value = withTiming(1, { duration: 500 });
-    headerY.value = withTiming(0, {
-      duration: 500,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, []);
+  const navigation = useNavigation();
 
-  const navController = useNavigation();
-  const headerAnimStyle = useAnimatedStyle(() => ({
-    opacity: headerOpacity.value,
-    transform: [{ translateY: headerY.value }],
-  }));
   return (
-    <Animated.View
-      style={[
-        {
-          flexDirection: 'row',
-          alignItems: 'center',
-          marginBottom: 10,
-          ...headerContainer,
-        },
-        headerAnimStyle,
-      ]}
-    >
+    <View style={[styles.wrapper, headerContainer]}>
+      {/* LEFT BUTTON */}
       <TouchableOpacity
         disabled={disableLeft}
-        style={{ ...styles.backBtn, ...leftBtnStyle }}
-        onPress={onLeftPress ? onLeftPress : () => navController.goBack()}
+        style={[styles.btn, leftBtnStyle]}
+        onPress={onLeftPress ? onLeftPress : () => navigation.goBack()}
         activeOpacity={0.75}
       >
         <SvgImg iconName={leftImg} height={20} width={9} />
       </TouchableOpacity>
 
-      <Text
-        style={{
-          ...styles.headerTextStyle,
-          ...textStyle,
-          fontFamily: fontFamily.montserratBold,
-        }}
+      {/* ✅ ANIMATED HEADER TEXT */}
+      <Animated.Text
+        style={[
+          styles.headerText,
+          { fontFamily: fontFamily.montserratBold },
+          textStyle, // <-- animated style comes here safely
+        ]}
+        numberOfLines={1}
       >
         {header}
-      </Text>
+      </Animated.Text>
 
+      {/* RIGHT BUTTON */}
       {showRightBtn ? (
         <TouchableOpacity
           disabled={disableRight}
-          style={{ ...styles.backBtn, ...rightBtnStyle }}
+          style={[styles.btn, rightBtnStyle]}
           onPress={onRightPress}
+          activeOpacity={0.75}
         >
           <SvgImg iconName={rightImg} height={28} width={28} />
         </TouchableOpacity>
       ) : (
         <View style={{ width: height * 0.06 }} />
       )}
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerTextStyle: {
-    color: colors.white,
-    fontSize: 20,
+  wrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  headerText: {
     flex: 1,
     textAlign: 'center',
-    textAlignVertical: 'center',
+    color: colors.white,
+    fontSize: 20,
   },
-  backBtn: {
+  btn: {
     width: height * 0.06,
     height: height * 0.06,
     borderRadius: 49,

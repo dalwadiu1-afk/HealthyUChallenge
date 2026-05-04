@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,14 @@ import { launchCamera } from 'react-native-image-picker';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
+import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
+
+const USER_ID = auth().currentUser?.uid;
+
+const getDateKey = () => {
+  return new Date().toISOString().split('T')[0];
+};
 
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   return (
@@ -47,32 +55,95 @@ export default function BeverageChallengeUI({ navigation }) {
   const [photo, setPhoto] = useState(null);
   const [label, setLabel] = useState('');
   const [timestamp, setTimestamp] = useState('');
+  const [ingredients, setIngredients] = useState('');
+
+  useEffect(() => {
+    if (!USER_ID) return;
+
+    const dateKey = getDateKey();
+
+    const ref = database().ref(`users/${USER_ID}/logs/beverage/${dateKey}`);
+
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (data) {
+        setPhoto(data.photo || null);
+        setLabel(data.name || '');
+        setIngredients(data.ingredients || '');
+        setTimestamp(
+          data.timestamp ? new Date(data.timestamp).toLocaleString() : '',
+        );
+      }
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
 
   const handleCamera = async () => {
     const granted = await requestCameraPermission();
     if (!granted) return;
-    launchCamera({ mediaType: 'photo', quality: 0.7 }, response => {
-      if (response.didCancel || response.errorCode) return;
-      const uri = response?.assets?.[0]?.uri;
-      if (!uri) return;
-      setPhoto(uri);
-      setTimestamp(new Date().toLocaleString());
+
+    return new Promise(resolve => {
+      launchCamera({ mediaType: 'photo', quality: 0.7 }, response => {
+        if (response.didCancel || response.errorCode) {
+          resolve(null);
+          return;
+        }
+
+        const uri = response?.assets?.[0]?.uri;
+        if (!uri) {
+          resolve(null);
+          return;
+        }
+
+        setPhoto(uri);
+        setTimestamp(new Date().toLocaleString());
+
+        resolve(uri);
+      });
     });
   };
 
-  const handlePost = () => {
+  const handlePost = async () => {
     if (!photo) {
       Alert.alert('Please upload a photo 📸');
       return;
     }
+
     if (!label.trim()) {
-      Alert.alert('Add a label for your drink 🏷');
+      Alert.alert('Add beverage name 🏷');
       return;
     }
-    Alert.alert('Posted to Social Tab 🎉');
-    setPhoto(null);
-    setLabel('');
-    setTimestamp('');
+
+    if (!ingredients.trim()) {
+      Alert.alert('Add ingredients 🥤');
+      return;
+    }
+
+    try {
+      const dateKey = getDateKey();
+
+      const entry = {
+        photo,
+        name: label,
+        ingredients,
+        timestamp: new Date().toISOString(),
+        type: 'beverage',
+      };
+
+      await database()
+        .ref(`users/${USER_ID}/logs/beverage/${dateKey}`)
+        .set(entry);
+
+      // reset
+      setPhoto(null);
+      setLabel('');
+      setIngredients('');
+      setTimestamp('');
+    } catch (e) {
+      console.log('Save error:', e);
+    }
   };
 
   const isReady = !!(photo && label.trim());
@@ -140,6 +211,16 @@ export default function BeverageChallengeUI({ navigation }) {
             placeholder="e.g. Mint Lemon Detox, Green Ginger Splash…"
             value={label}
             onChangeText={setLabel}
+            placeholderTextColor="rgba(255,255,255,0.25)"
+            style={styles.input}
+          />
+        </View>
+        <View style={styles.inputCard}>
+          <Text style={styles.inputLabel}>Ingredients</Text>
+          <TextInput
+            placeholder="e.g. Lemon, Mint, Ginger..."
+            value={ingredients}
+            onChangeText={setIngredients}
             placeholderTextColor="rgba(255,255,255,0.25)"
             style={styles.input}
           />
