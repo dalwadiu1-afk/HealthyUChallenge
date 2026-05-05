@@ -1,102 +1,4 @@
-// import React from 'react';
-// import { View, Text, StyleSheet, TextInput } from 'react-native';
-// import { Header, SvgImg, Wrapper } from '../../components';
-// import ChatCard from '../../components/social/chatCard';
-// import { colors, fontFamily } from '../../constant';
-// import { attachIcon, chatIcon, uploadIcon } from '../../assets/images';
-
-// export default function AddPost() {
-//   const posts = [
-//     {
-//       id: 1,
-//       name: 'Linh Nguyen',
-//       message:
-//         'I am very happy to be with Cafit in training sessions and how about you?',
-//       time: '10:30 AM || 2s ago',
-//       picture:
-//         'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-//     },
-//     // {
-//     //   id: 2,
-//     //   name: 'John Doe',
-//     //   message:
-//     //     'I am very happy to be with Cafit in training sessions and how about you?',
-//     //   time: '10:30 AM || 2s ago',
-//     //   picture:
-//     //     'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-//     // },
-//   ];
-//   return (
-//     <View style={{ flex: 1, backgroundColor: colors.dark }}>
-//       <Wrapper>
-//         <Header
-//           header={`Linh's Post`}
-//           showRightBtn={true}
-//           textStyle={styles.textStyle}
-//         />
-//         <View style={{ flex: 1 }}>
-//           {posts.map((item, index) => (
-//             <ChatCard key={index} item={item} />
-//           ))}
-//         </View>
-
-//         <View style={styles.commentContainer}>
-//           <View style={styles.attachBtn}>
-//             <SvgImg iconName={attachIcon} height={24} width={24} />
-//           </View>
-//           <TextInput
-//             placeholder="Write a comment..."
-//             style={styles.textInput}
-//           />
-//           <View
-//             style={{
-//               ...styles.attachBtn,
-//               backgroundColor: colors.primary,
-//               borderColor: colors.primary,
-//             }}
-//           >
-//             <SvgImg iconName={uploadIcon} height={24} width={24} />
-//           </View>
-//         </View>
-//       </Wrapper>
-//     </View>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   textStyle: {
-//     fontFamily: fontFamily.montserratBold,
-//     fontSize: 16,
-//     lineHeight: 26,
-//     textAlign: 'center',
-//     color: colors.white,
-//   },
-//   attachBtn: {
-//     width: 45,
-//     height: 45,
-//     borderRadius: 50,
-//     borderWidth: 1,
-//     borderColor: colors.white,
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//   },
-
-//   textInput: {
-//     flex: 1,
-//     marginHorizontal: 12,
-//     backgroundColor: colors.white,
-//     paddingVertical: 15,
-//     borderRadius: 50,
-//     paddingHorizontal: 20,
-//     fontFamily: fontFamily.montserratMedium,
-//   },
-//   commentContainer: {
-//     paddingVertical: 15,
-//     flexDirection: 'row',
-//     alignItems: 'center',
-//   },
-// });
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -105,11 +7,17 @@ import {
   StatusBar,
   TouchableOpacity,
   ScrollView,
+  Image,
+  Platform,
 } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import ChatCard from '../../components/social/chatCard';
 import { colors, fontFamily } from '../../constant';
+import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
 import { SvgImg } from '../../components';
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
+import storage from '@react-native-firebase/storage';
 import { attachIcon, uploadIcon } from '../../assets/images';
 
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
@@ -133,7 +41,111 @@ function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
 }
 
 export default function AddPost({ navigation }) {
-  const [comment, setComment] = useState('');
+  const [message, setMessage] = useState('');
+  const [image, setImage] = useState(null);
+
+  const handleCreatePost = async () => {
+    if (!message.trim() && !image) return;
+
+    const user = auth().currentUser || 'USER_UID';
+    if (!user) return;
+
+    try {
+      let imageUrl = '';
+
+      if (image) {
+        // imageUrl = await uploadImage(image); // ✅ upload first
+        imageUrl = image; // ✅ upload first
+      }
+
+      console.log('newPost :>> ');
+      const newPostRef = database().ref('posts').push();
+
+      const newPost = {
+        userId: user.uid,
+        name: user.displayName || 'User',
+        avatar: user.photoURL || '',
+
+        message: message,
+        image: imageUrl, // ✅ CORRECT
+
+        createdAt: Date.now(),
+
+        likes: {}, // ✅ IMPORTANT
+        comments: {}, // ✅ IMPORTANT
+      };
+      console.log('newPost :>> ', newPost);
+      await newPostRef.set(newPost);
+
+      setMessage('');
+      setImage(null);
+
+      navigation.goBack();
+    } catch (err) {
+      console.log('Post error:', err);
+    }
+  };
+
+  const pickImage = async () => {
+    const result = await launchImageLibrary({
+      mediaType: 'photo',
+      quality: 0.7,
+    });
+
+    if (result.didCancel) return;
+
+    const uri = result.assets?.[0]?.uri;
+    setImage(uri);
+  };
+
+  const openCamera = async () => {
+    const result = await launchCamera({
+      mediaType: 'photo',
+      quality: 0.7,
+    });
+
+    if (result.didCancel) return;
+
+    const uri = result.assets?.[0]?.uri;
+    setImage(uri);
+  };
+
+  const addComment = async text => {
+    const commentRef = database().ref(`posts/${postId}/comments`).push();
+
+    const newComment = {
+      userId: user.uid,
+      name: user.displayName || 'User',
+      text: text,
+      createdAt: Date.now(),
+      likes: {},
+    };
+
+    await commentRef.set(newComment);
+  };
+
+  const uploadImage = async uri => {
+    try {
+      const fileName = `posts/${Date.now()}.jpg`;
+
+      // ✅ FIX ANDROID PATH ISSUE
+      const uploadUri =
+        Platform.OS === 'android' ? uri.replace('file://', '') : uri;
+
+      const reference = storage().ref(fileName);
+
+      await reference.putFile(uploadUri);
+
+      const url = await reference.getDownloadURL();
+
+      console.log('UPLOAD SUCCESS:', url);
+
+      return url;
+    } catch (error) {
+      console.log('UPLOAD ERROR:', error);
+      return '';
+    }
+  };
 
   const posts = [
     {
@@ -185,26 +197,49 @@ export default function AddPost({ navigation }) {
           <ChatCard key={index} item={item} />
         ))}
       </ScrollView>
+      {image && (
+        <View style={styles.imagePreview}>
+          <Image source={{ uri: image }} style={styles.previewImage} />
 
+          <TouchableOpacity
+            onPress={() => setImage(null)}
+            style={styles.removeImageBtn}
+          >
+            <Text style={{ color: '#fff', fontSize: 12 }}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       {/* Comment input bar */}
       <View style={styles.inputBar}>
         {/* Attach */}
-        <TouchableOpacity style={styles.iconBtn} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.iconBtn}
+          activeOpacity={0.8}
+          onPress={pickImage}
+        >
           <SvgImg iconName={attachIcon} height={22} width={22} />
         </TouchableOpacity>
 
         {/* Text field */}
         <TextInput
           style={styles.textInput}
-          placeholder="Write a comment..."
+          placeholder="What's on your mind?"
           placeholderTextColor="rgba(255,255,255,0.3)"
-          value={comment}
-          onChangeText={setComment}
+          value={message}
+          onChangeText={setMessage}
           multiline
         />
 
         {/* Send */}
-        <TouchableOpacity style={styles.sendBtn} activeOpacity={0.85}>
+        <TouchableOpacity
+          disabled={!message.trim() && !image}
+          style={[
+            styles.sendBtn,
+            { opacity: message.trim() || image ? 1 : 0.5 },
+          ]}
+          activeOpacity={0.85}
+          onPress={handleCreatePost}
+        >
           <GradientBg
             id="sendGrad"
             c1="#6A9455"
@@ -248,7 +283,28 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.montserratSemiBold,
     color: colors.white,
   },
+  imagePreview: {
+    marginHorizontal: 20,
+    marginBottom: 10,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
 
+  previewImage: {
+    width: '100%',
+    height: 180,
+  },
+  removeImageBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   scroll: {
     paddingHorizontal: 24,
     paddingBottom: 20,

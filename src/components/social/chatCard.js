@@ -1,11 +1,17 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { colors, fontFamily } from '../../constant';
 
 const AVATAR_COLORS = ['#4D6644', '#5A96FF', '#A782FF', '#FFC15A', '#6B9E6E'];
 
-export default function ChatCard({ item, index, onCardPress }) {
-  const [liked, setLiked] = useState(false);
+export default function ChatCard({
+  item,
+  index,
+  onCardPress,
+  onLikePress,
+  onCommentPress,
+}) {
+  const [liked, setLiked] = useState(item?.isLiked ?? false);
   const [likeCount, setLikeCount] = useState(item?.likes ?? 0);
   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
   const initials =
@@ -16,9 +22,21 @@ export default function ChatCard({ item, index, onCardPress }) {
       .slice(0, 2) ?? 'U';
 
   const handleLike = () => {
-    setLiked(p => !p);
-    setLikeCount(p => (liked ? p - 1 : p + 1));
+    setLiked(prevLiked => {
+      setLikeCount(prevCount => (prevLiked ? prevCount - 1 : prevCount + 1));
+      return !prevLiked;
+    });
+
+    onLikePress && onLikePress();
   };
+
+  useEffect(() => {
+    setLiked(item?.isLiked ?? false);
+  }, [item?.isLiked]);
+
+  useEffect(() => {
+    setLikeCount(item?.likes ?? 0);
+  }, [item?.likes]);
 
   return (
     <TouchableOpacity
@@ -85,7 +103,11 @@ export default function ChatCard({ item, index, onCardPress }) {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          activeOpacity={0.7}
+          onPress={onCommentPress}
+        >
           <Text style={styles.actionIcon}>💬</Text>
           <Text style={styles.actionText}>{item?.comments}</Text>
         </TouchableOpacity>

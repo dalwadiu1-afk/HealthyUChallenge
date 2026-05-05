@@ -27,10 +27,11 @@ import database from '@react-native-firebase/database';
 import ChatCard from '../../components/social/chatCard';
 import { seedUserData } from '../../../seedUserData';
 import Svg, { Path } from 'react-native-svg';
+import auth from '@react-native-firebase/auth';
 import { Header } from '../../components';
 
 const { height, width } = Dimensions.get('window');
-
+const userId = auth().currentUser || 'USER_UID';
 const SHEET_MIN = height * 0.55;
 const SHEET_MAX = height * 0.81;
 
@@ -46,6 +47,19 @@ function StatPill({ label, value }) {
     </View>
   );
 }
+
+const formatTime = timestamp => {
+  if (!timestamp) return '';
+
+  const now = Date.now();
+  const diff = Math.floor((now - timestamp) / 1000);
+
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+
+  return new Date(timestamp).toLocaleDateString();
+};
 
 function TabBar({ currentIndex, onPress }) {
   return (
@@ -164,8 +178,6 @@ export default function ProfileDetails({ navigation }) {
   });
 
   useEffect(() => {
-    const userId = 'USER_UID'; // 🔥 replace with auth uid
-
     // 🔹 Profile + stats + activities
     const userRef = database().ref(`users/${userId}`);
 
@@ -197,10 +209,22 @@ export default function ProfileDetails({ navigation }) {
       if (!data) return setPosts([]);
 
       const formatted = Object.keys(data)
-        .map(key => ({
-          id: key,
-          ...data[key],
-        }))
+        .map(key => {
+          const post = data[key];
+
+          const likesObj = post.likes || {};
+          const commentsObj = post.comments || {};
+
+          return {
+            id: key,
+            ...post,
+
+            likesCount: Object.keys(likesObj).length,
+            commentsCount: Object.keys(commentsObj).length,
+
+            isLiked: !!likesObj[userId], // check if current user liked
+          };
+        })
         .sort((a, b) => b.createdAt - a.createdAt);
 
       setPosts(formatted);
@@ -324,8 +348,44 @@ export default function ProfileDetails({ navigation }) {
     return { height: h };
   });
 
+  const toggleLike = async postId => {
+    const likeRef = database().ref(`posts/${postId}/likes/${userId}`);
+
+    const snapshot = await likeRef.once('value');
+
+    if (snapshot.exists()) {
+      await likeRef.remove(); // 🔴 unlike
+    } else {
+      await likeRef.set(true); // 🟢 like
+    }
+  };
+
   const renderFeed = ({ item, index }) => (
-    <ChatCard key={index} item={item} index={index} onCardPress={() => {}} />
+    <ChatCard
+      item={{
+        name: item?.name,
+        message: item?.message,
+        picture: item?.image,
+        time: formatTime(item?.createdAt),
+        likes: item?.likesCount,
+        comments: item?.commentsCount,
+        isLiked: item?.isLiked,
+      }}
+      index={index}
+      onLikePress={() => toggleLike(item.id)}
+      onCardPress={() =>
+        navigation.navigate('SocialStack', {
+          screen: 'FeedDetails',
+          params: { postId: item?.id },
+        })
+      }
+      onCommentPress={() =>
+        navigation.navigate('SocialStack', {
+          screen: 'FeedDetails',
+          params: { postId: item?.id, showComment: true },
+        })
+      }
+    />
   );
 
   return (
