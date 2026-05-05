@@ -60,8 +60,17 @@ export const seedUserData = async () => {
     message: 'Just finished a 5K run! 🏃',
     image: 'https://...',
     createdAt: Date.now(),
-    likes: 14,
-    comments: 6,
+    likes: {
+      user1: true,
+      user2: true,
+    },
+    comments: {
+      commentId1: {
+        userId,
+        text,
+        createdAt,
+      },
+    },
   };
 
   // 🔥 SINGLE WRITE (BEST PRACTICE)

@@ -1,233 +1,4 @@
-// import React from 'react';
-// import {
-//   View,
-//   Text,
-//   Dimensions,
-//   StyleSheet,
-//   FlatList,
-//   ScrollView,
-// } from 'react-native';
-// import { Header, SvgImg, Wrapper } from '../../components';
-// import ChatCard from '../../components/social/chatCard';
-// import { colors, fontFamily } from '../../constant';
-// import { chatIcon, heartIcon } from '../../assets/images';
-
-// const { height } = Dimensions.get('window');
-
-// export default function FeedDetails({ navigation }) {
-//   const feed = {
-//     id: 1,
-//     name: 'Linh Nguyen',
-//     message:
-//       'I am very happy to be with Cafit in training sessions and how about you?',
-//     time: '10:30 AM || 2s ago',
-//     picture:
-//       'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-//     likes: 20,
-//     comments: 10,
-//   };
-
-//   const comments = [
-//     {
-//       id: 1,
-//       name: 'Linh Nguyen',
-//       message:
-//         'I am very happy to be with Cafit in training sessions and how about you?',
-//       time: '10:30 AM || 2s ago',
-//       picture:
-//         'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-//     },
-//     {
-//       id: 1,
-//       name: 'Linh Nguyen',
-//       message:
-//         'I am very happy to be with Cafit in training sessions and how about you?',
-//       time: '10:30 AM || 2s ago',
-//       picture:
-//         'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-//     },
-//     {
-//       id: 1,
-//       name: 'Linh Nguyen',
-//       message:
-//         'I am very happy to be with Cafit in training sessions and how about you?',
-//       time: '10:30 AM || 2s ago',
-//       picture:
-//         'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-//     },
-//     {
-//       id: 1,
-//       name: 'Linh Nguyen',
-//       message:
-//         'I am very happy to be with Cafit in training sessions and how about you?',
-//       time: '10:30 AM || 2s ago',
-//       picture:
-//         'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-//     },
-//     {
-//       id: 1,
-//       name: 'Linh Nguyen',
-//       message:
-//         'I am very happy to be with Cafit in training sessions and how about you?',
-//       time: '10:30 AM || 2s ago',
-//       picture:
-//         'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-//     },
-//     {
-//       id: 1,
-//       name: 'Linh Nguyen',
-//       message:
-//         'I am very happy to be with Cafit in training sessions and how about you?',
-//       time: '10:30 AM || 2s ago',
-//       picture:
-//         'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-//     },
-//     {
-//       id: 1,
-//       name: 'Linh Nguyen',
-//       message:
-//         'I am very happy to be with Cafit in training sessions and how about you?',
-//       time: '10:30 AM || 2s ago',
-//       picture:
-//         'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-//     },
-//     {
-//       id: 1,
-//       name: 'Linh Nguyen',
-//       message:
-//         'I am very happy to be with Cafit in training sessions and how about you?',
-//       time: '10:30 AM || 2s ago',
-//       picture:
-//         'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-//     },
-//   ];
-
-//   const renderComments = ({ item, index }) => {
-//     return (
-//       <View style={{ marginTop: index === 0 ? 0 : 16 }}>
-//         <View style={styles.commentContainer}>
-//           <View
-//             style={{
-//               flexDirection: 'row',
-//             }}
-//           >
-//             <View style={styles.icon} />
-//             <View style={{ marginLeft: 17, justifyContent: 'center' }}>
-//               <Text
-//                 style={{
-//                   fontSize: 16,
-//                   fontFamily: fontFamily.montserratSemiBold,
-//                   color: colors.white,
-//                 }}
-//               >
-//                 {item?.name}
-//               </Text>
-//               <Text style={styles.time}>{item?.time}</Text>
-//             </View>
-//           </View>
-//           <SvgImg iconName={heartIcon} height={24} width={24} />
-//         </View>
-//         <View style={{ marginTop: 6 }}>
-//           <Text style={styles.message}>{item?.message}</Text>
-//         </View>
-//         <View
-//           style={{
-//             paddingTop: 12,
-//             borderBottomWidth: 1,
-//             borderColor: colors.white,
-//           }}
-//         />
-//       </View>
-//     );
-//   };
-
-//   return (
-//     <View style={{ flex: 1, backgroundColor: colors.dark }}>
-//       <Wrapper>
-//         <Header
-//           header={`Linh's Post`}
-//           showRightBtn={true}
-//           textStyle={styles.textStyle}
-//           onLeftPress={() => navigation.goBack()}
-//           disableLeft={false}
-//         />
-//         <ScrollView showsVerticalScrollIndicator={false}>
-//           <View style={{}}>
-//             <ChatCard item={feed} />
-//           </View>
-
-//           <View style={{ marginTop: 24 }}>
-//             <Text
-//               style={{ fontSize: 16, fontWeight: 'bold', color: colors.white }}
-//             >
-//               Comments
-//             </Text>
-//             <View style={{ marginTop: 16 }}>
-//               {comments.map((item, index) => {
-//                 return (
-//                   <View key={index}>{renderComments({ item, index })}</View>
-//                 );
-//               })}
-//             </View>
-//           </View>
-//         </ScrollView>
-
-//         {/* </View> */}
-//       </Wrapper>
-//       <View style={styles.chatBtn}>
-//         <SvgImg iconName={chatIcon} height={35} width={35} />
-//       </View>
-//     </View>
-//   );
-// }
-// const styles = StyleSheet.create({
-//   textStyle: {
-//     fontFamily: fontFamily.montserratBold,
-//     fontSize: 16,
-//     lineHeight: 26,
-//     letterSpacing: 0,
-//     textAlign: 'center',
-//     color: colors.white,
-//   },
-//   icon: {
-//     width: 44,
-//     height: 44,
-//     borderRadius: 100,
-//     backgroundColor: colors.primary,
-//   },
-//   time: {
-//     fontFamily: fontFamily.montserratMedium,
-//     fontSize: 13,
-//     lineHeight: 20,
-//     color: colors.textSecondary,
-//   },
-//   message: {
-//     fontFamily: fontFamily.montserratMedium,
-//     fontSize: 15,
-//     lineHeight: 24,
-//     color: colors.white,
-//   },
-//   commentContainer: {
-//     flexDirection: 'row',
-//     justifyContent: 'space-between',
-//     flex: 1,
-//   },
-//   chatBtn: {
-//     width: 68,
-//     height: 68,
-//     borderRadius: 50,
-//     borderWidth: 1,
-//     borderColor: colors.white,
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//     position: 'absolute',
-//     bottom: 20,
-//     right: 20,
-//     backgroundColor: colors.white,
-//   },
-// });
-
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -236,112 +7,204 @@ import {
   ScrollView,
   StatusBar,
   TouchableOpacity,
+  TextInput,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import ChatCard from '../../components/social/chatCard';
 import { colors, fontFamily } from '../../constant';
-import { SvgImg } from '../../components';
+import { CommentCard, Header, SvgImg, Wrapper } from '../../components';
 import { chatIcon, heartIcon } from '../../assets/images';
+import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
 
 const { height } = Dimensions.get('window');
 
-export default function FeedDetails({ navigation }) {
-  const feed = {
-    id: 1,
-    name: 'Linh Nguyen',
-    message:
-      'I am very happy to be with Cafit in training sessions and how about you?',
-    time: '10:30 AM || 2s ago',
-    picture:
-      'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-    likes: 20,
-    comments: 10,
+export default function FeedDetails({ navigation, route }) {
+  const { postId, showComment } = route.params; // ✅ GET POST ID
+  const [commentText, setCommentText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [showCommentBox, setShowCommentBox] = useState(showComment || false);
+  const [post, setPost] = useState(null);
+  const [comments, setComments] = useState([]);
+  const userId = auth().currentUser?.uid || 'USER_UID';
+
+  // ✅ format time
+  const formatTime = timestamp => {
+    if (!timestamp) return '';
+    const diff = Math.floor((Date.now() - timestamp) / 1000);
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return new Date(timestamp).toLocaleDateString();
   };
 
-  const comments = Array.from({ length: 8 }, (_, i) => ({
-    id: i + 1,
-    name: 'Linh Nguyen',
-    message:
-      'I am very happy to be with Cafit in training sessions and how about you?',
-    time: '10:30 AM · 2s ago',
-    picture:
-      'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-  }));
+  useEffect(() => {
+    if (!postId) return;
+
+    const postRef = database().ref(`posts/${postId}`);
+
+    const listener = postRef.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (!data) return;
+
+      const formattedPost = {
+        id: postId,
+        ...data,
+        likesCount: data.likes ? Object.keys(data.likes).length : 0,
+        commentsCount: data.comments ? Object.keys(data.comments).length : 0,
+        isLiked: userId ? !!data.likes?.[userId] : false,
+      };
+      setPost(formattedPost);
+
+      if (data.comments) {
+        const formattedComments = Object.keys(data.comments)
+          .map(key => {
+            const comment = data.comments[key];
+
+            return {
+              id: key,
+              ...comment,
+              likesCount: comment.likes ? Object.keys(comment.likes).length : 0,
+              isLiked: userId ? !!comment.likes?.[userId] : false,
+            };
+          })
+          .sort((a, b) => b.createdAt - a.createdAt);
+
+        setComments(formattedComments);
+      } else {
+        setComments([]);
+      }
+    });
+
+    return () => postRef.off('value', listener);
+  }, [postId]);
+
+  const handleLike = () => {
+    if (!userId || !postId) return;
+
+    const likeRef = database().ref(`posts/${postId}/likes/${userId}`);
+
+    if (post?.isLiked) {
+      likeRef.remove(); // unlike
+    } else {
+      likeRef.set(true); // like
+    }
+  };
+
+  const toggleCommentLike = async (commentId, isLiked) => {
+    if (!userId || !postId) return;
+
+    const ref = database().ref(
+      `posts/${postId}/comments/${commentId}/likes/${userId}`,
+    );
+
+    if (isLiked) {
+      await ref.remove(); // 🔴 unlike
+    } else {
+      await ref.set(true); // 🟢 like
+    }
+  };
+
+  const handleAddComment = async () => {
+    if (!commentText.trim() || !userId || !postId) return;
+
+    try {
+      setSending(true);
+
+      const newRef = database().ref(`posts/${postId}/comments`).push();
+
+      await newRef.set({
+        text: commentText,
+        userId,
+        name: auth().currentUser?.displayName || 'User',
+        createdAt: Date.now(),
+      });
+
+      setCommentText('');
+    } catch (err) {
+      console.log('comment error', err);
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
-    <View style={styles.root}>
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        barStyle="light-content"
-      />
+    <>
+      <Wrapper safeAreaPops={{ edges: ['bottom'] }}>
+        <Header
+          headerContainer={{
+            marginTop: StatusBar.currentHeight,
+          }}
+          header={post?.name ? `${post.name}'s Post` : 'Post'}
+        />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation?.goBack()}
-          activeOpacity={0.8}
-        >
-          <Svg width={9} height={16} viewBox="0 0 9 16" fill="none">
-            <Path
-              d="M8 1L1 8L8 15"
-              stroke="#FFFFFF"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+        {/* ✅ POST */}
+        {post && (
+          <View style={styles.postWrap}>
+            <ChatCard
+              item={{
+                name: post.name,
+                message: post.message,
+                picture: post.image,
+                time: formatTime(post.createdAt),
+                likes: post.likesCount,
+                comments: post.commentsCount,
+                isLiked: post.isLiked,
+              }}
+              onLikePress={handleLike}
+              onCommentPress={() => setShowCommentBox(!showCommentBox)}
             />
-          </Svg>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Linh's Post</Text>
-        <View style={{ width: 44 }} />
-      </View>
+          </View>
+        )}
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
-      >
-        {/* Feed post */}
-        <View style={styles.postWrap}>
-          <ChatCard item={feed} />
-        </View>
-
-        {/* Comments */}
+        {/* ✅ COMMENTS */}
         <View style={styles.commentsSection}>
-          <Text style={styles.commentsLabel}>Comments</Text>
+          <Text style={styles.commentsLabel}>Comments ({comments.length})</Text>
 
           {comments.map((item, index) => (
-            <View key={index} style={styles.commentItem}>
-              <View style={styles.commentHeader}>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    flex: 1,
-                  }}
-                >
-                  <View style={styles.commentAvatar} />
-                  <View style={{ marginLeft: 12, justifyContent: 'center' }}>
-                    <Text style={styles.commentName}>{item?.name}</Text>
-                    <Text style={styles.commentTime}>{item?.time}</Text>
-                  </View>
-                </View>
-                <TouchableOpacity activeOpacity={0.75}>
-                  <SvgImg iconName={heartIcon} height={20} width={20} />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.commentMsg}>{item?.message}</Text>
-              {index < comments.length - 1 && <View style={styles.divider} />}
-            </View>
+            <CommentCard
+              key={item.id}
+              item={item}
+              index={index}
+              formatTime={formatTime}
+              onLikePress={() => toggleCommentLike(item.id, item.isLiked)}
+            />
           ))}
         </View>
-      </ScrollView>
 
-      {/* Floating action button */}
-      <TouchableOpacity style={styles.fab} activeOpacity={0.85}>
-        <SvgImg iconName={chatIcon} height={28} width={28} />
-      </TouchableOpacity>
-    </View>
+        {/* FAB */}
+        {/* <TouchableOpacity
+          style={{ ...styles.fab, bottom: showCommentBox ? 50 : 10 }}
+          onPress={() => setShowCommentBox(!showCommentBox)}
+        >
+          <SvgImg iconName={chatIcon} height={28} width={28} />
+        </TouchableOpacity> */}
+      </Wrapper>
+      {showCommentBox && (
+        <View style={styles.inputContainer}>
+          <TextInput
+            value={commentText}
+            onChangeText={setCommentText}
+            placeholder="Write a comment..."
+            placeholderTextColor="rgba(255,255,255,0.4)"
+            style={styles.input}
+            multiline
+          />
+
+          <TouchableOpacity
+            onPress={handleAddComment}
+            disabled={sending || !commentText.trim()}
+            style={[
+              styles.sendBtn,
+              (!commentText.trim() || sending) && { opacity: 0.5 },
+            ]}
+          >
+            <Text style={styles.sendText}>{sending ? '...' : 'Send'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </>
   );
 }
 
@@ -379,7 +242,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 100,
   },
+  inputContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(20,20,20,0.95)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
 
+  input: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    color: colors.white,
+    fontFamily: fontFamily.montserratRegular,
+    fontSize: 14,
+    maxHeight: 100,
+  },
+
+  sendBtn: {
+    marginLeft: 10,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.3)',
+  },
+
+  sendText: {
+    color: colors.white,
+    fontFamily: fontFamily.montserratSemiBold,
+    fontSize: 13,
+  },
   postWrap: {
     marginBottom: 24,
   },
@@ -441,7 +344,7 @@ const styles = StyleSheet.create({
 
   fab: {
     position: 'absolute',
-    bottom: 32,
+
     right: 24,
     width: 58,
     height: 58,

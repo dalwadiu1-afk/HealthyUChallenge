@@ -5,6 +5,7 @@ export * from './common/InputBox';
 export * from './common/Wrapper';
 export * from './common/SearchBar';
 export * from './social/chatCard';
+export * from './social/commentCard';
 export * from './profile/ProfileCard';
 export * from './profile/ProfileHeader2';
 export * from './common/SvgImg';
