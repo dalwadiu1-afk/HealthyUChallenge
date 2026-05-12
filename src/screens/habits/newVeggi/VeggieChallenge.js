@@ -8,6 +8,7 @@ import {
   TextInput,
   StyleSheet,
   StatusBar,
+  Platform,
 } from 'react-native';
 import Svg, {
   Path,
@@ -25,22 +26,27 @@ import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 
 const user = auth().currentUser;
+const today = new Date();
+const CURRENT_MONTH_KEY = `${today.toLocaleString('default', {
+  month: 'long',
+})}_${today.getFullYear()}`;
 const USER_ID = user?.uid;
 const DAYS_PER_WEEK = 1;
-
-function GradientBg({ id, c1, c2, r = 20 }) {
-  return (
-    <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none">
-      <Defs>
-        <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor={c1} stopOpacity="1" />
-          <Stop offset="1" stopColor={c2} stopOpacity="1" />
-        </LinearGradient>
-      </Defs>
-      <Rect width="100%" height="100%" fill={`url(#${id})`} rx={r} />
-    </Svg>
-  );
-}
+const MAX_WEEKS = 4;
+const defaultWeeks = {
+  week1: {
+    uri: '',
+    label: '',
+    timestamp: null,
+    locked: false,
+  },
+  week2: {
+    uri: '',
+    label: '',
+    timestamp: null,
+    locked: true,
+  },
+};
 
 function CameraIcon() {
   return (
@@ -64,179 +70,203 @@ function CameraIcon() {
 }
 
 const VeggieChallenge = ({ navigation }) => {
-  const [weeks, setWeeks] = useState([]);
-  const [currentWeek, setCurrentWeek] = useState(0);
-  const [currentDay, setCurrentDay] = useState(0);
+  const [goalStartDate, setGoalStartDate] = useState(null);
+  const [weeks, setWeeks] = useState({});
+  const [labels, setLabels] = useState({});
 
   useEffect(() => {
     if (!USER_ID) return;
 
-    const ref = database().ref(`/users/${USER_ID}/veggieChallenge`);
+    const goalRef = database().ref(`/users/${USER_ID}/goal`);
+    const veggieRef = database().ref(
+      `/users/${USER_ID}/habits/${CURRENT_MONTH_KEY}`,
+    );
 
-    const listener = ref.on('value', snapshot => {
-      if (snapshot.exists()) {
-        const data = snapshot.val();
+    goalRef.once('value').then(snap => {
+      setGoalStartDate(snap.val()?.startDate || Date.now());
+    });
 
-        const normalized = (
-          Array.isArray(data) ? data : Object.values(data)
-        ).map(w => ({
-          startDate: w?.startDate || Date.now(),
-          entries: Array.isArray(w?.entries)
-            ? w.entries
-            : Array(DAYS_PER_WEEK).fill(null),
-        }));
+    const listener = veggieRef.on('value', snapshot => {
+      if (!snapshot.exists()) {
+        // first time user
+        const starterWeeks = {
+          week1: {
+            uri: '',
+            label: '',
+            timestamp: null,
+            locked: false,
+          },
+          week2: {
+            uri: '',
+            label: '',
+            timestamp: null,
+            locked: true,
+          },
+        };
 
-        setWeeks(normalized);
-      } else {
-        const initial = [
+        setWeeks(starterWeeks);
+
+        veggieRef.set({
+          weeks: starterWeeks,
+          updatedAt: Date.now(),
+        });
+        return;
+      }
+
+      const data = snapshot.val();
+
+      let normalized = data?.weeks || defaultWeeks;
+
+      // first time fallback
+      if (Object.keys(normalized).length === 0) {
+        normalized = [
           {
             startDate: Date.now(),
             entries: Array(DAYS_PER_WEEK).fill(null),
           },
+          {
+            startDate: null,
+            entries: Array(DAYS_PER_WEEK).fill(null),
+            locked: true,
+          },
         ];
-        setWeeks(initial);
-        ref.set(initial);
       }
+
+      setWeeks(normalized);
     });
+    return () => veggieRef.off('value', listener);
+  }, [goalStartDate]);
 
-    return () => ref.off('value', listener);
-  }, []);
+  const updateWeeks = async newWeeks => {
+    try {
+      await database()
+        .ref(`/users/${USER_ID}/habits/${CURRENT_MONTH_KEY}`)
+        .update({
+          weeks: newWeeks,
+          updatedAt: Date.now(),
+        });
 
-  const isWeekUnlocked = weekIndex => {
-    if (weekIndex === 0) return true;
-
-    const prevWeek = weeks[weekIndex - 1];
-    if (!prevWeek) return false;
-
-    const completed = prevWeek.entries?.every(e => e !== null);
-
-    const diffDays = (Date.now() - prevWeek.startDate) / (1000 * 60 * 60 * 24);
-
-    return completed && diffDays >= 7;
+      console.log('SAVE SUCCESS');
+    } catch (e) {
+      console.log('SAVE ERROR', e);
+    }
   };
 
-  const pickImage = async (weekIndex, dayIndex) => {
-    if (weekIndex !== currentWeek || !isWeekUnlocked(weekIndex)) return;
-
+  const pickImage = async weekKey => {
     const granted = await requestCameraPermission();
+
     if (!granted) return;
 
-    launchCamera({ mediaType: 'photo', quality: 0.7 }, response => {
-      if (response.didCancel || response.errorCode) return;
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.7,
+      },
+      async response => {
+        if (response.didCancel) return;
 
-      const uri = response?.assets?.[0]?.uri;
-      if (!uri) return;
-
-      setWeeks(prev => {
-        const updated = [...prev];
-
-        if (!updated[weekIndex]) {
-          updated[weekIndex] = {
-            startDate: Date.now(),
-            entries: Array(DAYS_PER_WEEK).fill(null),
-          };
+        if (response.errorCode) {
+          console.log(response.errorMessage);
+          return;
         }
 
-        const safeEntries = Array.isArray(updated[weekIndex].entries)
-          ? updated[weekIndex].entries
-          : Array(DAYS_PER_WEEK).fill(null);
+        try {
+          const asset = response?.assets?.[0];
 
-        updated[weekIndex] = {
-          ...updated[weekIndex],
-          entries: safeEntries.map((e, i) =>
-            i === dayIndex
-              ? {
-                  uri,
-                  label: '',
-                  timestamp: new Date().toLocaleString(),
-                }
-              : e,
-          ),
-        };
+          const uri =
+            Platform.OS === 'android'
+              ? asset?.uri
+              : asset?.uri?.replace('file://', '');
+          if (!uri) return;
 
-        // ➕ create next week AFTER updating current
-        if (dayIndex === DAYS_PER_WEEK - 1) {
-          const nextWeek = weekIndex + 1;
+          const updated = {
+            ...weeks,
+            [weekKey]: {
+              ...weeks[weekKey],
+              uri,
+              label: weeks[weekKey]?.label || '',
+              timestamp: Date.now(),
+              locked: false,
+            },
+          };
 
-          if (!updated[nextWeek]) {
-            updated[nextWeek] = {
-              startDate: Date.now(),
-              entries: Array(DAYS_PER_WEEK).fill(null),
+          const currentWeekNumber = Number(weekKey.replace('week', ''));
+
+          const nextWeekNumber = currentWeekNumber + 1;
+
+          if (
+            nextWeekNumber <= MAX_WEEKS &&
+            !updated[`week${nextWeekNumber}`]
+          ) {
+            updated[`week${nextWeekNumber}`] = {
+              uri: '',
+              label: '',
+              timestamp: null,
+              locked: true,
             };
           }
 
-          setCurrentWeek(nextWeek);
-          setCurrentDay(0);
-        } else {
-          setCurrentDay(prev => prev + 1);
+          // unlock next week ONLY after current week completed
+          if (updated[weekKey]?.uri) {
+            const nextWeekKey = `week${nextWeekNumber}`;
+
+            if (updated[nextWeekKey]) {
+              updated[nextWeekKey].locked = true;
+            }
+          }
+
+          setWeeks(updated);
+
+          await updateWeeks(updated);
+        } catch (e) {
+          console.log('IMAGE ERROR', e);
         }
-
-        updateWeeks(updated); // 🔥 single source of truth
-        return updated;
-      });
-    });
+      },
+    );
   };
 
-  const updateLabel = (weekIndex, dayIndex, text) => {
-    if (weekIndex !== currentWeek) return;
+  const updateLabel = async (weekKey, text) => {
+    const updated = {
+      ...weeks,
+      [weekKey]: {
+        ...weeks[weekKey],
+        label: text,
+      },
+    };
 
-    setWeeks(prev => {
-      const updated = [...prev];
+    setWeeks(updated);
 
-      if (!updated[weekIndex]?.entries?.[dayIndex]) return prev;
-
-      updated[weekIndex] = {
-        ...updated[weekIndex],
-        entries: updated[weekIndex].entries.map((e, i) =>
-          i === dayIndex ? { ...e, label: text } : e,
-        ),
-      };
-
-      updateWeeks(updated); // 🔥 ADD THIS
-      return updated;
-    });
+    await updateWeeks(updated);
   };
 
-  const updateWeeks = newData => {
-    setWeeks(newData);
-    database().ref(`/users/${USER_ID}/veggieChallenge`).set(newData);
+  const deleteEntry = async weekKey => {
+    const updated = { ...weeks };
+
+    const currentWeekNumber = Number(weekKey.replace('week', ''));
+
+    updated[weekKey] = {
+      ...updated[weekKey],
+      uri: '',
+      label: '',
+      timestamp: null,
+    };
+
+    // remove future weeks
+    for (let i = currentWeekNumber + 1; i <= MAX_WEEKS; i++) {
+      delete updated[`week${i}`];
+    }
+
+    setWeeks(updated);
+
+    await updateWeeks(updated);
   };
 
-  const deleteEntry = (weekIndex, dayIndex) => {
-    if (weekIndex !== currentWeek) return;
+  const safeWeeks = Object.values(weeks || {});
+  const activeWeekIndex = Object.values(weeks).findIndex(item => !item?.uri);
 
-    setWeeks(prev => {
-      const updated = [...prev];
-      if (!updated[weekIndex]) return prev;
+  const completedWeeks = safeWeeks.filter(w => !!w?.uri).length;
 
-      updated[weekIndex] = {
-        ...updated[weekIndex],
-        entries: updated[weekIndex].entries.map((e, i) =>
-          i === dayIndex ? null : e,
-        ),
-      };
-
-      updateWeeks(updated); // 🔥 THIS WAS MISSING
-      return updated;
-    });
-  };
-
-  const isEditable = weekIndex =>
-    weekIndex === currentWeek && isWeekUnlocked(weekIndex);
-
-  const safeWeeks = weeks.map(w => ({
-    ...w,
-    entries: Array.isArray(w.entries)
-      ? w.entries
-      : Array(DAYS_PER_WEEK).fill(null),
-  }));
-
-  const completedWeeks = safeWeeks.filter(w =>
-    w.entries?.every(e => e !== null),
-  ).length;
-
-  const progress = weeks.length ? completedWeeks / weeks.length : 0;
-
+  const progress = MAX_WEEKS ? completedWeeks / MAX_WEEKS : 0;
   return (
     <View style={styles.root}>
       <Header
@@ -246,9 +276,8 @@ const VeggieChallenge = ({ navigation }) => {
           paddingHorizontal: 24,
         }}
       />
-      <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
-        {/* Hero */}
 
+      <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
         <Text style={styles.heroTitle}>🥦 Weekly Veggie Challenge</Text>
         <Text style={styles.heroSub}>
           Upload 1 veggie meal per week — new week unlocks every 7 days
@@ -264,138 +293,102 @@ const VeggieChallenge = ({ navigation }) => {
             />
           </View>
           <Text style={styles.progressLabel}>
-            {completedWeeks}/{weeks.length} weeks
+            {completedWeeks}/{safeWeeks.length} weeks
           </Text>
         </View>
+        {Object.entries(weeks)
+          .sort(([a], [b]) => {
+            return (
+              Number(a.replace('week', '')) - Number(b.replace('week', ''))
+            );
+          })
+          .map(([weekKey, week], wi) => {
+            const hasImage = !!week?.uri;
+            const isCurrent = weekKey === `week${activeWeekIndex + 1}`;
+            const unlocked = !week?.locked;
+            const weekDone = hasImage;
 
-        {safeWeeks?.map((week, wi) => {
-          const unlocked = isWeekUnlocked(wi);
-          const isCurrent = wi === currentWeek;
-          const weekDone = week?.entries?.every(e => e !== null);
-
-          return (
-            <View
-              key={wi}
-              style={[
-                styles.weekCard,
-                weekDone && styles.weekCardDone,
-                !unlocked && styles.weekCardLocked,
-              ]}
-            >
-              {weekDone && unlocked && (
-                <GradientBg
-                  id={`vwg${wi}`}
-                  c1="rgba(77,102,68,0.18)"
-                  c2="rgba(45,74,37,0.08)"
-                />
-              )}
-
-              {/* Week header row */}
-              <View style={styles.weekHeader}>
-                <View
-                  style={[
-                    styles.weekNumBadge,
-                    weekDone && styles.weekNumBadgeDone,
-                    !unlocked && styles.weekNumBadgeLocked,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.weekNumText,
-                      weekDone && { color: colors.white },
-                    ]}
-                  >
-                    {weekDone ? '✓' : wi + 1}
+            return (
+              <View key={`week-${wi}`} style={styles.weekCard}>
+                {/* HEADER */}
+                <View style={styles.weekHeader}>
+                  <Text style={styles.weekTitleText}>
+                    Week {weekKey.replace('week', '')}
                   </Text>
+
+                  {weekDone && (
+                    <View style={styles.completedPill}>
+                      <Text style={styles.completedPillText}>Completed</Text>
+                    </View>
+                  )}
+
+                  {isCurrent && !weekDone && (
+                    <View style={styles.currentPill}>
+                      <Text style={styles.currentPillText}>Active</Text>
+                    </View>
+                  )}
                 </View>
-                <Text
-                  style={[styles.weekTitleText, !unlocked && styles.lockedText]}
-                >
-                  Week {wi + 1}
-                </Text>
-                {weekDone && (
-                  <View style={styles.completedPill}>
-                    <Text style={styles.completedPillText}>Completed</Text>
+
+                {/* BODY */}
+                {!unlocked ? (
+                  <View style={styles.lockedBox}>
+                    <Text style={styles.lockEmoji}>🔒</Text>
+
+                    <Text style={styles.lockedSub}>
+                      Unlocks 7 days after previous week completion
+                    </Text>
                   </View>
-                )}
-                {isCurrent && !weekDone && (
-                  <View style={styles.currentPill}>
-                    <Text style={styles.currentPillText}>Active</Text>
-                  </View>
-                )}
-                {!unlocked && (
-                  <View style={styles.lockedPill}>
-                    <Text style={styles.lockedPillText}>🔒 Locked</Text>
-                  </View>
+                ) : hasImage ? (
+                  <>
+                    <View style={styles.entryCard}>
+                      <Image
+                        source={{
+                          uri: week?.uri,
+                        }}
+                        style={styles.entryImg}
+                      />
+                      <TextInput
+                        value={labels[weekKey] ?? week?.label}
+                        onChangeText={t =>
+                          setLabels(prev => ({ ...prev, [weekKey]: t }))
+                        }
+                        onEndEditing={() =>
+                          updateLabel(weekKey, labels[weekKey])
+                        }
+                        style={styles.uploadText}
+                      />
+                    </View>
+
+                    <View style={styles.entryActions}>
+                      <TouchableOpacity
+                        style={styles.retakeBtn}
+                        onPress={() => pickImage(weekKey)}
+                      >
+                        <Text style={styles.retakeText}>Retake</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.deleteBtn}
+                        onPress={() => deleteEntry(weekKey)}
+                      >
+                        <Text style={styles.deleteText}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.uploadBtn}
+                    onPress={() => pickImage(weekKey)}
+                  >
+                    <CameraIcon />
+                    <Text style={styles.uploadText}>
+                      Upload Veggie Meal Photo
+                    </Text>
+                  </TouchableOpacity>
                 )}
               </View>
-
-              {/* Locked */}
-              {!unlocked ? (
-                <View style={styles.lockedBox}>
-                  <Text style={styles.lockEmoji}>🔒</Text>
-                  <Text style={styles.lockedSub}>Unlocks after 7 days</Text>
-                </View>
-              ) : (
-                <>
-                  {week?.entries?.map((entry, di) => {
-                    const editable = isEditable(wi, di);
-                    return (
-                      <View key={di}>
-                        {entry ? (
-                          <View style={styles.entryCard}>
-                            <Image
-                              source={{ uri: entry.uri }}
-                              style={styles.entryImg}
-                            />
-                            <Text style={styles.entryTime}>
-                              {entry.timestamp}
-                            </Text>
-                            <TextInput
-                              value={entry.label}
-                              onChangeText={t => updateLabel(wi, di, t)}
-                              editable={editable}
-                              placeholder="Vegetable name…"
-                              placeholderTextColor="rgba(255,255,255,0.3)"
-                              style={styles.entryInput}
-                            />
-                            {editable && (
-                              <View style={styles.entryActions}>
-                                <TouchableOpacity
-                                  style={styles.retakeBtn}
-                                  onPress={() => pickImage(wi, di)}
-                                >
-                                  <Text style={styles.retakeText}>Retake</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  style={styles.deleteBtn}
-                                  onPress={() => deleteEntry(wi, di)}
-                                >
-                                  <Text style={styles.deleteText}>Delete</Text>
-                                </TouchableOpacity>
-                              </View>
-                            )}
-                          </View>
-                        ) : isCurrent && di === currentDay ? (
-                          <TouchableOpacity
-                            style={styles.uploadBtn}
-                            onPress={() => pickImage(wi, di)}
-                            activeOpacity={0.8}
-                          >
-                            <CameraIcon />
-                            <Text style={styles.uploadText}>
-                              Upload Veggie Meal Photo
-                            </Text>
-                          </TouchableOpacity>
-                        ) : null}
-                      </View>
-                    );
-                  })}
-                </>
-              )}
-            </View>
-          );
-        })}
+            );
+          })}
       </Wrapper>
     </View>
   );
@@ -412,6 +405,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingBottom: 16,
   },
+
   backBtn: {
     width: 44,
     height: 44,
@@ -646,7 +640,7 @@ const styles = StyleSheet.create({
   },
   uploadText: {
     color: 'rgba(255,255,255,0.35)',
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: fontFamily.montserratMedium,
   },
 });

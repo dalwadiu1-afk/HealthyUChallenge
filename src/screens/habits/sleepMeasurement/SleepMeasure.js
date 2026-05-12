@@ -22,6 +22,7 @@ import Svg, {
 import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
 import firestore from '@react-native-firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import database from '@react-native-firebase/database';
 import moment from 'moment';
 import auth from '@react-native-firebase/auth';
@@ -177,8 +178,51 @@ export default function SleepClock({ navigation }) {
     return () => ref.off();
   };
 
+  const restoreSleepTimer = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('ACTIVE_SLEEP_TIMER');
+
+      if (!saved) return;
+
+      const parsed = JSON.parse(saved);
+
+      // only restore if timer was running
+      if (!parsed?.startedAt) return;
+
+      const start = new Date(parsed.startedAt);
+
+      setStarted(true);
+      setStartTime(start);
+
+      setBedTime(parsed.bedTime);
+      setBedAngle(timeToAngle(parsed.bedTime));
+
+      // calculate elapsed instantly
+      const now = new Date();
+
+      const seconds = Math.floor((now - start) / 1000);
+
+      setLiveSeconds(seconds);
+
+      const t = getNowTime();
+
+      setLiveWakeTime(t);
+      setWakeTime(t);
+
+      const minutes = Math.floor(seconds / 60);
+
+      const angle =
+        (timeToAngle(parsed.bedTime) + minutesToAngle(minutes)) % 360;
+
+      setWakeAngle(angle);
+    } catch (e) {
+      console.log('restore timer error', e);
+    }
+  };
+
   useEffect(() => {
     init();
+    restoreSleepTimer();
 
     let interval;
 
@@ -216,28 +260,41 @@ export default function SleepClock({ navigation }) {
   const handleManualSave = async () => {
     if (!bedTime || !wakeTime) return;
 
-    const selectedDate = moment(date, 'ddd, MMMM Do').format('YYYY-MM-DD');
-
-    const ref = database().ref(`users/${USER_ID}/sleepLogs/${selectedDate}`);
-
     const startAngle = timeToAngle(bedTime);
     const endAngle = timeToAngle(wakeTime);
 
     const duration = getDuration(startAngle, endAngle);
     const totalHours = duration.hours + duration.mins / 60;
 
-    await ref.set({
-      bedTime,
-      wakeTime,
-      duration: totalHours,
-      type: 'manual',
-      updatedAt: Date.now(),
-    });
+    // month + day keys
+    const monthKey = moment(date, 'ddd, MMMM Do').format('MMMM_YYYY');
+    const dayKey = moment(date, 'ddd, MMMM Do').format('DD');
+
+    // target
+    const targetHours = Number(goalInput || sleepData?.goal?.selectedGoal || 8);
+
+    await database()
+      .ref(`users/${USER_ID}/habits/${monthKey}`)
+      .update({
+        title: 'sleep',
+        target: `${targetHours} hr`,
+      });
+
+    // save day data
+    await database()
+      .ref(`users/${USER_ID}/habits/${monthKey}/days/${dayKey}`)
+      .set({
+        sleep: `${totalHours.toFixed(1)} hr`,
+        completed: totalHours >= targetHours,
+        bedTime,
+        wakeTime,
+        type: 'manual',
+        updatedAt: Date.now(),
+      });
   };
   const handleSleepToggle = async () => {
     const now = new Date();
 
-    // ✅ LOCAL DATE (fixes May 1 bug)
     const getLocalDateKey = () => {
       return (
         now.getFullYear() +
@@ -248,46 +305,71 @@ export default function SleepClock({ navigation }) {
       );
     };
 
-    // ───── START ─────
+    // ───────── START ─────────
     if (!started) {
-      const startKey = getLocalDateKey(); // ✅ FIXED
+      const startKey = getLocalDateKey();
 
       setSleepDateKey(startKey);
-
-      const ref = database().ref(`users/${USER_ID}/sleepLogs/${startKey}`);
-
       setStartTime(now);
       setStarted(true);
 
       const t = getNowTime();
+
       setBedTime(t);
       setBedAngle(timeToAngle(t));
 
-      await ref.update({
-        bedTime: t,
-      });
+      // SAVE TIMER LOCALLY
+      await AsyncStorage.setItem(
+        'ACTIVE_SLEEP_TIMER',
+        JSON.stringify({
+          startedAt: now.toISOString(),
+          bedTime: t,
+        }),
+      );
 
       return;
     }
 
-    // ───── STOP ─────
-    const ref = database().ref(`users/${USER_ID}/sleepLogs/${sleepDateKey}`);
-
+    // ───────── STOP ─────────
     setStarted(false);
 
     const wake = getNowTime();
+
     setWakeTime(wake);
     setWakeAngle(timeToAngle(wake));
 
     const duration = getDuration(bedAngle, wakeAngle);
+
     const totalHours = duration.hours + duration.mins / 60;
 
-    await ref.update({
-      bedTime,
-      wakeTime: wake,
-      duration: totalHours,
-    });
+    // month/day keys
+    const monthKey = moment().format('MMMM_YYYY');
+    const dayKey = moment().format('DD');
 
+    // target
+    const targetHours = Number(goalInput || sleepData?.goal?.selectedGoal || 8);
+
+    // create habit parent
+    await database()
+      .ref(`users/${USER_ID}/habits/${monthKey}`)
+      .update({
+        title: 'sleep',
+        target: `${targetHours} hr`,
+      });
+
+    // save sleep log inside days
+    await database()
+      .ref(`users/${USER_ID}/habits/${monthKey}/days/${dayKey}`)
+      .set({
+        sleep: `${totalHours.toFixed(1)} hr`,
+        completed: totalHours >= targetHours,
+        bedTime,
+        wakeTime: wake,
+        type: 'timer',
+        updatedAt: Date.now(),
+      });
+    // clear local timer
+    await AsyncStorage.removeItem('ACTIVE_SLEEP_TIMER');
     setStartTime(null);
     setLiveSeconds(0);
     setSleepDateKey(null);

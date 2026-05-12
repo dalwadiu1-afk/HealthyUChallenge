@@ -38,6 +38,40 @@ export default function ChatCard({
     setLikeCount(item?.likes ?? 0);
   }, [item?.likes]);
 
+  const renderPostContent = item => {
+    const renderers = {
+      snack: () => (
+        <View style={styles.beverageCard}>
+          <Text style={styles.beverageTitle}>🍿 Snack: {item.snackName}</Text>
+          <Text style={styles.typeText}>Quantity: {item.qty}</Text>
+          <Text style={styles.typeText}>Healthy Snack Challenge</Text>
+        </View>
+      ),
+
+      beverage: () => (
+        <View style={styles.beverageCard}>
+          <Text style={styles.beverageTitle}>🍹 {item.beverageName}</Text>
+
+          {item.ingredients?.length > 0 && (
+            <View style={styles.ingredientsWrap}>
+              {item.ingredients.map((i, idx) => (
+                <View key={idx} style={styles.ingredientPill}>
+                  <Text style={styles.ingredientText}>#{i}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <Text style={styles.typeText}>Healthy Beverage Challenge</Text>
+        </View>
+      ),
+
+      post: () => null,
+    };
+
+    return renderers[item.type]?.() || null;
+  };
+
   return (
     <TouchableOpacity
       activeOpacity={0.92}
@@ -45,7 +79,12 @@ export default function ChatCard({
       style={styles.card}
     >
       {/* Header row */}
-      <View style={styles.headerRow}>
+      <View
+        style={{
+          ...styles.headerRow,
+          marginBottom: item?.beverageName ? 0 : 12,
+        }}
+      >
         <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
           {item?.avatar ? (
             <Image
@@ -71,22 +110,26 @@ export default function ChatCard({
       </View>
 
       {/* Message */}
-      <Text style={styles.message} numberOfLines={3}>
+      <Text
+        style={{ ...styles.message, marginBottom: item?.beverageName ? 0 : 12 }}
+        numberOfLines={3}
+      >
         {item?.message}
       </Text>
 
+      <View>{renderPostContent(item)}</View>
+
       {/* Image */}
-      {/* {item?.picture && ( */}
       <Image
         source={{
           uri:
             item.picture ||
+            item.image ||
             'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
         }}
         style={styles.postImage}
         resizeMode="cover"
       />
-      {/* )} */}
 
       {/* Footer actions */}
       <View style={styles.footer}>
@@ -133,7 +176,6 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
   },
   avatar: {
     width: 44,
@@ -177,7 +219,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: 'rgba(255,255,255,0.78)',
     fontFamily: fontFamily.montserratRegular,
-    marginBottom: 12,
   },
   postImage: {
     width: '100%',
@@ -211,5 +252,48 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.45)',
     fontSize: 13,
     fontFamily: fontFamily.montserratMedium,
+  },
+  beverageCard: {
+    backgroundColor: 'rgba(106,148,85,0.08)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(106,148,85,0.18)',
+    padding: 12,
+    marginBottom: 12,
+  },
+
+  beverageTitle: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+    marginBottom: 10,
+  },
+
+  ingredientsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+
+  ingredientPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  ingredientText: {
+    color: '#8FD175',
+    fontSize: 12,
+    fontFamily: fontFamily.montserratMedium,
+  },
+
+  typeText: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 11,
+    fontFamily: fontFamily.montserratRegular,
+    marginTop: 12,
   },
 });

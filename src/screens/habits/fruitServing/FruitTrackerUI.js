@@ -24,13 +24,28 @@ import firestore from '@react-native-firebase/firestore';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import { useEffect } from 'react';
+import moment from 'moment';
+
+const getMonthKey = () => moment().format('MMM_YYYY');
+
+const getWeekKey = startDate => getWeekFromStart(startDate);
+
+const getDateKey = (startDate, date = new Date()) =>
+  moment(date).format('YYYY-MM-DD');
+
+const getWeekFromStart = (startDate, currentDate = new Date()) => {
+  const start = moment(startDate);
+  const now = moment(currentDate);
+
+  const diffDays = now.diff(start, 'days');
+  const weekNumber = Math.floor(diffDays / 7) + 1;
+
+  return `week${weekNumber}`;
+};
 
 const DAILY_GOAL = 3;
 const user = auth().currentUser;
 const USER_ID = user?.uid || 'USER_UID';
-const getDateKey = (date = new Date()) => {
-  return date.toISOString().split('T')[0]; // "2026-05-02"
-};
 
 const FRUITS = [
   { name: 'Apple', serving: '1 medium (182g)', emoji: '🍎' },
@@ -66,12 +81,35 @@ function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
 export default function FruitTrackerUI({ navigation }) {
   const [selectedFruit, setSelectedFruit] = useState(null);
   const [photo, setPhoto] = useState(null);
+  const [startDate, setStartDate] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [weeksData, setWeeksData] = useState({});
   const [fruits, setFruits] = useState(FRUITS);
+  const [showList, setShowList] = useState(false);
   const [dayMeta, setDayMeta] = useState({
     total: 0,
     completed: false,
   });
+
+  useEffect(() => {
+    if (!USER_ID) return;
+
+    const ref = database().ref(`users/${USER_ID}/goal/startDate`);
+
+    ref.once('value').then(snapshot => {
+      const val = snapshot.val();
+
+      if (val) {
+        setStartDate(val); // should be ISO string or timestamp
+      } else {
+        const today = new Date().toISOString();
+
+        ref.set(today);
+        setStartDate(today);
+      }
+    });
+  }, []);
+
   useEffect(() => {
     const unsubscribe = firestore()
       .collection('fruits')
@@ -96,35 +134,36 @@ export default function FruitTrackerUI({ navigation }) {
   }, []);
 
   useEffect(() => {
-    if (!USER_ID) return;
+    if (!USER_ID || !startDate) return;
 
-    const dateKey = getDateKey();
+    const monthKey = getMonthKey(startDate);
+    const weekKey = getWeekKey(startDate);
 
-    const ref = database().ref(`users/${USER_ID}/fruits/logs/${dateKey}`);
+    const dateKey = getDateKey(startDate);
+
+    const ref = database().ref(
+      `users/${USER_ID}/habits/${monthKey}/${weekKey}`,
+    );
 
     const listener = ref.on('value', snapshot => {
       const data = snapshot.val();
-      if (data) {
+
+      if (data?.[dateKey]) {
         setDayMeta({
-          total: data.total || 0,
-          completed: data.completed || false,
+          total: data?.[dateKey].total || 0,
+          completed: data?.[dateKey].completed || false,
         });
       }
-
-      if (data?.entries) {
-        const arr = Object.keys(data.entries).map(key => ({
-          id: key,
-          ...data.entries[key],
-        }));
-
-        setLogs(arr);
+      console.log('data?.entries :>> ', data);
+      if (data) {
+        setWeeksData(data);
       } else {
         setLogs([]);
       }
     });
 
     return () => ref.off('value', listener);
-  }, []);
+  }, [startDate]);
 
   const pickPhoto = async () => {
     const granted = await requestCameraPermission();
@@ -135,12 +174,16 @@ export default function FruitTrackerUI({ navigation }) {
   };
 
   const addLog = async () => {
-    if (!selectedFruit) return;
+    if (!selectedFruit || !startDate) return;
 
     try {
-      const dateKey = getDateKey();
+      const monthKey = getMonthKey(startDate);
+      const weekKey = getWeekKey(startDate);
+      const dateKey = getDateKey(startDate);
 
-      const dayRef = database().ref(`users/${USER_ID}/fruits/logs/${dateKey}`);
+      const dayRef = database().ref(
+        `users/${USER_ID}/habits/${monthKey}/${weekKey}/${dateKey}`,
+      );
 
       const entryRef = dayRef.child('entries').push();
 
@@ -155,7 +198,7 @@ export default function FruitTrackerUI({ navigation }) {
         serving: selectedFruit.serving,
         emoji: selectedFruit.emoji,
         photo: photo || null,
-        createdAt: new Date().toISOString(),
+        createdAt: Date.now(),
       });
 
       await dayRef.update({
@@ -170,9 +213,52 @@ export default function FruitTrackerUI({ navigation }) {
     }
   };
 
-  const getEnergyEmoji = fruit => {
-    if (['Apple', 'Banana', 'Orange'].includes(fruit)) return '⚡';
-    return '🥱';
+  const renderWeeks = () => {
+    if (!weeksData) return null;
+
+    const dates = Object.entries(weeksData);
+
+    return dates.map(([date, day]) => {
+      const entries = day?.entries ? Object.values(day.entries) : [];
+
+      return (
+        <View key={date} style={styles.card}>
+          <TouchableOpacity
+            onPress={() =>
+              setShowList(prev => ({
+                ...prev,
+                [date]: !prev?.[date],
+              }))
+            }
+          >
+            <Text style={styles.cardDate}>
+              📅{' '}
+              {moment(date).isSame(moment(), 'day')
+                ? 'Today'
+                : moment(date).format('DD MMM YYYY')}
+            </Text>
+
+            <Text style={styles.cardSub}>
+              🍎 Total: {day?.total || 0} servings
+              {day?.completed ? ' • 🎉 Goal met' : ' • ⏳ In progress'}
+            </Text>
+          </TouchableOpacity>
+
+          {entries.length > 0 && showList?.[date] ? (
+            entries.map((item, i) => (
+              <View key={i} style={styles.entryRow}>
+                <Text style={styles.entryLeft}>
+                  {item.emoji} {item.fruit}
+                </Text>
+                <Text style={styles.entryRight}>{item.serving}</Text>
+              </View>
+            ))
+          ) : entries.length === 0 ? (
+            <Text style={styles.emptyText}>No entries</Text>
+          ) : null}
+        </View>
+      );
+    });
   };
 
   const todayCount = dayMeta.total;
@@ -209,7 +295,7 @@ export default function FruitTrackerUI({ navigation }) {
           {todayCount}/{DAILY_GOAL} {goalMet ? '✓' : 'servings'}
         </Text>
       </View>
-      <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
+      <Wrapper safeAreaPops={{ edges: ['bottom'] }}>
         {/* Goal banner */}
         {goalMet && (
           <View style={styles.goalBanner}>
@@ -326,27 +412,17 @@ export default function FruitTrackerUI({ navigation }) {
         </View>
 
         {/* Today's log */}
-        {logs.length > 0 && (
-          <>
-            <Text style={styles.logTitle}>Today's Servings</Text>
-            {logs.map(item => (
-              <View key={item.id} style={styles.logCard}>
-                {item.photo ? (
-                  <Image source={{ uri: item.photo }} style={styles.logImg} />
-                ) : (
-                  <View style={styles.logEmojiBox}>
-                    <Text style={styles.logEmoji}>{item.emoji}</Text>
-                  </View>
-                )}
-                <View style={styles.logInfo}>
-                  <Text style={styles.logFruit}>{item.fruit}</Text>
-                  <Text style={styles.logServing}>{item.serving}</Text>
-                </View>
-                <Text style={styles.logTime}>{item.time}</Text>
-              </View>
-            ))}
-          </>
-        )}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Fruit Progress</Text>
+
+          <ScrollView>
+            {Object.keys(weeksData || {}).length > 0 ? (
+              renderWeeks()
+            ) : (
+              <Text style={{ color: '#fff' }}>No data yet</Text>
+            )}
+          </ScrollView>
+        </View>
       </Wrapper>
     </View>
   );
@@ -415,7 +491,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: fontFamily.montserratMedium,
   },
-
+  cardTitle: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+    marginBottom: 4,
+  },
   scroll: { padding: 18, paddingTop: 16, paddingBottom: 48 },
 
   goalBanner: {
@@ -593,5 +674,51 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.3)',
     fontSize: 11,
     fontFamily: fontFamily.montserratRegular,
+  },
+  card: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  cardDate: {
+    color: colors.white,
+    fontSize: 14,
+    fontFamily: fontFamily.montserratSemiBold,
+    marginBottom: 6,
+  },
+
+  cardSub: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    marginBottom: 10,
+    fontFamily: fontFamily.montserratRegular,
+  },
+
+  entryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+  },
+
+  entryLeft: {
+    color: colors.white,
+    fontSize: 13,
+  },
+
+  entryRight: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+  },
+
+  emptyText: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 12,
+    marginTop: 6,
   },
 });

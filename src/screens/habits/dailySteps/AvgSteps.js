@@ -18,6 +18,9 @@ import Svg, {
 } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import useStepCount from '../../../hooks/useStepCount';
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
+import database from '@react-native-firebase/database';
 
 const CHART_HEIGHT = 148;
 const PADDING = 16;
@@ -35,6 +38,24 @@ function buildEmptyData(startDate) {
 function formatDay(date) {
   return date.toLocaleDateString('en-US', { day: 'numeric' });
 }
+
+const saveSteps = async steps => {
+  const uid = auth().currentUser?.uid;
+
+  const today = new Date();
+  const monthName = today.toLocaleString('en-US', { month: 'long' });
+  const year = today.getFullYear();
+  const day = today.getDate();
+
+  const monthKey = `${monthName}_${year}`;
+
+  await database()
+    .ref(`users/${uid}/habits/${monthKey}/days/${day}`)
+    .update({
+      progress: steps.toString(),
+      completed: steps >= 8000,
+    });
+};
 
 // Circular progress ring
 function RingProgress({ percent }) {
@@ -179,22 +200,106 @@ export default function StepsChart30Days({ navigation }) {
   } = useStepCount();
 
   const [selected, setSelected] = useState(0);
+  const [habits, setHabits] = useState(null);
+
+  const transformHabitData = habits => {
+    if (!habits) return [];
+
+    // Get latest month key (sorted)
+    const monthKeys = Object.keys(habits).sort((a, b) => {
+      const [mA, yA] = a.split('_');
+      const [mB, yB] = b.split('_');
+
+      const dA = new Date(`${mA} 1, ${yA}`);
+      const dB = new Date(`${mB} 1, ${yB}`);
+
+      return dB - dA; // latest first
+    });
+
+    const monthKey = monthKeys[0];
+    const monthData = habits[monthKey];
+
+    if (!monthData?.days) return [];
+
+    const [monthName, year] = monthKey.split('_');
+    const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
+
+    return Object.entries(monthData.days).map(([day, val]) => ({
+      dayIndex: Number(day) - 1,
+      date: new Date(year, monthIndex, Number(day)),
+      steps:
+        typeof val === 'object' && val?.progress ? parseFloat(val.progress) : 0,
+      completed: typeof val === 'object' ? val.completed || false : false,
+    }));
+  };
+
+  const fillMissingDays = (data, year, monthIndex) => {
+    const full = [];
+
+    for (let i = 1; i <= 30; i++) {
+      const found = data.find(d => d.date.getDate() === i);
+
+      if (found) {
+        full.push(found);
+      } else {
+        full.push({
+          dayIndex: i - 1,
+          date: new Date(year, monthIndex, i),
+          steps: 0,
+          completed: false,
+        });
+      }
+    }
+
+    return full;
+  };
+
+  useEffect(() => {
+    const uid = auth().currentUser?.uid;
+
+    const ref = database().ref(`users/${uid}/habits`);
+
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val();
+      setHabits(data || null);
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
 
   // Use real HealthKit data, fall back to empty skeleton while loading
-  const data = rawData ?? buildEmptyData(startDate);
+  let data = [];
 
+  if (habits) {
+    const habitData = transformHabitData(habits);
+
+    if (habitData.length > 0) {
+      const date = habitData[0].date;
+
+      data = fillMissingDays(habitData, date.getFullYear(), date.getMonth());
+    } else {
+      data = buildEmptyData(startDate);
+    }
+  } else {
+    data = buildEmptyData(startDate);
+  }
   // Auto-select the most recent day that has steps once data loads
   useEffect(() => {
-    if (!rawData) return;
-    const lastActiveIdx = [...rawData].reverse().findIndex(d => d.steps > 0);
-    if (lastActiveIdx !== -1) setSelected(rawData.length - 1 - lastActiveIdx);
-  }, [rawData]);
+    if (!data || data.length === 0) return;
+
+    const lastActiveIdx = [...data].reverse().findIndex(d => d.steps > 0);
+
+    if (lastActiveIdx !== -1) {
+      setSelected(data.length - 1 - lastActiveIdx);
+    }
+  }, [data]);
 
   const displayedTodaySteps =
-    todaySteps > 0 ? todaySteps : rawData?.[0]?.steps ?? 0;
+    todaySteps > 0 ? todaySteps : data[selected]?.steps || 0;
 
   // Bar height logic
-  const MAX_STEPS = Math.max(...data.map(d => d.steps), 1);
+  const MAX_STEPS =
+    data.length > 0 ? Math.max(...data.map(d => d.steps), 1) : 1;
   const graphH = CHART_HEIGHT - PADDING * 2;
   const MIN_BAR = 8;
   const getBarH = val => Math.max(MIN_BAR, (val / MAX_STEPS) * graphH);
@@ -206,7 +311,10 @@ export default function StepsChart30Days({ navigation }) {
   const reqAvg =
     remaining > 0 ? Math.max(0, (GOAL - pastTotal) / remaining) : 0;
   const goalPct = Math.min(pastTotal / GOAL, 1);
-  const selectedItem = data[selected];
+  const selectedItem = data?.[selected] || {
+    steps: 0,
+    date: new Date(),
+  };
 
   const renderBar = (item, index) => {
     const barH = getBarH(item.steps);
@@ -286,7 +394,8 @@ export default function StepsChart30Days({ navigation }) {
           <TouchableOpacity
             style={styles.refreshBtn}
             activeOpacity={0.8}
-            onPress={refetch}
+            // onPress={refetch}
+            // onPress={refetch}
             disabled={loading}
           >
             {loading ? (

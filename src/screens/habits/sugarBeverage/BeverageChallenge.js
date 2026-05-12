@@ -24,8 +24,10 @@ import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
+import moment from 'moment';
 
 const USER_ID = auth().currentUser?.uid;
+const getMonthKey = () => moment().format('MMMM_YYYY');
 
 const getDateKey = () => {
   return new Date().toISOString().split('T')[0];
@@ -55,14 +57,18 @@ export default function BeverageChallengeUI({ navigation }) {
   const [photo, setPhoto] = useState(null);
   const [label, setLabel] = useState('');
   const [timestamp, setTimestamp] = useState('');
-  const [ingredients, setIngredients] = useState('');
+  const [ingredients, setIngredients] = useState([]);
+  const [ingredientInput, setIngredientInput] = useState('');
 
   useEffect(() => {
     if (!USER_ID) return;
 
     const dateKey = getDateKey();
+    const monthKey = getMonthKey();
 
-    const ref = database().ref(`users/${USER_ID}/logs/beverage/${dateKey}`);
+    const ref = database().ref(
+      `users/${USER_ID}/habits/beverage/${monthKey}/days/${dateKey}`,
+    );
 
     const listener = ref.on('value', snapshot => {
       const data = snapshot.val();
@@ -70,7 +76,7 @@ export default function BeverageChallengeUI({ navigation }) {
       if (data) {
         setPhoto(data.photo || null);
         setLabel(data.name || '');
-        setIngredients(data.ingredients || '');
+        setIngredients(data.ingredients || []);
         setTimestamp(
           data.timestamp ? new Date(data.timestamp).toLocaleString() : '',
         );
@@ -79,6 +85,17 @@ export default function BeverageChallengeUI({ navigation }) {
 
     return () => ref.off('value', listener);
   }, []);
+
+  const addIngredient = () => {
+    const value = ingredientInput.trim();
+
+    if (!value) return;
+
+    // add locally only
+    setIngredients(prev => [...prev, value]);
+
+    setIngredientInput('');
+  };
 
   const handleCamera = async () => {
     const granted = await requestCameraPermission();
@@ -116,33 +133,70 @@ export default function BeverageChallengeUI({ navigation }) {
       return;
     }
 
-    if (!ingredients.trim()) {
+    if (ingredients.length === 0) {
       Alert.alert('Add ingredients 🥤');
       return;
     }
 
     try {
       const dateKey = getDateKey();
+      const monthKey = getMonthKey();
 
+      const currentUser = auth().currentUser;
+
+      // create new post ref
+      const postRef = database().ref('posts').push();
+
+      const postId = postRef.key;
+
+      // beverage entry
       const entry = {
         photo,
         name: label,
         ingredients,
         timestamp: new Date().toISOString(),
         type: 'beverage',
+        postId,
       };
 
+      // save inside habit
       await database()
-        .ref(`users/${USER_ID}/logs/beverage/${dateKey}`)
+        .ref(`users/${USER_ID}/habits/beverage/${monthKey}/days/${dateKey}`)
         .set(entry);
 
-      // reset
+      // create post object
+      const postData = {
+        postId,
+        userId: USER_ID,
+        name: currentUser?.displayName || 'User',
+        avatar: currentUser?.photoURL || '',
+        text: `🍹 ${label}`,
+        beverageName: label,
+        ingredients,
+        image: photo,
+        type: 'beverage',
+        likes: {},
+        comments: {},
+        createdAt: Date.now(),
+      };
+
+      // save in posts
+      await postRef.set(postData);
+
+      // save reference inside user
+      await database().ref(`users/${USER_ID}/posts/${postId}`).set(true);
+
+      // reset states
       setPhoto(null);
       setLabel('');
-      setIngredients('');
+      setIngredients([]);
+      setIngredientInput('');
       setTimestamp('');
+
+      Alert.alert('Posted successfully 🎉');
     } catch (e) {
       console.log('Save error:', e);
+      Alert.alert('Something went wrong');
     }
   };
 
@@ -217,13 +271,30 @@ export default function BeverageChallengeUI({ navigation }) {
         </View>
         <View style={styles.inputCard}>
           <Text style={styles.inputLabel}>Ingredients</Text>
-          <TextInput
-            placeholder="e.g. Lemon, Mint, Ginger..."
-            value={ingredients}
-            onChangeText={setIngredients}
-            placeholderTextColor="rgba(255,255,255,0.25)"
-            style={styles.input}
-          />
+
+          <View style={styles.ingRow}>
+            <TextInput
+              placeholder="e.g. Lemon, Mint, Ginger..."
+              value={ingredientInput}
+              onChangeText={setIngredientInput}
+              placeholderTextColor="rgba(255,255,255,0.25)"
+              style={[styles.input, { flex: 1 }]}
+            />
+
+            <TouchableOpacity style={styles.addBtn} onPress={addIngredient}>
+              <Text style={styles.addBtnText}>Add</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Render added ingredients */}
+          <View style={styles.ingList}>
+            {ingredients?.length > 0 &&
+              ingredients?.map((item, index) => (
+                <View key={index} style={styles.ingCard}>
+                  <Text style={styles.ingText}>{item}</Text>
+                </View>
+              ))}
+          </View>
         </View>
 
         {/* Preview */}
@@ -343,7 +414,50 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     lineHeight: 20,
   },
+  ingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
 
+  addBtn: {
+    paddingHorizontal: 14,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: 'rgba(106,148,85,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(106,148,85,0.4)',
+  },
+
+  addBtnText: {
+    color: colors.white,
+    fontFamily: fontFamily.montserratSemiBold,
+    fontSize: 13,
+  },
+
+  ingList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 10,
+    gap: 8,
+  },
+
+  ingCard: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  ingText: {
+    color: colors.white,
+    fontSize: 12,
+    fontFamily: fontFamily.montserratRegular,
+  },
   scroll: { padding: 18, paddingTop: 16, paddingBottom: 48 },
 
   photoBox: {

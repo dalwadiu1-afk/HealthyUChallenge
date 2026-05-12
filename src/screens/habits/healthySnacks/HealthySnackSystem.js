@@ -8,6 +8,7 @@ import {
   TextInput,
   StyleSheet,
   StatusBar,
+  Alert,
 } from 'react-native';
 import Svg, {
   Path,
@@ -23,6 +24,13 @@ import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
+import moment from 'moment';
+
+const getMonthKey = () => moment().format('MMMM_YYYY');
+
+const getDateKey = () => {
+  return new Date().toISOString().split('T')[0];
+};
 
 const USER_ID = auth().currentUser?.uid;
 
@@ -122,9 +130,10 @@ export default function SnackSystemUI({ navigation }) {
       await ref.set({
         name: snackName.trim(),
         qty: qty.trim(),
-        image: image || null,
+        image: image || '',
         status: 'pending',
-        createdAt: new Date().toISOString(),
+        createdAt: Date.now(),
+        type: 'snack',
       });
 
       setSnackName('');
@@ -135,11 +144,127 @@ export default function SnackSystemUI({ navigation }) {
     }
   };
 
-  const updateStatus = async (id, status) => {
+  const updateStatus = async (item, status) => {
     try {
-      await database()
-        .ref(`users/${USER_ID}/snacks/requests/${id}`)
-        .update({ status });
+      // only when approved
+      if (status === 'approved') {
+        const monthKey = getMonthKey();
+        const dateKey = getDateKey();
+
+        // save inside habits
+        const habitRef = database().ref(
+          `users/${USER_ID}/habits/snacks/${monthKey}/days/${dateKey}`,
+        );
+
+        const snapshot = await habitRef.once('value');
+
+        const existing = snapshot.val();
+
+        let snackList = [];
+
+        if (existing?.snacks) {
+          snackList = existing.snacks;
+        }
+
+        snackList.push({
+          requestId: item.id,
+          name: item.name,
+          qty: item.qty,
+          image: item.image || '',
+          approvedAt: Date.now(),
+          status: 'approved',
+        });
+        console.log('snackList :>> ', snackList);
+        await habitRef.set({
+          snacks: snackList,
+          updatedAt: Date.now(),
+        });
+
+        // admin custom message popup
+        Alert.alert(
+          'Post to Social Feed',
+          'Do you want to post this approved snack?',
+          [
+            {
+              text: 'No',
+              style: 'cancel',
+            },
+            {
+              text: 'Post',
+              onPress: async () => {
+                try {
+                  const currentUser = auth().currentUser;
+
+                  const postRef = database().ref('posts').push();
+
+                  const postId = postRef.key;
+
+                  const postData = {
+                    postId,
+                    userId: USER_ID,
+
+                    avatar: currentUser?.photoURL || '',
+                    name: currentUser?.displayName || 'Admin',
+                    requestId: item.id,
+                    text: `✅ Approved snack: ${item.name}`,
+
+                    snackName: item.name,
+                    qty: item.qty,
+
+                    image: item.image || '',
+                    type: 'snack',
+
+                    createdAt: Date.now(),
+
+                    likes: {},
+                    comments: {},
+                  };
+
+                  await postRef.set(postData);
+
+                  await database()
+                    .ref(`users/${USER_ID}/posts/${postId}`)
+                    .set(true);
+
+                  console.log('Posted successfully');
+                } catch (e) {
+                  console.log('Post create error:', e);
+                }
+              },
+            },
+          ],
+        );
+      }
+
+      // =========================
+      // REJECT FLOW (FIXED)
+      // =========================.
+      if (status === 'rejected') {
+        const postsSnap = await database()
+          .ref('posts')
+          .orderByChild('requestId')
+          .equalTo(item.id)
+          .once('value');
+
+        const posts = postsSnap.val();
+        console.log('object :>> ', posts);
+        if (posts) {
+          const deletePromises = await Promise.all(
+            Object.keys(posts).map(postKey => {
+              database().ref(`posts/${postKey}`).remove();
+              database().ref(`users/${USER_ID}/posts/${postKey}`).remove();
+            }),
+          );
+          await Promise.all(deletePromises);
+        }
+      }
+
+      // =========================
+      // PENDING RESET (optional)
+      // =========================
+      if (status === 'pending') {
+        // just keep request, no action needed
+      }
     } catch (e) {
       console.log('Update error:', e);
     }
@@ -461,7 +586,7 @@ export default function SnackSystemUI({ navigation }) {
                     <View style={styles.adminBtnRow}>
                       <TouchableOpacity
                         style={styles.approveBtn}
-                        onPress={() => updateStatus(item.id, 'approved')}
+                        onPress={() => updateStatus(item, 'approved')}
                         activeOpacity={0.85}
                       >
                         <GradientBg
@@ -475,7 +600,7 @@ export default function SnackSystemUI({ navigation }) {
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.rejectBtn}
-                        onPress={() => updateStatus(item.id, 'rejected')}
+                        onPress={() => updateStatus(item, 'rejected')}
                         activeOpacity={0.85}
                       >
                         <GradientBg
@@ -489,7 +614,7 @@ export default function SnackSystemUI({ navigation }) {
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.resetBtn}
-                        onPress={() => updateStatus(item.id, 'pending')}
+                        onPress={() => updateStatus(item, 'pending')}
                         activeOpacity={0.8}
                       >
                         <Text style={styles.resetBtnText}>Reset</Text>

@@ -7,25 +7,25 @@ import {
   Image,
   StatusBar,
   Animated,
+  Alert,
 } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
 import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
 import database from '@react-native-firebase/database';
-import storage from '@react-native-firebase/storage';
 import { launchCamera } from 'react-native-image-picker';
+import moment from 'moment';
 
 const TOTAL = 4;
 const USER_ID = auth().currentUser?.uid;
-const getLocalDateKey = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-    2,
-    '0',
-  )}-${String(d.getDate()).padStart(2, '0')}`;
-};
+
+const MONTH_KEY = moment().format('MMMM_YYYY');
+const CURRENT_WEEK = 'week1';
+
+const WEEK_PATH = `users/${USER_ID}/habits/${MONTH_KEY}/weeks/${CURRENT_WEEK}`;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /* ICONS */
 function CameraIcon() {
@@ -61,10 +61,10 @@ function CheckIcon() {
 }
 
 export default function FitnessClassUI() {
-  const [photos, setPhotos] = useState(() =>
-    Array.from({ length: TOTAL }, () => null),
-  );
-  const tempPhotos = useRef(Array.from({ length: TOTAL }, () => null)).current;
+  const [weekData, setWeekData] = useState({});
+  const [photos, setPhotos] = useState(Array(TOTAL).fill(null));
+
+  const tempPhotos = useRef(Array(TOTAL).fill(null)).current;
 
   const headerAnim = useRef(new Animated.Value(0)).current;
 
@@ -76,96 +76,170 @@ export default function FitnessClassUI() {
     }).start();
   }, []);
 
-  /* FIRESTORE LISTENER */
+  /* LIVE LISTENER */
+  /* LIVE LISTENER */
   useEffect(() => {
-    const today = getLocalDateKey();
+    const ref = database().ref(WEEK_PATH);
 
-    const ref = database().ref(`users/${USER_ID}/logs/${today}`);
-
-    const onValueChange = ref.on('value', snapshot => {
+    const listener = ref.on('value', snapshot => {
       const data = snapshot.val() || {};
 
-      setPhotos(data.workoutPhotos || Array(TOTAL).fill(null));
-    });
+      setWeekData(data);
 
-    return () => ref.off('value', onValueChange);
-  }, []);
+      // FIX ARRAY STRUCTURE
+      const firebasePhotos = data?.workoutPhotos || {};
 
-  /* 📸 PICK IMAGE (INSTANT UI UPDATE) */
-  const handleUpload = async index => {
-    const result = await launchCamera({
-      mediaType: 'photo',
-      quality: 0.7,
-    });
-
-    if (result.didCancel) return;
-
-    const uri = result.assets[0].uri;
-
-    tempPhotos[index] = uri;
-
-    // 🔥 instant UI update (NO delay feel)
-    setPhotos(prev => {
-      const updated = [...prev];
-      updated[index] = uri;
-      return updated;
-    });
-  };
-
-  /* 🔥 DONE UPLOAD (FIXED + STABLE) */
-  const handleDone = async index => {
-    try {
-      const uri = tempPhotos[index];
-      if (!uri) return;
-
-      const today = getLocalDateKey();
-
-      // const fileName = `workouts/${USER_ID}/${today}_${index}.jpg`;
-
-      // const ref = storage().ref(fileName);
-
-      // // upload image
-      // await ref.putFile(uri);
-
-      // // get download URL
-      // const downloadURL = await ref.getDownloadURL();
-
-      const ref = database().ref(`users/${USER_ID}/logs/${today}`);
-
-      const snapshot = await ref.once('value');
-      const data = snapshot.val() || {};
-
-      const workoutPhotos = data?.workoutPhotos
-        ? [...data.workoutPhotos]
-        : Array(TOTAL).fill(null);
-
-      workoutPhotos[index] = tempPhotos[index];
-
-      await ref.set(
-        {
-          workout: 1,
-          workoutPhotos,
-        },
-        { merge: true },
+      const formattedPhotos = Array.from(
+        { length: TOTAL },
+        (_, i) => firebasePhotos[i] || null,
       );
 
-      // 🔥 safe UI update
+      setPhotos(formattedPhotos);
+
+      /* AUTO LOCK IF EXPIRED */
+      if (data?.expiresAt && Date.now() > data.expiresAt && !data?.locked) {
+        ref.update({
+          locked: true,
+        });
+      }
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
+
+  const isExpired = weekData?.expiresAt && Date.now() > weekData?.expiresAt;
+
+  const isLocked = weekData?.locked || isExpired;
+
+  /* 📸 PICK IMAGE */
+  const handleUpload = async index => {
+    try {
+      if (isLocked) {
+        Alert.alert('Week Locked', 'This fitness session has expired.');
+        return;
+      }
+
+      const result = await launchCamera({
+        mediaType: 'photo',
+        quality: 0.7,
+      });
+
+      if (result.didCancel) return;
+
+      const uri = result.assets?.[0]?.uri;
+
+      if (!uri) return;
+
+      tempPhotos[index] = uri;
+
+      /* instant UI */
       setPhotos(prev => {
         const updated = [...prev];
-        updated[index] = tempPhotos[index];
+
+        updated[index] = {
+          uri,
+          caption: `I'm at workout #${index + 1}!`,
+          uploadedAt: Date.now(),
+        };
+
         return updated;
+      });
+
+      await saveWorkout(index, uri);
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  /* SAVE TO FIREBASE */
+  const saveWorkout = async (index, uri) => {
+    try {
+      const ref = database().ref(WEEK_PATH);
+
+      const snapshot = await ref.once('value');
+
+      const data = snapshot.val() || {};
+
+      const now = Date.now();
+
+      /* LOCK CHECK */
+      if (data?.locked) {
+        Alert.alert('Locked', 'Week already locked.');
+        return;
+      }
+
+      /* EXPIRE CHECK */
+      if (data?.expiresAt && now > data.expiresAt) {
+        await ref.update({
+          locked: true,
+        });
+
+        Alert.alert('Expired', '24 hour workout window expired.');
+
+        return;
+      }
+
+      /* INIT START */
+      let startedAt = data?.startedAt || now;
+
+      let expiresAt = data?.expiresAt || startedAt + DAY_MS;
+
+      const existingPhotos = data?.workoutPhotos || {};
+
+      const workoutPhotos = Array.from(
+        { length: TOTAL },
+        (_, i) => existingPhotos[i] || null,
+      );
+
+      workoutPhotos[index] = {
+        uri,
+        caption: `I'm at workout #${index + 1}!`,
+        uploadedAt: now,
+      };
+
+      const totalCompleted = workoutPhotos.filter(Boolean).length;
+
+      const completed = totalCompleted === TOTAL;
+
+      await ref.update({
+        title: 'weekly_fitness_class',
+        target: '4 workout photos weekly',
+
+        startedAt,
+        expiresAt,
+
+        completed,
+        locked: completed,
+
+        totalCompleted,
+        updatedAt: now,
+
+        workoutPhotos,
       });
 
       tempPhotos[index] = null;
     } catch (e) {
-      console.log('Upload error:', e);
+      console.log('SAVE ERROR:', e);
     }
   };
 
   const done = photos.filter(Boolean).length;
+
   const progress = done / TOTAL;
 
-  /* CARD COMPONENT */
+  const getRemainingTime = () => {
+    if (!weekData?.expiresAt) return '24h remaining';
+
+    const diff = weekData.expiresAt - Date.now();
+
+    if (diff <= 0) return 'Expired';
+
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+
+    return `${hours}h remaining`;
+  };
+
+  /* CARD */
   const WorkoutCard = ({ index, photo }) => {
     const anim = useRef(new Animated.Value(0)).current;
 
@@ -206,32 +280,38 @@ export default function FitnessClassUI() {
 
             <View style={styles.cardHeaderText}>
               <Text style={styles.cardTitle}>Workout #{index + 1}</Text>
+
               <Text style={styles.cardSub}>
-                {isDone ? 'Photo uploaded ✓' : 'Tap to upload proof'}
+                {isDone ? photo?.caption : 'Tap to upload proof'}
               </Text>
             </View>
 
             {isDone && (
-              <TouchableOpacity
-                onPress={() => handleDone(index)}
-                style={styles.donePill}
-              >
-                <Text style={styles.donePillText}>Done</Text>
-              </TouchableOpacity>
+              <View style={styles.donePill}>
+                <Text style={styles.donePillText}>Uploaded</Text>
+              </View>
             )}
           </View>
 
           <TouchableOpacity
-            style={[styles.uploadBox, isDone && styles.uploadBoxDone]}
+            disabled={isLocked || isDone}
+            style={[
+              styles.uploadBox,
+              isDone && styles.uploadBoxDone,
+              isLocked && styles.lockedBox,
+            ]}
             onPress={() => handleUpload(index)}
             activeOpacity={0.8}
           >
-            {photo ? (
-              <Image source={{ uri: photo }} style={styles.uploadImage} />
+            {photo?.uri ? (
+              <Image source={{ uri: photo.uri }} style={styles.uploadImage} />
             ) : (
               <View style={styles.uploadPlaceholder}>
                 <CameraIcon />
-                <Text style={styles.uploadText}>+ Upload Photo</Text>
+
+                <Text style={styles.uploadText}>
+                  {isLocked ? 'Session Locked' : '+ Upload Photo'}
+                </Text>
               </View>
             )}
           </TouchableOpacity>
@@ -249,21 +329,29 @@ export default function FitnessClassUI() {
           <Text style={styles.heroTitle}>🏋️ Weekly Fitness Class</Text>
 
           <Text style={styles.heroSub}>
-            Complete 4 workouts and upload your proof
+            Upload 4 workout proofs within 24 hours
           </Text>
 
           <View style={styles.progressCard}>
             <View style={styles.progressLabelRow}>
               <Text style={styles.progressLabel}>Progress</Text>
+
               <Text style={styles.progressCount}>
                 {done} / {TOTAL} workouts
               </Text>
             </View>
+
             <View style={styles.progressBg}>
               <Animated.View
-                style={[styles.progressFill, { width: `${progress * 100}%` }]}
+                style={[
+                  styles.progressFill,
+                  {
+                    width: `${progress * 100}%`,
+                  },
+                ]}
               />
             </View>
+
             <View style={styles.progressDots}>
               {Array.from({ length: TOTAL }).map((_, i) => (
                 <View
@@ -272,69 +360,46 @@ export default function FitnessClassUI() {
                 />
               ))}
             </View>
+
+            <View style={styles.statusRow}>
+              <Text style={styles.statusText}>
+                {weekData?.completed
+                  ? 'Completed ✓'
+                  : isLocked
+                  ? 'Locked'
+                  : getRemainingTime()}
+              </Text>
+            </View>
           </View>
         </Animated.View>
 
         {photos.map((photo, index) => (
           <WorkoutCard key={index} index={index} photo={photo} />
         ))}
-
-        <TouchableOpacity style={styles.ctaBtn}>
-          <Text style={styles.ctaText}>Join Weekly Fitness Class</Text>
-        </TouchableOpacity>
       </View>
     </Wrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.dark },
-
-  /* Header */
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: (StatusBar.currentHeight || 44) + 8,
-    paddingHorizontal: 18,
-    paddingBottom: 10,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.15)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
+  root: {
     flex: 1,
-    textAlign: 'center',
-    color: colors.white,
-    fontSize: 18,
-    fontFamily: fontFamily.montserratBold,
   },
 
-  scroll: { paddingHorizontal: 18, paddingBottom: 48 },
-
-  /* Hero */
   heroTitle: {
     color: colors.white,
     fontSize: 22,
     fontFamily: fontFamily.montserratBold,
     marginBottom: 6,
-    includeFontPadding: false,
   },
+
   heroSub: {
     color: colors.grey,
     fontSize: 13,
     fontFamily: fontFamily.montserratMedium,
     marginBottom: 20,
-    lineHeight: 20,
   },
 
-  /* Progress */
   progressCard: {
     backgroundColor: colors.bubbleDark,
     borderRadius: 20,
@@ -343,21 +408,25 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 22,
   },
+
   progressLabelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 10,
   },
+
   progressLabel: {
     color: 'rgba(255,255,255,0.45)',
     fontSize: 12,
     fontFamily: fontFamily.montserratMedium,
   },
+
   progressCount: {
     color: colors.white,
     fontSize: 12,
     fontFamily: fontFamily.montserratSemiBold,
   },
+
   progressBg: {
     height: 6,
     borderRadius: 6,
@@ -365,21 +434,40 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 12,
   },
+
   progressFill: {
     height: '100%',
     backgroundColor: colors.secondary,
     borderRadius: 6,
   },
-  progressDots: { flexDirection: 'row', gap: 8 },
+
+  progressDots: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+
   dot: {
     flex: 1,
     height: 4,
     borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
-  dotFilled: { backgroundColor: colors.secondary },
 
-  /* Workout card */
+  dotFilled: {
+    backgroundColor: colors.secondary,
+  },
+
+  statusRow: {
+    marginTop: 14,
+    alignItems: 'center',
+  },
+
+  statusText: {
+    color: colors.secondary,
+    fontFamily: fontFamily.montserratSemiBold,
+    fontSize: 12,
+  },
+
   card: {
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 20,
@@ -388,16 +476,19 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 12,
   },
+
   cardDone: {
     borderColor: 'rgba(143,175,120,0.3)',
     backgroundColor: 'rgba(143,175,120,0.06)',
   },
+
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
     gap: 12,
   },
+
   numBadge: {
     width: 36,
     height: 36,
@@ -408,27 +499,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   numBadgeDone: {
     backgroundColor: colors.primary,
     borderColor: colors.secondary,
   },
+
   numText: {
     color: colors.white,
     fontSize: 14,
     fontFamily: fontFamily.montserratBold,
   },
-  cardHeaderText: { flex: 1 },
+
+  cardHeaderText: {
+    flex: 1,
+  },
+
   cardTitle: {
     color: colors.white,
     fontSize: 14,
     fontFamily: fontFamily.montserratSemiBold,
     marginBottom: 2,
   },
+
   cardSub: {
     color: colors.grey,
     fontSize: 11,
     fontFamily: fontFamily.montserratMedium,
   },
+
   donePill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -437,13 +536,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(143,175,120,0.3)',
   },
+
   donePillText: {
     color: colors.secondary,
     fontSize: 11,
     fontFamily: fontFamily.montserratSemiBold,
   },
 
-  /* Upload */
   uploadBox: {
     height: 130,
     borderRadius: 14,
@@ -455,45 +554,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.03)',
   },
-  uploadBoxDone: { borderStyle: 'solid', borderColor: 'rgba(143,175,120,0.3)' },
-  uploadPlaceholder: { alignItems: 'center', gap: 8 },
+
+  uploadBoxDone: {
+    borderStyle: 'solid',
+    borderColor: 'rgba(143,175,120,0.3)',
+  },
+
+  lockedBox: {
+    opacity: 0.5,
+  },
+
+  uploadPlaceholder: {
+    alignItems: 'center',
+    gap: 8,
+  },
+
   uploadText: {
     color: 'rgba(255,255,255,0.3)',
     fontSize: 13,
     fontFamily: fontFamily.montserratMedium,
   },
-  uploadImage: { width: '100%', height: '100%' },
-  uploadOverlay: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-  },
-  retakeBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 49,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  retakeText: {
-    color: colors.white,
-    fontSize: 11,
-    fontFamily: fontFamily.montserratMedium,
-  },
 
-  /* CTA */
-  ctaBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 49,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  ctaText: {
-    color: colors.white,
-    fontSize: 15,
-    fontFamily: fontFamily.montserratSemiBold,
-    letterSpacing: 0.3,
+  uploadImage: {
+    width: '100%',
+    height: '100%',
   },
 });

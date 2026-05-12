@@ -151,6 +151,10 @@ export default function FeedDetails({ navigation, route }) {
                 likes: post.likesCount,
                 comments: post.commentsCount,
                 isLiked: post.isLiked,
+
+                beverageName: post.beverageName,
+                ingredients: post.ingredients || [],
+                type: post.type,
               }}
               onLikePress={handleLike}
               onCommentPress={() => setShowCommentBox(!showCommentBox)}

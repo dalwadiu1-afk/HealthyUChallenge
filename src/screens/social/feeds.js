@@ -19,44 +19,6 @@ import ProfileHeader from '../../components/profile/ProfileHeader';
 import { Wrapper } from '../../components';
 import database from '@react-native-firebase/database';
 
-const { width } = Dimensions.get('window');
-
-const POSTS = [
-  {
-    id: 1,
-    name: 'Linh Nguyen',
-    message:
-      'Just finished a 5K morning run — feeling incredible! Who else is keeping up with their daily steps? 🏃‍♀️',
-    time: '10:30 AM · 2 min ago',
-    picture:
-      'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-    likes: 24,
-    comments: 8,
-  },
-  {
-    id: 2,
-    name: 'Marcus Lee',
-    message:
-      'Hit a new personal best at the gym today. Consistency is everything — keep going everyone! 💪',
-    time: '9:15 AM · 1 hr ago',
-    picture:
-      'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-    likes: 41,
-    comments: 12,
-  },
-  {
-    id: 3,
-    name: 'Sara Kim',
-    message:
-      'Meal prepped for the whole week — all balanced, all clean 🥗 Drop a 🙌 if you meal prep too!',
-    time: 'Yesterday · 8:00 PM',
-    picture:
-      'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-    likes: 33,
-    comments: 5,
-  },
-];
-
 const STORIES = [
   { id: 0, name: 'Your Story', color: '#4D6644', isOwn: true },
   { id: 1, name: 'Linh', color: '#5A96FF' },
@@ -159,18 +121,6 @@ export default function Feeds({ navigation }) {
     }).start();
   }, []);
 
-  const headerStyle = {
-    opacity: headerAnim,
-    transform: [
-      {
-        translateY: headerAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [-16, 0],
-        }),
-      },
-    ],
-  };
-
   const filteredPosts = posts.filter(
     p =>
       p.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -261,12 +211,20 @@ export default function Feeds({ navigation }) {
               <ChatCard
                 item={{
                   name: item?.name,
-                  message: item?.message,
+                  message: item?.message || item?.text,
                   picture: item?.image,
                   time: formatTime(item?.createdAt),
                   likes: item?.likesCount,
                   comments: item?.commentsCount,
                   isLiked: item?.isLiked,
+
+                  beverageName: item.beverageName,
+                  ingredients: item.ingredients || [],
+                  type: item.type,
+
+                  snackName: item?.snackName,
+                  qty: item?.qty,
+                  type: item?.type,
                 }}
                 index={index}
                 onLikePress={() => toggleLike(item.id)}

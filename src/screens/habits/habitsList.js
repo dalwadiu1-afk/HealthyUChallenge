@@ -12,8 +12,8 @@ import {
 } from 'react-native';
 import { colors, fontFamily } from '../../constant';
 import { Wrapper } from '../../components';
-
-const { width } = Dimensions.get('window');
+import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
 
 const CATEGORIES = ['All', 'Fitness', 'Nutrition', 'Sleep', 'Wellness'];
 
@@ -47,141 +47,6 @@ const CATEGORY_STYLE = {
 /* =======================
    RESTORED SCREEN NAMES
 ======================= */
-const ALL_HABITS = [
-  {
-    id: 1,
-    title: 'Nutrition Session',
-    description: 'Book and attend a free nutrition counseling session',
-    screenName: 'BookAnAppointment',
-    category: 'Nutrition',
-  },
-  {
-    id: 2,
-    title: 'Daily Steps',
-    description: 'Walk your target number of steps every day',
-    screenName: 'WalkingRewardBoard',
-    category: 'Fitness',
-  },
-  {
-    id: 3,
-    title: 'Fiber Goal',
-    description: 'Eat 25–38g fiber daily for at least 20 days',
-    screenName: 'DailyFiberCounts', // ✅ FIXED
-    category: 'Nutrition',
-  },
-  {
-    id: 4,
-    title: 'Sleep Well',
-    description: 'Get 7–9 hours of sleep each night',
-    screenName: 'SleepMeasure',
-    category: 'Sleep',
-  },
-  {
-    id: 5,
-    title: 'Fitness Class',
-    description: 'Join a weekly fitness class',
-    screenName: 'WeeklyFitnessClass',
-    category: 'Fitness',
-  },
-  {
-    id: 6,
-    title: 'Strength Training',
-    description: 'Do weight training at least 2x per week',
-    screenName: 'WeightResistanceTraining',
-    category: 'Fitness',
-  },
-  {
-    id: 7,
-    title: 'Safe Weight Loss',
-    description: 'Lose no more than 2 lbs per week for 4 weeks',
-    screenName: 'WeightChallengeUI',
-    category: 'Wellness',
-  },
-  {
-    id: 8,
-    title: 'Half Plate Veggies',
-    description: 'Make half your plate fruits & veggies once daily',
-    screenName: 'HalfPlateFruitsVeggies',
-    category: 'Nutrition',
-  },
-  {
-    id: 9,
-    title: 'Meatless Day',
-    description: 'Go meat-free at least once per week',
-    screenName: 'MeatlessChallenge',
-    category: 'Nutrition',
-  },
-  {
-    id: 10,
-    title: 'Fermented Foods',
-    description: 'Eat 1 fermented food daily for 7 days',
-    screenName: 'FermentedFoodChallenge',
-    category: 'Nutrition',
-  },
-  {
-    id: 11,
-    title: 'Body Fat Progress',
-    description: 'Improve body fat percentage over time',
-    screenName: 'BodyFatGoalScreen',
-    category: 'Wellness',
-  },
-  {
-    id: 12,
-    title: 'Try New Veggies',
-    description: 'Eat 1 new vegetable per week (2 weeks)',
-    screenName: 'VeggieChallenge',
-    category: 'Nutrition',
-  },
-  {
-    id: 13,
-    title: 'Limit Sugar',
-    description: 'Stay under daily added sugar limit for 21 days',
-    screenName: 'SugarChartDays',
-    category: 'Nutrition',
-  },
-  {
-    id: 14,
-    title: 'Workout Buddy',
-    description: 'Exercise with a friend 4 times',
-    screenName: 'FriendWorkoutChallenge',
-    category: 'Fitness',
-  },
-  {
-    id: 15,
-    title: 'Cardio Progress',
-    description: 'Increase cardio time or intensity',
-    screenName: 'CardioTrackerUI',
-    category: 'Fitness',
-  },
-  {
-    id: 16,
-    title: 'Healthy Drinks',
-    description: 'Create a no-added-sugar drink combo',
-    screenName: 'BeverageChallengeUI',
-    category: 'Nutrition',
-  },
-  {
-    id: 17,
-    title: 'Snack Planning',
-    description: 'Build and shop a healthy snack list',
-    screenName: 'SnackListingUI',
-    category: 'Nutrition',
-  },
-  {
-    id: 18,
-    title: 'Daily Fruits',
-    description: 'Eat 2–3 servings of fruit every day',
-    screenName: 'FruitTrackerUI',
-    category: 'Nutrition',
-  },
-  {
-    id: 19,
-    title: 'Custom Goal',
-    description: 'Add your own personal health goal',
-    screenName: 'FutureIdeasUI',
-    category: 'Wellness',
-  },
-];
 
 /* =======================
    FLIP CARD
@@ -291,6 +156,158 @@ function FlipCard({ item, navigation, index }) {
 ======================= */
 export default function HabitsList({ navigation }) {
   const [activeCategory, setActiveCategory] = useState('All');
+  const [appointmentScreen, setAppointmentScreen] =
+    useState('BookAnAppointment');
+  const userId = auth().currentUser.uid;
+  const ALL_HABITS = [
+    {
+      id: 1,
+      title: 'Nutrition Session',
+      description: 'Book and attend a free nutrition counseling session',
+      screenName: appointmentScreen,
+      category: 'Nutrition',
+    },
+    {
+      id: 2,
+      title: 'Daily Steps',
+      description: 'Walk your target number of steps every day',
+      screenName: 'WalkingRewardBoard',
+      category: 'Fitness',
+    },
+    {
+      id: 3,
+      title: 'Fiber Goal',
+      description: 'Eat 25–38g fiber daily for at least 20 days',
+      screenName: 'DailyFiberCounts', // ✅ FIXED
+      category: 'Nutrition',
+    },
+    {
+      id: 4,
+      title: 'Sleep Well',
+      description: 'Get 7–9 hours of sleep each night',
+      screenName: 'SleepMeasure',
+      category: 'Sleep',
+    },
+    {
+      id: 5,
+      title: 'Fitness Class',
+      description: 'Join a weekly fitness class',
+      screenName: 'WeeklyFitnessClass',
+      category: 'Fitness',
+    },
+    {
+      id: 6,
+      title: 'Strength Training',
+      description: 'Do weight training at least 2x per week',
+      screenName: 'WeightResistanceTraining',
+      category: 'Fitness',
+    },
+    {
+      id: 7,
+      title: 'Safe Weight Loss',
+      description: 'Lose no more than 2 lbs per week for 4 weeks',
+      screenName: 'WeightChallengeUI',
+      category: 'Wellness',
+    },
+    {
+      id: 8,
+      title: 'Half Plate Veggies',
+      description: 'Make half your plate fruits & veggies once daily',
+      screenName: 'HalfPlateFruitsVeggies',
+      category: 'Nutrition',
+    },
+    {
+      id: 9,
+      title: 'Meatless Day',
+      description: 'Go meat-free at least once per week',
+      screenName: 'MeatlessChallenge',
+      category: 'Nutrition',
+    },
+    {
+      id: 10,
+      title: 'Fermented Foods',
+      description: 'Eat 1 fermented food daily for 7 days',
+      screenName: 'FermentedFoodChallenge',
+      category: 'Nutrition',
+    },
+    {
+      id: 11,
+      title: 'Body Fat Progress',
+      description: 'Improve body fat percentage over time',
+      screenName: 'BodyFatGoalScreen',
+      category: 'Wellness',
+    },
+    {
+      id: 12,
+      title: 'Try New Veggies',
+      description: 'Eat 1 new vegetable per week (2 weeks)',
+      screenName: 'VeggieChallenge',
+      category: 'Nutrition',
+    },
+    {
+      id: 13,
+      title: 'Limit Sugar',
+      description: 'Stay under daily added sugar limit for 21 days',
+      screenName: 'SugarChartDays',
+      category: 'Nutrition',
+    },
+    {
+      id: 14,
+      title: 'Workout Buddy',
+      description: 'Exercise with a friend 4 times',
+      screenName: 'FriendWorkoutChallenge',
+      category: 'Fitness',
+    },
+    {
+      id: 15,
+      title: 'Cardio Progress',
+      description: 'Increase cardio time or intensity',
+      screenName: 'CardioTrackerUI',
+      category: 'Fitness',
+    },
+    {
+      id: 16,
+      title: 'Healthy Drinks',
+      description: 'Create a no-added-sugar drink combo',
+      screenName: 'BeverageChallengeUI',
+      category: 'Nutrition',
+    },
+    {
+      id: 17,
+      title: 'Snack Planning',
+      description: 'Build and shop a healthy snack list',
+      screenName: 'SnackListingUI',
+      category: 'Nutrition',
+    },
+    {
+      id: 18,
+      title: 'Daily Fruits',
+      description: 'Eat 2–3 servings of fruit every day',
+      screenName: 'FruitTrackerUI',
+      category: 'Nutrition',
+    },
+    {
+      id: 19,
+      title: 'Custom Goal',
+      description: 'Add your own personal health goal',
+      screenName: 'FutureIdeasUI',
+      category: 'Wellness',
+    },
+  ];
+  const [profile, setProfile] = useState(null);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const ref = database().ref(`users/${userId}/profile`);
+
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val();
+      setProfile(data || null);
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
 
   const filtered =
     activeCategory === 'All'
@@ -298,7 +315,9 @@ export default function HabitsList({ navigation }) {
       : ALL_HABITS.filter(h => h.category === activeCategory);
 
   const headerFade = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
+    // checkAppointmentProgress();
     Animated.timing(headerFade, {
       toValue: 1,
       duration: 600,
@@ -306,6 +325,55 @@ export default function HabitsList({ navigation }) {
     }).start();
   }, []);
 
+  const checkAppointmentProgress = async () => {
+    const now = Date.now();
+
+    const monthKey = new Date()
+      .toLocaleString('en-US', { month: 'long', year: 'numeric' })
+      .replace(' ', '_');
+
+    const snapshot = await database()
+      .ref(`users/${userId}/habits/${monthKey}`)
+      .once('value');
+
+    const habitData = snapshot.val();
+
+    if (!habitData) {
+      setAppointmentScreen('BookAnAppointment');
+      return;
+    }
+
+    let isActive = false;
+
+    Object.values(habitData).forEach(item => {
+      if (!item?.createdAt || !item?.doctorId) return;
+
+      const startDate = item.createdAt;
+      const endDate = startDate + 7 * 24 * 60 * 60 * 1000;
+
+      if (now >= startDate && now <= endDate) {
+        isActive = true;
+      }
+    });
+
+    if (isActive) {
+      setAppointmentScreen('SessionActiveScreen'); // 🔥 during 7 days
+    } else {
+      setAppointmentScreen('SessionConfirmation'); // after
+    }
+  };
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+
+    if (hour < 12) return 'Good Morning 🌿';
+    if (hour < 17) return 'Good Afternoon ☀️';
+    if (hour < 21) return 'Good Evening 🌙';
+    return 'Good Night 🌌';
+  };
+
+  const greeting = getGreeting();
+  const displayName = profile?.name || profile?.username || '';
   return (
     <View style={styles.container}>
       <Wrapper containerStyle={{ paddingHorizontal: 0 }} orbsRight>
@@ -323,19 +391,21 @@ export default function HabitsList({ navigation }) {
               {/* Header */}
               <View style={styles.header}>
                 <View>
-                  <Text style={styles.headerGreeting}>Good Morning 🌿</Text>
+                  <Text style={styles.headerGreeting}>
+                    {displayName ? `${greeting}, ${displayName}` : greeting}
+                  </Text>
                   <Text style={styles.headerTitle}>Your Habits</Text>
                 </View>
-                <View style={styles.statsRow}>
+                {/* <View style={styles.statsRow}>
                   <View style={styles.statBadge}>
                     <Text style={styles.statNum}>{ALL_HABITS.length}</Text>
                     <Text style={styles.statLabel}>Total</Text>
                   </View>
                   <View style={[styles.statBadge, { marginLeft: 8 }]}>
-                    <Text style={styles.statNum}>3</Text>
+                    <Text style={styles.s  tatNum}>3</Text>
                     <Text style={styles.statLabel}>Done</Text>
                   </View>
-                </View>
+                </View> */}
               </View>
 
               {/* Category filter */}

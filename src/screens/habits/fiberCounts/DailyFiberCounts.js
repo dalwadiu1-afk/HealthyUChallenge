@@ -18,9 +18,9 @@ import Svg, {
 } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
 import database from '@react-native-firebase/database';
 import { getSmartTips } from '../../../utils/helper';
+import { Header, Wrapper } from '../../../components';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -30,10 +30,24 @@ const BAR_WIDTH = 14;
 const ITEM_WIDTH = 30;
 
 const START_DATE = new Date('2026-04-15');
-const USER_ID = auth().currentUser?.uid;
 
-const GOAL_MIN = 25;
-const GOAL_MAX = 38;
+const buildFiberTemplate = startDateStr => {
+  const start = new Date(startDateStr);
+  start.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: 30 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+
+    const key = d.toISOString().split('T')[0]; // YYYY-MM-DD
+
+    return {
+      key,
+      fiber: 0,
+      date: d,
+    };
+  });
+};
 
 function BackIcon() {
   return (
@@ -64,66 +78,83 @@ function StatRow({ emoji, label, value, last }) {
   );
 }
 
-const getTodayIndex = () => {
-  const today = new Date();
-
-  // normalize time (important to avoid timezone issues)
-  const start = new Date(START_DATE);
-  start.setHours(0, 0, 0, 0);
-  today.setHours(0, 0, 0, 0);
-
-  const diffDays = Math.floor((today - start) / (1000 * 60 * 60 * 24));
-
-  // clamp between 0 and 29 (since you only generate 30 days)
-  return Math.max(0, Math.min(29, diffDays));
-};
-
 export default function FiberChartDays({ navigation }) {
   const [tips, setTips] = useState([]);
   const [input, setInput] = useState('');
   const [selected, setSelected] = useState(10);
   const [fiberData, setFiberData] = useState([]);
+  const [goalRange, setGoalRange] = useState({
+    min: 25,
+    max: 38,
+  });
 
   /* ───────── FIRESTORE LIVE DATA ───────── */
   useEffect(() => {
-    const ref = database().ref(`users/${USER_ID}`);
+    let userRef = null;
 
-    const listener = ref.on('value', snapshot => {
-      const data = snapshot.val() || {};
-      const logs = data.logs || {};
-      const start = data?.goal?.startDate
-        ? new Date(data.goal.startDate)
-        : new Date(); // fallback
+    const unsubscribeAuth = auth().onAuthStateChanged(user => {
+      if (!user) {
+        setFiberData(buildFiberTemplate('2026-04-15'));
+        return;
+      }
 
-      const formatted = Array.from({ length: 30 }, (_, i) => {
-        const date = new Date(start);
-        date.setDate(start.getDate() + i);
+      const uid = user.uid;
+      userRef = database().ref(`/users/${uid}`);
 
-        const key = date.toISOString().split('T')[0];
+      userRef.on('value', snapshot => {
+        const data = snapshot.val() || {};
 
-        return {
-          dayIndex: i,
-          fiber: logs[key]?.fiber || 0,
-          date,
-        };
+        const startDate = data?.goal?.startDate || '2026-04-15';
+        const habits = data?.habits || {};
+        const gender = data?.profile?.gender;
+
+        const goal =
+          gender === 'male' ? { min: 30, max: 38 } : { min: 21, max: 25 };
+
+        setGoalRange(goal);
+
+        const baseData = buildFiberTemplate(startDate);
+
+        const keys = Object.keys(habits);
+
+        if (!keys.length) {
+          setFiberData(baseData);
+          setTips(getSmartTips(baseData));
+          return;
+        }
+
+        const latestKey = keys.sort((a, b) => {
+          const [, mA, yA] = a.split('_');
+          const [, mB, yB] = b.split('_');
+          return new Date(`${mB} 1, ${yB}`) - new Date(`${mA} 1, ${yA}`);
+        })[0];
+
+        const days = habits?.[latestKey]?.days || {};
+
+        const formatted = baseData.map(item => ({
+          ...item,
+          fiber: Number(days?.[item.key]?.progress || 0),
+        }));
+
+        setFiberData(formatted);
+        setTips(getSmartTips(formatted));
       });
-
-      setFiberData(formatted);
-      setTips(getSmartTips(formatted));
-      console.log('getSmartTips(formatted) :>> ', getSmartTips(formatted));
-
-      // set today automatically
-      setSelected(getTodayIndex(start));
     });
 
-    // cleanup
-    return () => ref.off('value', listener);
+    return () => {
+      if (userRef) userRef.off();
+      unsubscribeAuth();
+    };
   }, []);
 
-  const max = Math.max(...fiberData.map(d => d.fiber), 40);
+  const max = fiberData.length
+    ? Math.max(...fiberData.map(d => d.fiber), 40)
+    : 40;
   const graphHeight = CHART_HEIGHT - PADDING * 2;
-  const getBarH = val => (val / max) * graphHeight;
-
+  const getBarH = val => {
+    if (!max) return 0;
+    return (val / max) * graphHeight;
+  };
   const formatDate = date =>
     date.toLocaleDateString('en-US', { day: 'numeric' });
 
@@ -134,36 +165,39 @@ export default function FiberChartDays({ navigation }) {
 
     setInput('');
 
+    const uid = auth().currentUser?.uid;
     const today = new Date();
-    const todayKey = today.toISOString().split('T')[0];
 
-    const currentTodayData = fiberData.find(
-      d => d.date.toISOString().split('T')[0] === todayKey,
-    );
+    const day = today.toISOString().split('T')[0];
+    const monthName = today.toLocaleString('en-US', { month: 'long' });
+    const year = today.getFullYear();
 
-    const newFiber = (currentTodayData?.fiber || 0) + val;
+    const habitKey = `${monthName}_${year}`;
 
-    // update local state (same as before)
-    const updated = fiberData.map(item => {
-      const key = item.date.toISOString().split('T')[0];
+    // find existing value
+    const current = fiberData.find(d => d.date.getDate() === today.getDate());
 
-      if (key === todayKey) {
-        return {
-          ...item,
-          fiber: newFiber,
-        };
-      }
+    const newFiber = (current?.fiber || 0) + val;
 
-      return item;
-    });
-
-    setFiberData(updated);
-
-    // ✅ ONLY CHANGE HERE (Firestore → Realtime DB)
     try {
-      await database().ref(`users/${USER_ID}/logs/${todayKey}`).update({
-        fiber: newFiber,
+      await database()
+        .ref(`users/${uid}/habits/${habitKey}/days/${day}`)
+        .update({
+          progress: String(newFiber),
+          completed: newFiber >= goalRange.min,
+        });
+
+      // optional: set meta (only once)
+      await database().ref(`users/${uid}/habits/${habitKey}`).update({
+        title: 'Fiber Intake',
+        target: '25-38g',
       });
+
+      setFiberData(prev =>
+        prev.map(d =>
+          d.date.getDate() === today.getDate() ? { ...d, fiber: newFiber } : d,
+        ),
+      );
     } catch (e) {
       console.log('Error updating fiber:', e);
     }
@@ -175,7 +209,7 @@ export default function FiberChartDays({ navigation }) {
 
   const remainingDays = 30 - (selected + 1);
   const requiredAvg =
-    remainingDays > 0 ? (GOAL_MIN * 30 - total) / remainingDays : 0;
+    remainingDays > 0 ? (goalRange.min * 30 - total) / remainingDays : 0;
 
   const trendPoints = fiberData
     .map((d, i) => {
@@ -187,7 +221,7 @@ export default function FiberChartDays({ navigation }) {
 
   const warning = useMemo(() => {
     const last7 = fiberData.slice(-7);
-    const lowDays = last7.filter(d => d.fiber < GOAL_MIN).length;
+    const lowDays = last7.filter(d => d.fiber < goalRange.min).length;
     if (lowDays >= 4) return '⚠️ Severe low fiber trend detected';
     if (lowDays >= 2) return '⚠️ Fiber intake inconsistent';
     return null;
@@ -195,25 +229,15 @@ export default function FiberChartDays({ navigation }) {
 
   return (
     <View style={styles.root}>
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        barStyle="light-content"
+      <Header
+        header={'Fiber Tracker'}
+        headerContainer={{
+          marginTop: StatusBar.currentHeight,
+          paddingHorizontal: 24,
+        }}
       />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation?.goBack()}
-        >
-          <BackIcon />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Fiber Tracker</Text>
-        <View style={styles.headerRight} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <Wrapper orbsRight safeAreaPops={{ edges: ['bottom'] }}>
         <View style={styles.selectedPill}>
           <Text style={styles.selectedPillText}>
             Day {selected + 1} · {fiberData[selected]?.fiber || 0}g fiber
@@ -227,7 +251,7 @@ export default function FiberChartDays({ navigation }) {
               {fiberData.map((item, index) => {
                 const barHeight = getBarH(item.fiber);
                 const inRange =
-                  item.fiber >= GOAL_MIN && item.fiber <= GOAL_MAX;
+                  item.fiber >= goalRange.min && item.fiber <= goalRange.max;
 
                 return (
                   <View
@@ -352,7 +376,7 @@ export default function FiberChartDays({ navigation }) {
         <TouchableOpacity style={styles.shareBtn}>
           <Text style={styles.shareBtnText}>Share Progress</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </Wrapper>
     </View>
   );
 }

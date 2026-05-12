@@ -20,67 +20,69 @@ import { Header, Wrapper } from '../../../components';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const USER_ID = auth().currentUser?.uid;
 
-const getToday = () => new Date().toISOString().split('T')[0];
-const TOTAL_DAYS = 30;
+const today = new Date();
+
+const CURRENT_MONTH_KEY = `${today.toLocaleString('default', {
+  month: 'long',
+})}_${today.getFullYear()}`;
+
+const TOTAL_DAYS = new Date(
+  today.getFullYear(),
+  today.getMonth() + 1,
+  0,
+).getDate();
+
+const TODAY_DAY = String(today.getDate()).padStart(2, '0');
 const CARD_SIZE = (SCREEN_WIDTH - 18 * 2 - 10) / 2;
 
 const HalfPlateFruitsVeggies = ({ navigation }) => {
-  const [photos, setPhotos] = useState(Array(TOTAL_DAYS).fill(null));
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [startDate, setStartDate] = useState(null);
+  const [habitData, setHabitData] = useState({});
 
   useEffect(() => {
     if (!USER_ID) return;
 
-    const ref = database().ref(`users/${USER_ID}/logs/halfPlateChallenge`);
+    const ref = database().ref(
+      `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}`,
+    );
 
     const listener = ref.on('value', snapshot => {
       const data = snapshot.val();
 
-      if (!data) return;
-
-      // restore start date
-      if (data.startDate) {
-        const sd = new Date(data.startDate);
-        setStartDate(sd);
-
-        const diff = Math.floor((new Date() - sd) / (1000 * 60 * 60 * 24));
-
-        setCurrentIndex(Math.min(diff, TOTAL_DAYS - 1));
+      if (data) {
+        setHabitData(data);
+      } else {
+        setHabitData({
+          title: 'Half Plate Fruits & Veggies',
+          target: '1 Photo',
+          days: {},
+        });
       }
-
-      // restore days safely
-      const serverDays = data?.days || {};
-      const restored = Array(TOTAL_DAYS).fill(null);
-
-      Object.entries(serverDays).forEach(([day, value]) => {
-        restored[Number(day) - 1] = value;
-      });
-
-      setPhotos(restored);
     });
 
     return () => ref.off('value', listener);
   }, []);
 
-  const saveDay = async (index, uri) => {
-    const ref = database().ref(`users/${USER_ID}/logs/halfPlateChallenge`);
-
-    const timestamp = new Date().toISOString();
+  const saveDay = async (dayKey, uri) => {
+    const ref = database().ref(
+      `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}`,
+    );
 
     await ref.update({
-      startDate: startDate?.toISOString() || new Date().toISOString(),
+      title: 'Half Plate Fruits & Veggies',
+      target: '1 Photo',
+      startedAt: habitData?.startedAt || new Date().toISOString(),
 
-      [`days/${index + 1}`]: {
+      [`days/${dayKey}`]: {
         uri,
-        timestamp,
+        completed: true,
+        timestamp: new Date().toISOString(),
       },
 
       updatedAt: database.ServerValue.TIMESTAMP,
     });
   };
 
-  const pickImage = async index => {
+  const pickImage = async dayKey => {
     const granted = await requestCameraPermission();
     if (!granted) return;
 
@@ -90,69 +92,61 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
       const uri = res?.assets?.[0]?.uri;
       if (!uri) return;
 
-      const updated = [...photos];
-      updated[index] = {
-        uri,
-        timestamp: new Date().toISOString(),
-      };
-
-      setPhotos(updated);
-
-      await saveDay(index, uri);
+      await saveDay(dayKey, uri);
     });
   };
 
-  const deletePhoto = async index => {
-    const newPhotos = [...photos];
-    newPhotos[index] = null;
-    setPhotos(newPhotos);
-
-    const docRef = doc(db, 'users', USER_ID);
-
-    await setDoc(
-      docRef,
-      {
-        logs: {
-          halfPlateChallenge: {
-            days: {
-              [index + 1]: null,
-            },
-          },
-        },
-      },
-      { merge: true },
-    );
+  const deletePhoto = async dayKey => {
+    await database()
+      .ref(
+        `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}/days/${dayKey}`,
+      )
+      .remove();
   };
 
-  const completed = photos.filter(Boolean).length;
+  const days = habitData?.days || {};
+
+  const completed = Object.values(days).filter(item => item?.completed).length;
+
   const progress = completed / TOTAL_DAYS;
 
   // Pair days into rows of 2
   const rows = Array.from({ length: Math.ceil(TOTAL_DAYS / 2) }, (_, i) => [
-    i * 2,
-    i * 2 + 1 < TOTAL_DAYS ? i * 2 + 1 : null,
+    i * 2 + 1,
+    i * 2 + 2 <= TOTAL_DAYS ? i * 2 + 2 : null,
   ]);
 
-  const DayCard = ({ index }) => {
-    if (index === null) return <View style={{ width: CARD_SIZE }} />;
+  const DayCard = ({ dayNumber }) => {
+    if (!dayNumber) return <View style={{ width: CARD_SIZE }} />;
 
-    const item = photos[index];
-    const isLocked = index > currentIndex;
-    const isDone = !!item;
+    const dayKey = String(dayNumber).padStart(2, '0');
+
+    const item = days?.[dayKey];
+
+    // LOCK OLD DAYS
+    const isPastDay = Number(dayKey) < Number(TODAY_DAY);
+
+    // ONLY TODAY OPEN
+    const isToday = dayKey === TODAY_DAY;
+
+    // FUTURE LOCKED
+    const isFuture = Number(dayKey) > Number(TODAY_DAY);
+
+    const isLocked = isPastDay || isFuture;
+
+    const isDone = !!item?.completed;
 
     return (
       <View
         style={[
           styles.card,
           isDone && styles.cardDone,
-          isLocked && styles.cardLocked,
+          isLocked && !isDone && styles.cardLocked,
         ]}
       >
-        {/* Day label */}
         <View style={styles.cardHeader}>
-          <Text style={[styles.dayLabel, isLocked && styles.dayLabelLocked]}>
-            Day {index + 1}
-          </Text>
+          <Text style={styles.dayLabel}>Day {dayNumber}</Text>
+
           {isDone && (
             <View style={styles.doneBadge}>
               <Text style={styles.doneBadgeText}>✓</Text>
@@ -160,35 +154,44 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
           )}
         </View>
 
-        {/* Content */}
         {isDone ? (
           <View style={styles.photoWrap}>
             <Image source={{ uri: item.uri }} style={styles.photo} />
-            <Text style={styles.timestamp}>{item.timestamp}</Text>
-            <View style={styles.photoActions}>
-              <TouchableOpacity
-                style={styles.retakeBtn}
-                onPress={() => pickImage(index)}
-              >
-                <Text style={styles.retakeText}>Retake</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.deleteBtn}
-                onPress={() => deletePhoto(index)}
-              >
-                <Text style={styles.deleteText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
+
+            <Text style={styles.timestamp}>
+              {new Date(item.timestamp).toLocaleDateString()}
+            </Text>
+
+            {!isPastDay && (
+              <View style={styles.photoActions}>
+                <TouchableOpacity
+                  style={styles.retakeBtn}
+                  onPress={() => pickImage(dayKey)}
+                >
+                  <Text style={styles.retakeText}>Retake</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.deleteBtn}
+                  onPress={() => deletePhoto(dayKey)}
+                >
+                  <Text style={styles.deleteText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         ) : isLocked ? (
           <View style={styles.lockedBox}>
             <Text style={styles.lockEmoji}>🔒</Text>
-            <Text style={styles.lockedText}>Locked</Text>
+
+            <Text style={styles.lockedText}>
+              {isPastDay ? 'Missed' : 'Locked'}
+            </Text>
           </View>
         ) : (
           <TouchableOpacity
             style={styles.uploadBtn}
-            onPress={() => pickImage(index)}
+            onPress={() => pickImage(dayKey)}
             activeOpacity={0.8}
           >
             <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
@@ -205,6 +208,7 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
                 strokeWidth={1.8}
               />
             </Svg>
+
             <Text style={styles.uploadText}>Upload Photo</Text>
           </TouchableOpacity>
         )}
@@ -236,9 +240,22 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
           </View>
           {/* Week indicators */}
           <View style={styles.weekRow}>
-            {['W1', 'W2', 'W3', 'W4'].map((w, i) => {
+            {[0, 1, 2, 3].map(i => {
+              const start = i * 7 + 1;
+              const end = Math.min(start + 6, TOTAL_DAYS);
+
+              const weekDays = Array.from(
+                { length: end - start + 1 },
+                (_, idx) => {
+                  const day = String(start + idx).padStart(2, '0');
+                  return days?.[day];
+                },
+              );
+
               const weekDone =
-                photos.slice(i * 7, (i + 1) * 7).filter(Boolean).length === 7;
+                weekDays.filter(item => item?.completed).length ===
+                weekDays.length;
+
               return (
                 <View
                   key={i}
@@ -250,7 +267,7 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
                       weekDone && styles.weekChipTextDone,
                     ]}
                   >
-                    {w}
+                    W{i + 1}
                   </Text>
                 </View>
               );
@@ -261,8 +278,8 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
         {/* Day grid */}
         {rows.map((pair, rowIndex) => (
           <View key={rowIndex} style={styles.row}>
-            <DayCard index={pair[0]} />
-            <DayCard index={pair[1]} />
+            <DayCard dayNumber={pair[0]} />
+            <DayCard dayNumber={pair[1]} />
           </View>
         ))}
       </Wrapper>

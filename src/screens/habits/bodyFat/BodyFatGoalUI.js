@@ -25,11 +25,20 @@ import Svg, {
 } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
+import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet';
+const today = new Date();
 
+const CURRENT_MONTH_KEY = `${today.toLocaleString('default', {
+  month: 'long',
+})}_${today.getFullYear()}`;
 const user = auth().currentUser;
 const USER_ID = user?.uid || 'USER_UID';
 const CORRECT_OTP = '1234';
 const { height } = Dimensions.get('window');
+
+const generateCode = () => {
+  return Math.floor(1000 + Math.random() * 9000).toString();
+};
 
 function GradientBg({ id, c1, c2, r = 20, horizontal = false }) {
   return (
@@ -123,12 +132,14 @@ const BodyFatGoalScreen = ({ navigation }) => {
   const [targetBFP, setTargetBFP] = useState(18);
   const [showOtp, setShowOtp] = useState(false);
   const [editable, setEditable] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
   const [locked, setLocked] = useState(false);
-
+  const otpSheetRef = useRef(null);
   const [otp, setOtp] = useState(['', '', '', '']);
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-  const difference = Math.abs(targetBFP - startBFP);
+  const diff = targetBFP - startBFP;
+  const difference = Math.abs(diff);
 
   const getValidation = () => {
     if (difference === 0) return '⚠️ Start and target cannot be the same';
@@ -150,6 +161,7 @@ const BodyFatGoalScreen = ({ navigation }) => {
 
   useEffect(() => {
     if (!USER_ID) return;
+    initCode();
 
     const checkGoal = async () => {
       const snapshot = await database()
@@ -183,55 +195,66 @@ const BodyFatGoalScreen = ({ navigation }) => {
     checkGoal();
   }, []);
 
-  const openOtp = () => {
-    setShowOtp(true);
+  const initCode = async () => {
+    const code = generateCode();
 
-    Animated.timing(slideAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
+    const now = Date.now();
+    const baseURL = `/users/${USER_ID}/habits`;
 
-  const closeOtp = () => {
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => setShowOtp(false));
-
-    const enteredOtp = otp.join('');
-    console.log('enteredOtp === CORRECT_OTP :>> ', enteredOtp === CORRECT_OTP);
-    if (enteredOtp === CORRECT_OTP && !locked) {
-      setEditable(true);
-    } else {
-      setEditable(false);
-    }
-  };
-
-  const uploadData = async () => {
-    const user = auth().currentUser;
-
-    if (!user) {
-      console.log('User not logged in');
-      return;
-    }
-
-    try {
-      await database().ref(`/users/${user.uid}/bodyFatGoal`).set({
-        startBFP,
-        targetBFP,
-        goalType,
-        createdAt: Date.now(),
+    await database().ref(`${baseURL}`).set({
+      title: 'Body Fat',
+      target: 'Twice a month',
+    });
+    await database()
+      .ref(`${baseURL}/sessionCode`)
+      .set({
+        code,
+        createdAt: now,
+        expiresAt: now + 10 * 60 * 1000, // 10 min expiry
+        used: false,
       });
 
-      console.log('Saved successfully');
+    console.log('New session code generated:', code);
+  };
 
-      setLocked(true);
-      setEditable(false);
-    } catch (e) {
-      console.log('Upload error:', e);
+  // const uploadData = async () => {
+  //   const user = auth().currentUser;
+
+  //   if (!user) {
+  //     console.log('User not logged in');
+  //     return;
+  //   }
+
+  //   try {
+  //     await database()
+  //       .ref(`/users/${user.uid}/habits/${CURRENT_MONTH_KEY}`)
+  //       .update({
+  //         startBFP,
+  //         targetBFP,
+  //         goalType,
+  //         createdAt: Date.now(),
+  //       });
+  //     console.log('Saved successfully');
+
+  //     setLocked(true);
+  //     setEditable(false);
+  //   } catch (e) {
+  //     console.log('Upload error:', e);
+  //   }
+  // };
+
+  useEffect(() => {
+    if (goalType === 'decrease' && targetBFP >= startBFP) {
+      setTargetBFP(Math.max(5, startBFP - 1));
     }
+
+    if (goalType === 'increase' && targetBFP <= startBFP) {
+      setTargetBFP(Math.min(50, startBFP + 1));
+    }
+  }, [goalType, startBFP]);
+
+  const canAddMeal = weekNumber => {
+    return weekNumber === 1 || weekNumber === 4;
   };
 
   const handleOtpChange = (val, index) => {
@@ -255,6 +278,133 @@ const BodyFatGoalScreen = ({ navigation }) => {
     inputRange: [0, 1],
     outputRange: [300, 0],
   });
+
+  const uploadData = async () => {
+    const user = auth().currentUser;
+
+    if (!user) {
+      console.log('User not logged in');
+      return;
+    }
+
+    try {
+      const now = Date.now();
+
+      const updates = {};
+
+      // 🔹 USER GOAL TABLE
+      updates[`users/${user.uid}/goal/bodyFat`] = {
+        title: 'Body Fat Goal',
+
+        startDate: now,
+
+        goalType,
+
+        startBFP,
+        targetBFP,
+
+        currentBFP: startBFP,
+
+        difference: Number(difference.toFixed(1)),
+
+        categories: {
+          current: currentCat.label,
+          target: targetCat.label,
+        },
+
+        status: {
+          locked: true,
+          editable: false,
+          otpVerified,
+          completed: false,
+        },
+
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      // 🔹 MONTHLY HABIT TABLE
+      updates[`users/${user.uid}/habits/${CURRENT_MONTH_KEY}`] = {
+        title: 'Body Fat',
+        target: `${targetBFP}%`,
+
+        createdAt: now,
+        updatedAt: now,
+
+        status: {
+          locked: true,
+          editable: false,
+          otpVerified,
+        },
+
+        progress: {
+          startBFP,
+          currentBFP: startBFP,
+          targetBFP,
+          difference: Number(difference.toFixed(1)),
+        },
+
+        categories: {
+          current: {
+            label: currentCat.label,
+            color: currentCat.color,
+          },
+
+          target: {
+            label: targetCat.label,
+            color: targetCat.color,
+          },
+        },
+
+        settings: {
+          goalType,
+          isCut,
+        },
+
+        analytics: {
+          completionRate: 0,
+          checkIns: 0,
+          streak: 0,
+        },
+
+        history: {
+          [`${now}`]: {
+            startBFP,
+            targetBFP,
+            goalType,
+            createdAt: now,
+          },
+        },
+
+        logs: {
+          [`${new Date().getDate()}`]: {
+            currentBFP: startBFP,
+            note: 'Initial body fat setup',
+            completed: true,
+            createdAt: now,
+          },
+        },
+      };
+
+      // 🔹 SESSION CODE
+      updates[`users/${user.uid}/habits/sessionCode`] = {
+        code: generateCode(),
+        createdAt: now,
+        expiresAt: now + 10 * 60 * 1000,
+        used: false,
+      };
+
+      // 🔥 SINGLE FIREBASE WRITE
+      await database().ref().update(updates);
+
+      console.log('Saved successfully');
+
+      setLocked(true);
+      setEditable(false);
+    } catch (e) {
+      console.log('Upload error:', e);
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -373,27 +523,35 @@ const BodyFatGoalScreen = ({ navigation }) => {
 
         {/* Sliders card */}
         <View style={styles.slidersCard}>
-          <TouchableOpacity onPress={openOtp} style={{ marginBottom: 12 }}>
-            <Text style={styles.sliderLabel}>Enter Starting BFP</Text>
+          <View style={{ marginBottom: 12 }}>
+            <TouchableOpacity onPress={() => otpSheetRef.current?.show()}>
+              <Text style={styles.sliderLabel}>Enter Start BFP</Text>
+            </TouchableOpacity>
+
             <TextInput
               style={styles.goalInput}
               keyboardType="numeric"
               value={String(startBFP)}
               onChangeText={val => setStartBFP(Number(val) || 0)}
-              editable={editable && !locked}
+              editable={!locked || editable}
             />
-          </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity onPress={openOtp} style={{ marginBottom: 12 }}>
-            <Text style={styles.sliderLabel}>Enter Target BFP</Text>
+          <View>
+            <TouchableOpacity
+              onPress={() => otpSheetRef.current?.show()}
+              style={{ padding: 5 }}
+            >
+              <Text style={styles.sliderLabel}>Enter Target BFP</Text>
+            </TouchableOpacity>
             <TextInput
               style={styles.goalInput}
               keyboardType="numeric"
               value={String(targetBFP)}
               onChangeText={val => setTargetBFP(Number(val) || 0)}
-              editable={editable && !locked}
+              editable={!locked || editable}
             />
-          </TouchableOpacity>
+          </View>
           {/* Current slider */}
           <View style={styles.sliderBlock}>
             <View style={styles.sliderLabelRow}>
@@ -414,14 +572,14 @@ const BodyFatGoalScreen = ({ navigation }) => {
                 </Text>
               </View>
             </View>
-            <View pointerEvents={editable && !locked ? 'auto' : 'none'}>
+            <View pointerEvents={editable || !locked ? 'auto' : 'none'}>
               <Slider
                 value={startBFP}
                 onValueChange={val => {
-                  if (!editable || locked) return;
+                  if (!editable && locked) return;
                   setStartBFP(val);
                 }}
-                style={{ opacity: editable && !locked ? 1 : 0.4 }}
+                style={{ opacity: editable || !locked ? 1 : 0.4 }}
                 minimumValue={5}
                 maximumValue={50}
                 step={0.5}
@@ -456,14 +614,14 @@ const BodyFatGoalScreen = ({ navigation }) => {
                 </Text>
               </View>
             </View>
-            <View pointerEvents={editable && !locked ? 'auto' : 'none'}>
+            <View pointerEvents={editable || !locked ? 'auto' : 'none'}>
               <Slider
                 value={targetBFP}
                 onValueChange={val => {
                   if (!editable || locked) return;
                   setTargetBFP(val);
                 }}
-                style={{ opacity: editable && !locked ? 1 : 0.4 }}
+                style={{ opacity: editable || !locked ? 1 : 0.4 }}
                 minimumValue={5}
                 maximumValue={50}
                 step={0.5}
@@ -504,7 +662,12 @@ const BodyFatGoalScreen = ({ navigation }) => {
                 { color: isCut ? colors.secondary : '#A782FF' },
               ]}
             >
-              {isCut ? 'Reduce' : 'Increase'} {difference.toFixed(1)}%
+              {Math.abs(diff) < 0.5
+                ? 'Maintain'
+                : diff < 0
+                ? 'Reduce'
+                : 'Increase'}{' '}
+              {difference.toFixed(1)}%
             </Text>
           </View>
         </View>
@@ -543,11 +706,11 @@ const BodyFatGoalScreen = ({ navigation }) => {
             ))}
           </View>
         </View>
-
+        {console.log('validationMsg || locked >> ', validationMsg)}
         {/* Save button */}
         <TouchableOpacity
           style={[styles.saveBtn, !!validationMsg && styles.saveBtnDisabled]}
-          disabled={!!validationMsg || locked}
+          disabled={!!validationMsg}
           activeOpacity={0.85}
           onPress={uploadData}
         >
@@ -563,84 +726,101 @@ const BodyFatGoalScreen = ({ navigation }) => {
           <Text style={styles.saveBtnText}>Save Goal</Text>
         </TouchableOpacity>
         {/* OTP bottom sheet */}
-        {showOtp && (
-          <>
-            <Pressable style={styles.overlay} onPress={closeOtp} />
-            <Animated.View
-              style={[
-                styles.otpPanel,
-                { transform: [{ translateY: panelTranslate }] },
-              ]}
-            >
-              <GradientBg id="otpPanel" c1="#1E2D1A" c2="#161D15" r={24} />
+        <ActionSheet
+          ref={otpSheetRef}
+          gestureEnabled
+          closable
+          containerStyle={{
+            backgroundColor: '#161D15',
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+            paddingHorizontal: 24,
+            paddingTop: 10,
+            // paddingBottom: 40,
+            borderWidth: 1,
+            borderBottomWidth: 0,
+            borderColor: 'rgba(255,255,255,0.08)',
+          }}
+        >
+          <Text style={styles.otpTitle}>Enter Confirmation Code</Text>
 
-              {/* Handle */}
-              <View style={styles.panelHandle} />
+          <Text style={styles.otpSub}>
+            Enter the 4-digit code provided by your practitioner
+          </Text>
 
-              <Text style={styles.otpTitle}>Enter Confirmation Code</Text>
-              <Text style={styles.otpSub}>
-                Enter the 4-digit code provided by your practitioner
-              </Text>
+          <View style={styles.otpRow}>
+            {otp.map((digit, i) => (
+              <TextInput
+                key={i}
+                ref={inputs[i]}
+                style={[styles.otpBox, digit && styles.otpBoxFilled]}
+                value={digit}
+                onChangeText={val => handleOtpChange(val.slice(-1), i)}
+                onKeyPress={e => handleOtpBackspace(e, i)}
+                keyboardType="number-pad"
+                maxLength={1}
+                textAlign="center"
+                placeholder="·"
+                placeholderTextColor="rgba(255,255,255,0.15)"
+                selectionColor={colors.secondary}
+              />
+            ))}
+          </View>
 
-              <View style={styles.otpRow}>
-                {otp.map((digit, i) => (
-                  <TextInput
-                    key={i}
-                    ref={inputs[i]}
-                    style={[styles.otpBox, digit && styles.otpBoxFilled]}
-                    value={digit}
-                    onChangeText={val => handleOtpChange(val.slice(-1), i)}
-                    onKeyPress={e => handleOtpBackspace(e, i)}
-                    keyboardType="number-pad"
-                    maxLength={1}
-                    textAlign="center"
-                    placeholderTextColor="rgba(255,255,255,0.15)"
-                    placeholder="·"
-                    selectionColor={colors.secondary}
-                  />
-                ))}
-              </View>
+          <TouchableOpacity
+            style={[
+              styles.otpConfirmBtn,
+              !otpFilled && styles.otpConfirmBtnDisabled,
+            ]}
+            disabled={!otpFilled}
+            activeOpacity={0.85}
+            onPress={() => {
+              const enteredOtp = otp.join('');
 
-              <TouchableOpacity
-                style={[
-                  styles.otpConfirmBtn,
-                  !otpFilled && styles.otpConfirmBtnDisabled,
-                ]}
-                activeOpacity={0.85}
-                disabled={!otpFilled}
-                onPress={() => {
-                  const enteredOtp = otp.join('');
-
-                  if (enteredOtp === CORRECT_OTP && !locked) {
+              database()
+                .ref(`/users/${USER_ID}/habits`)
+                .once('value')
+                .then(snapshot => {
+                  const fetchData = snapshot.val();
+                  const data = fetchData?.sessionCode;
+                  console.log('data :>> ', data);
+                  if (data?.code === enteredOtp && !data?.used) {
                     setEditable(true);
+                    setOtpVerified(true);
+
+                    // mark as used
+                    database()
+                      .ref(`/users/${USER_ID}/habits/sessionCode`)
+                      .update({ used: true });
                   } else {
                     setEditable(false);
+                    setOtpVerified(false);
                   }
+                });
 
-                  closeOtp();
-                }}
-              >
-                {otpFilled && (
-                  <GradientBg
-                    id="otpConfirm"
-                    c1="#6A9455"
-                    c2="#3A5A2A"
-                    r={14}
-                    horizontal
-                  />
-                )}
-                <Text
-                  style={[
-                    styles.otpConfirmText,
-                    !otpFilled && styles.otpConfirmTextDisabled,
-                  ]}
-                >
-                  Confirm
-                </Text>
-              </TouchableOpacity>
-            </Animated.View>
-          </>
-        )}
+              otpSheetRef.current?.hide();
+            }}
+          >
+            {otpFilled && (
+              <GradientBg
+                id="otpConfirm"
+                c1="#6A9455"
+                c2="#3A5A2A"
+                r={14}
+                horizontal
+              />
+            )}
+
+            <Text
+              style={[
+                styles.otpConfirmText,
+                !otpFilled && styles.otpConfirmTextDisabled,
+              ]}
+            >
+              Confirm
+            </Text>
+          </TouchableOpacity>
+        </ActionSheet>
       </Wrapper>
     </View>
   );
@@ -878,18 +1058,12 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   otpPanel: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: height / 1.5,
-    zIndex: 20,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: 'hidden',
-    padding: 24,
-    paddingBottom: 40,
     borderWidth: 1,
     borderBottomWidth: 0,
+    paddingBottom: 25,
     borderColor: 'rgba(255,255,255,0.1)',
   },
   panelHandle: {
@@ -904,7 +1078,7 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 18,
     fontFamily: fontFamily.montserratBold,
-    marginBottom: 4,
+    marginVertical: 10,
   },
   otpSub: {
     color: 'rgba(255,255,255,0.4)',
