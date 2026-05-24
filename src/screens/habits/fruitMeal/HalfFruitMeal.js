@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   Image,
-  ScrollView,
   StyleSheet,
   StatusBar,
   Dimensions,
@@ -16,27 +15,36 @@ import { requestCameraPermission } from '../../../utils/helper';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import { Header, Wrapper } from '../../../components';
+import moment from 'moment';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const USER_ID = auth().currentUser?.uid;
 
-const today = new Date();
+const today = moment();
+const CURRENT_MONTH_KEY = today.format('MMMM_YYYY');
+const todayMoment = moment().format('YYYY-MM-DD');
 
-const CURRENT_MONTH_KEY = `${today.toLocaleString('default', {
-  month: 'long',
-})}_${today.getFullYear()}`;
-
-const TOTAL_DAYS = new Date(
-  today.getFullYear(),
-  today.getMonth() + 1,
-  0,
-).getDate();
-
-const TODAY_DAY = String(today.getDate()).padStart(2, '0');
 const CARD_SIZE = (SCREEN_WIDTH - 18 * 2 - 10) / 2;
 
 const HalfPlateFruitsVeggies = ({ navigation }) => {
   const [habitData, setHabitData] = useState({});
+  const [startDate, setStartDate] = useState(null);
+
+  useEffect(() => {
+    if (!USER_ID) return;
+
+    const ref = database().ref(`users/${USER_ID}/goal`);
+
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (data?.startDate) {
+        setStartDate(data.startDate); // "2026-05-10"
+      }
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
 
   useEffect(() => {
     if (!USER_ID) return;
@@ -62,6 +70,10 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
     return () => ref.off('value', listener);
   }, []);
 
+  const startMoment = startDate ? moment(startDate, 'YYYY-MM-DD') : null;
+
+  const TOTAL_DAYS = startMoment ? moment().endOf('month').date() : 0;
+
   const saveDay = async (dayKey, uri) => {
     const ref = database().ref(
       `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}`,
@@ -70,12 +82,12 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
     await ref.update({
       title: 'Half Plate Fruits & Veggies',
       target: '1 Photo',
-      startedAt: habitData?.startedAt || new Date().toISOString(),
+      startedAt: habitData?.startedAt || moment().toISOString(),
 
       [`days/${dayKey}`]: {
         uri,
         completed: true,
-        timestamp: new Date().toISOString(),
+        timestamp: moment().toISOString(),
       },
 
       updatedAt: database.ServerValue.TIMESTAMP,
@@ -108,29 +120,35 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
 
   const completed = Object.values(days).filter(item => item?.completed).length;
 
-  const progress = completed / TOTAL_DAYS;
+  const progress = TOTAL_DAYS ? completed / TOTAL_DAYS : 0;
 
   // Pair days into rows of 2
-  const rows = Array.from({ length: Math.ceil(TOTAL_DAYS / 2) }, (_, i) => [
-    i * 2 + 1,
-    i * 2 + 2 <= TOTAL_DAYS ? i * 2 + 2 : null,
-  ]);
+  const rows = Array.from({ length: Math.ceil(TOTAL_DAYS / 2) }, (_, i) => {
+    const day1 = i * 2 + 1;
+    const day2 = i * 2 + 2;
+
+    return [day1, day2 <= TOTAL_DAYS ? day2 : null];
+  });
 
   const DayCard = ({ dayNumber }) => {
     if (!dayNumber) return <View style={{ width: CARD_SIZE }} />;
 
-    const dayKey = String(dayNumber).padStart(2, '0');
+    const dateKey = startMoment
+      ? moment(startMoment)
+          .add(dayNumber - 1, 'days')
+          .format('YYYY-MM-DD')
+      : null;
 
-    const item = days?.[dayKey];
+    const item = days?.[dateKey];
 
     // LOCK OLD DAYS
-    const isPastDay = Number(dayKey) < Number(TODAY_DAY);
+    const dayMoment = startMoment
+      ? moment(startMoment).add(dayNumber - 1, 'days')
+      : null;
 
-    // ONLY TODAY OPEN
-    const isToday = dayKey === TODAY_DAY;
-
-    // FUTURE LOCKED
-    const isFuture = Number(dayKey) > Number(TODAY_DAY);
+    const isToday = dayMoment ? dayMoment.isSame(moment(), 'day') : false;
+    const isPastDay = dayMoment ? dayMoment.isBefore(moment(), 'day') : false;
+    const isFuture = dayMoment ? dayMoment.isAfter(moment(), 'day') : false;
 
     const isLocked = isPastDay || isFuture;
 
@@ -166,14 +184,14 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
               <View style={styles.photoActions}>
                 <TouchableOpacity
                   style={styles.retakeBtn}
-                  onPress={() => pickImage(dayKey)}
+                  onPress={() => pickImage(dateKey)}
                 >
                   <Text style={styles.retakeText}>Retake</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.deleteBtn}
-                  onPress={() => deletePhoto(dayKey)}
+                  onPress={() => deletePhoto(dateKey)}
                 >
                   <Text style={styles.deleteText}>Delete</Text>
                 </TouchableOpacity>
@@ -191,7 +209,7 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
         ) : (
           <TouchableOpacity
             style={styles.uploadBtn}
-            onPress={() => pickImage(dayKey)}
+            onPress={() => pickImage(dateKey)}
             activeOpacity={0.8}
           >
             <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">

@@ -92,62 +92,7 @@ const CATEGORY_COLOR = {
   Podcasts: { bg: 'rgba(167,130,255,0.15)', text: '#A782FF' },
 };
 
-function ResourceCard({ item, index }) {
-  const anim = useRef(new Animated.Value(0)).current;
-  const cat = CATEGORY_COLOR[item.category] || CATEGORY_COLOR.Tips;
-
-  useEffect(() => {
-    Animated.timing(anim, {
-      toValue: 1,
-      duration: 400,
-      delay: index * 70,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  const animStyle = {
-    opacity: anim,
-    transform: [
-      {
-        translateY: anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [20, 0],
-        }),
-      },
-    ],
-  };
-
-  return (
-    <Animated.View style={animStyle}>
-      <TouchableOpacity style={styles.card} activeOpacity={0.85}>
-        {/* Left emoji block */}
-        <View style={[styles.emojiBox, { backgroundColor: cat.bg }]}>
-          <Text style={styles.emojiText}>{item.emoji}</Text>
-        </View>
-
-        {/* Content */}
-        <View style={styles.cardContent}>
-          <View style={styles.cardTopRow}>
-            <View style={[styles.categoryBadge, { backgroundColor: cat.bg }]}>
-              <Text style={[styles.categoryText, { color: cat.text }]}>
-                {item.category}
-              </Text>
-            </View>
-            <Text style={styles.readTime}>{item.readTime}</Text>
-          </View>
-          <Text style={styles.cardTitle} numberOfLines={2}>
-            {item.title}
-          </Text>
-          <Text style={styles.cardDesc} numberOfLines={2}>
-            {item.desc}
-          </Text>
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
-
-export default function ResourcesList() {
+export default function ResourcesList({ navigation }) {
   const [activeCategory, setActiveCategory] = useState('All');
   const [resources, setResources] = useState([]);
   const [featured, setFeatured] = useState(null);
@@ -201,6 +146,69 @@ export default function ResourcesList() {
       ? resources
       : resources.filter(r => r.category === activeCategory);
 
+  const onCardPress = () => {
+    navigation.navigate('QuizStart');
+  };
+
+  function ResourceCard({ item, index }) {
+    const anim = useRef(new Animated.Value(0)).current;
+    const cat = CATEGORY_COLOR[item.category] || CATEGORY_COLOR.Tips;
+
+    useEffect(() => {
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 400,
+        delay: index * 70,
+        useNativeDriver: true,
+      }).start();
+    }, []);
+
+    const animStyle = {
+      opacity: anim,
+      transform: [
+        {
+          translateY: anim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [20, 0],
+          }),
+        },
+      ],
+    };
+
+    return (
+      <Animated.View style={animStyle}>
+        <TouchableOpacity
+          style={styles.card}
+          activeOpacity={0.85}
+          onPress={onCardPress}
+        >
+          {/* Left emoji block */}
+          <View style={[styles.emojiBox, { backgroundColor: cat.bg }]}>
+            <Text style={styles.emojiText}>{item.emoji}</Text>
+          </View>
+
+          {/* Content */}
+          <View style={styles.cardContent}>
+            <View style={styles.cardTopRow}>
+              <View style={[styles.categoryBadge, { backgroundColor: cat.bg }]}>
+                <Text style={[styles.categoryText, { color: cat.text }]}>
+                  {item.category}
+                </Text>
+              </View>
+              <Text style={styles.readTime}>{item.readTime}</Text>
+            </View>
+            <Text style={styles.cardTitle} numberOfLines={2}>
+              {item.title}
+            </Text>
+            <Text style={styles.cardDesc} numberOfLines={2}>
+              {item.desc}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Wrapper>
@@ -225,6 +233,7 @@ export default function ResourcesList() {
                 <TouchableOpacity
                   style={styles.featuredCard}
                   activeOpacity={0.88}
+                  onPress={onCardPress}
                 >
                   <View style={styles.featuredBadge}>
                     <Text style={styles.featuredBadgeText}>

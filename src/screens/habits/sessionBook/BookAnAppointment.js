@@ -28,12 +28,24 @@ const fullName = user?.displayName || '';
 const email = user?.email || '';
 const uid = user?.uid || '';
 
+const generateCode = () => {
+  return Math.floor(1000 + Math.random() * 9000).toString();
+};
+
+const monthKey = new Date()
+  .toLocaleString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  })
+  .replace(' ', '_');
+
 export default function BookAnAppointment({ navigation, route }) {
   const { doctorId = '1' } = route.params || {};
 
   const actionSheetRef = useRef(null);
   const [selectedDay, setSelectedDay] = useState([]);
   const [doctor, setDoctor] = useState(null);
+  const [seeMore, setSeeMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const appState = useRef(AppState.currentState);
   const [emailOpened, setEmailOpened] = useState(false);
@@ -62,12 +74,52 @@ export default function BookAnAppointment({ navigation, route }) {
 
   const fetchData = async () => {
     try {
-      const snapshot = await firestore().collection('doctors').doc('1').get();
-      setDoctor(snapshot?.data());
+      const doctorSnapshot = await firestore()
+        .collection('doctors')
+        .doc('1')
+        .get();
+
+      const doctorData = doctorSnapshot?.data();
+
+      setDoctor(doctorData);
+
+      const ref = database().ref(`/users/${uid}/habits/booking/${monthKey}`);
+
+      const listener = ref.on('value', snapshot => {
+        const data = snapshot.val();
+
+        if (!data) {
+          setLoading(false);
+          return;
+        }
+
+        const latest = Object.values(data).reduce((latest, current) => {
+          return current.createdAt > latest.createdAt ? current : latest;
+        });
+
+        const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+
+        const isExpired = Date.now() > latest?.createdAt + SEVEN_DAYS;
+
+        console.log('isExpired :>> ', isExpired);
+
+        // only redirect if request is still valid
+        if (latest?.status === 'requested' && !isExpired && !latest?.used) {
+          navigation.replace('ConfirmationCode', {
+            doctor: {
+              ...latest,
+              ...doctorData,
+            },
+          });
+        }
+
+        setLoading(false);
+      });
+
+      return () => ref.off('value', listener);
     } catch (e) {
       console.log(e);
-    } finally {
-      setLoading(false); // ✅ correct
+      setLoading(false);
     }
   };
 
@@ -84,7 +136,7 @@ I hope you are doing well.
 
 I am ${fullName}, a student. I wanted to ask about your availability for an appointment.
 
-Please let me know a time that works best for you. I am generally available on ${selectedDaysText}, but I can adjust to fit your schedule.
+Please let me know a time that works best for you.
 
 Thank you for your time and consideration.
 
@@ -109,28 +161,49 @@ Email: ${email}`;
     try {
       const userId = uid;
 
-      const now = new Date();
-      const monthKey = now
+      const now = Date.now();
+
+      const monthKey = new Date()
         .toLocaleString('en-US', {
           month: 'long',
           year: 'numeric',
         })
-        .replace(' ', '_'); // May_2026
+        .replace(' ', '_');
 
       const appointmentId = database().ref().push().key;
 
+      // generate session code
+      const code = generateCode();
+
       const updates = {};
 
-      updates[`users/${userId}/habits/${monthKey}/${appointmentId}`] = {
+      // booking + session data
+      updates[`users/${userId}/habits/booking/${monthKey}/${appointmentId}`] = {
+        code,
         doctorId,
         doctorName: doctor?.name || '',
         days: selectedDay,
         status: 'requested',
-        createdAt: Date.now(),
+        bookingId: appointmentId,
+        createdAt: now,
+        expiresAt: now + 10 * 60 * 1000,
+        used: false,
       };
 
-      await database().ref().update(updates);
-      navigation.navigate('SessionConfirmation', { doctorId });
+      // single write
+      await database()
+        .ref()
+        .update(updates)
+        .then(() => {
+          navigation?.navigate('ConfirmationCode', {
+            doctor: {
+              ...doctor,
+              ...updates[
+                `users/${userId}/habits/booking/${monthKey}/${appointmentId}`
+              ],
+            },
+          });
+        });
     } catch (e) {
       console.log('error:', e);
     }
@@ -153,44 +226,42 @@ Email: ${email}`;
   }
 
   return (
-    <Wrapper containerStyle={{ paddingHorizontal: 0 }}>
-      <View style={styles.root}>
-        {/* HERO IMAGE */}
-        {console.log('doctor.image :>> ', doctor.image)}
-        <Image
-          source={{
-            uri:
-              doctor.image ||
-              'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-          }}
-          style={styles.heroImage}
-          resizeMode="cover"
-        />
+    <View style={styles.root}>
+      {/* FIXED HERO IMAGE */}
+      <Image
+        source={{
+          uri:
+            doctor.image ||
+            'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
+        }}
+        style={styles.heroImage}
+        resizeMode="cover"
+      />
 
-        {/* CONTENT */}
+      <Header
+        headerContainer={{
+          paddingHorizontal: 23,
+          zIndex: 2,
+          position: 'absolute',
+          width: '100%',
+          paddingTop: StatusBar.currentHeight,
+        }}
+        leftBtnStyle={{ backgroundColor: 'rgba(7, 4, 19, 0.6)' }}
+      />
 
-        <Header
-          headerContainer={{
-            paddingHorizontal: 23,
-            zIndex: 1,
-            paddingTop: 20,
-          }}
-          leftBtnStyle={{ backgroundColor: 'rgba(7, 4, 19, 0.6)' }}
-        />
-        <View
-          style={{
-            height: HERO_HEIGHT - 32,
-            position: 'absolute',
-            width: '100%',
-          }}
-        />
-
+      {/* SCROLLABLE CONTENT */}
+      <ScrollView
+        // scrollEnabled={seeMore}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingTop: HERO_HEIGHT - 40,
+          flexGrow: 1,
+        }}
+      >
         <View style={styles.card}>
-          {/* NAME */}
           <Text style={styles.doctorName}>{doctor.name}</Text>
           <Text style={styles.specialty}>{doctor.specialty}</Text>
 
-          {/* STATS */}
           <View style={styles.statsRow}>
             <Stat value={`${doctor.patients}+`} label="Patients" />
             <Stat value={doctor.experience} label="Experience" />
@@ -200,106 +271,69 @@ Email: ${email}`;
 
           <View style={styles.divider} />
 
-          {/* ABOUT */}
           <Text style={styles.sectionTitle}>About Me</Text>
-          <Text style={styles.aboutText}>
+
+          <Text style={styles.aboutText} numberOfLines={seeMore ? 0 : 3}>
             {doctor.about}
-            <Text style={styles.readMore}> Read More…</Text>
           </Text>
 
-          {/* AVAILABLE DAYS */}
-          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>
-            Available Days
-          </Text>
-
-          <View style={styles.daysRow}>
-            {doctor.availableDays?.map((day, index) => (
-              <TouchableOpacity
-                onPress={() => {
-                  setSelectedDay(prev => {
-                    if (prev.includes(day)) {
-                      // remove if already selected
-                      return prev.filter(d => d !== day);
-                    } else {
-                      // add if not selected
-                      return [...prev, day];
-                    }
-                  });
-                }}
-                key={index}
-                style={[
-                  styles.dayChip,
-                  selectedDay.includes(day) && {
-                    backgroundColor: colors.secondary,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.dayText,
-                    selectedDay.includes(day) && {
-                      color: colors.primary,
-                      fontFamily: fontFamily.montserratBold,
-                    },
-                  ]}
-                >
-                  {day}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* BOOK BUTTON */}
           <TouchableOpacity
-            style={styles.bookBtn}
-            onPress={
-              () => openEmail()
-              // navigation.navigate('SessionConfirmation', { doctorId })
-            }
+            style={{ marginTop: 10, alignSelf: 'flex-end' }}
+            onPress={() => setSeeMore(!seeMore)}
           >
-            <Text style={styles.bookBtnText}>Book An Appointment</Text>
+            <Text style={styles.readMore}>
+              {!seeMore ? '...Read More' : '...Read Less'}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={{ marginTop: 20, justifyContent: 'flex-end' }}>
+            <TouchableOpacity
+              style={styles.bookBtn}
+              onPress={() => openEmail()}
+            >
+              <Text style={styles.bookBtnText}>Book An Appointment</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+
+      <ActionSheet ref={actionSheetRef}>
+        <View style={{ padding: 20 }}>
+          <Text style={{ fontSize: 16, marginBottom: 20 }}>
+            Did you send the appointment email?
+          </Text>
+
+          <TouchableOpacity
+            style={{
+              padding: 14,
+              backgroundColor: colors.secondary,
+              borderRadius: 10,
+              marginBottom: 10,
+            }}
+            onPress={async () => {
+              actionSheetRef.current?.hide();
+              await saveAppointment();
+            }}
+          >
+            <Text style={{ color: '#000', textAlign: 'center' }}>
+              Yes, Sent
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              padding: 14,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: '#ccc',
+            }}
+            onPress={() => actionSheetRef.current?.hide()}
+          >
+            <Text style={{ textAlign: 'center' }}>Not Yet</Text>
           </TouchableOpacity>
         </View>
-
-        {/* BACK BUTTON */}
-        <ActionSheet ref={actionSheetRef}>
-          <View style={{ padding: 20 }}>
-            <Text style={{ fontSize: 16, marginBottom: 20 }}>
-              Did you send the appointment email?
-            </Text>
-
-            <TouchableOpacity
-              style={{
-                padding: 14,
-                backgroundColor: colors.secondary,
-                borderRadius: 10,
-                marginBottom: 10,
-              }}
-              onPress={async () => {
-                actionSheetRef.current?.hide();
-                await saveAppointment();
-              }}
-            >
-              <Text style={{ color: '#000', textAlign: 'center' }}>
-                Yes, Sent
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={{
-                padding: 14,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: '#ccc',
-              }}
-              onPress={() => actionSheetRef.current?.hide()}
-            >
-              <Text style={{ textAlign: 'center' }}>Not Yet</Text>
-            </TouchableOpacity>
-          </View>
-        </ActionSheet>
-      </View>
-    </Wrapper>
+      </ActionSheet>
+    </View>
   );
 }
 
@@ -314,8 +348,8 @@ const Stat = ({ value, label }) => (
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: colors.dark,
   },
-
   loader: {
     flex: 1,
     justifyContent: 'center',
@@ -347,8 +381,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 32,
     backgroundColor: colors.dark,
     paddingTop: 28,
-    minHeight: height * 0.6,
-    top: height / 3,
+    paddingBottom: 40,
   },
 
   doctorName: {
@@ -406,6 +439,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: fontFamily.montserratMedium,
     lineHeight: 21,
+    textAlign: 'justify',
   },
 
   readMore: {
@@ -439,6 +473,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 49,
     alignItems: 'center',
+    justifyContent: 'flex-end',
   },
 
   bookBtnText: {

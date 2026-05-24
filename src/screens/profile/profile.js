@@ -6,17 +6,15 @@ import {
   Image,
   Dimensions,
   TouchableOpacity,
-  ScrollView,
-  StatusBar,
   Animated,
 } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
 
 import { colors, fontFamily } from '../../constant';
 import { Wrapper } from '../../components';
+import { calculateStreak } from '../../utils/helper';
+import { useSelector } from 'react-redux';
 
 const { width, height } = Dimensions.get('window');
 
@@ -65,6 +63,14 @@ const MENU_ITEMS = [
     badge: null,
   },
 ];
+
+const demo = {
+  '2026-05-10': {},
+  '2026-05-11': {},
+  '2026-05-12': {},
+  '2026-05-13': {},
+  // '2026-05-17': {},
+};
 
 function MenuItem({ item, onPress, index }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -136,40 +142,13 @@ function MenuItem({ item, onPress, index }) {
 }
 
 export default function Profile({ navigation }) {
-  const [profile, setProfile] = useState({});
-  const userRef = database().ref(`users/${userId}/profile`);
   const headerAnim = useRef(new Animated.Value(0)).current;
   const avatarScale = useRef(new Animated.Value(0.85)).current;
-
-  const calculateStreak = habit => {
-    if (!habit) return 0;
-
-    const allDays = [];
-
-    Object.values(habit).forEach(month => {
-      if (month?.days) {
-        Object.entries(month?.days).forEach(([day, data]) => {
-          if (data?.completed) {
-            allDays.push(day);
-          }
-        });
-      }
-    });
-
-    return allDays.length; // simple version (can upgrade later)
-  };
-
-  useEffect(() => {
-    const listener = userRef.on('value', snapshot => {
-      const data = snapshot.val();
-
-      if (data) {
-        setProfile(data);
-      }
-    });
-
-    return () => userRef.off('value', listener);
-  }, []);
+  const userId = useSelector(state => state.user?.uid);
+  const startDate = useSelector(state => state.user?.goal?.startDate);
+  const data = useSelector(state => state.user);
+  const profile = data?.profile;
+  const habitsData = data?.habits;
 
   useEffect(() => {
     Animated.parallel([
@@ -189,20 +168,51 @@ export default function Profile({ navigation }) {
   const year = new Date().getFullYear();
   const monthKey = `${currentMonth}_${year}`;
 
-  const days = profile?.habit?.[monthKey]?.days || {};
+  const days = habitsData?.[monthKey]?.days || {};
+  console.log('days :>> ', habitsData);
 
   const activeDays = Object.keys(days).length;
 
-  const streak = calculateStreak(profile?.habit);
-  const today = String(new Date().getDate()).padStart(2, '0');
+  const { currentStreak, longestStreak } = calculateStreak(days || {});
+
+  // format => YYYY-MM-DD
+  const todayDate = new Date();
+  const todayKey = todayDate.toISOString().split('T')[0];
 
   const currentHabit = profile?.habit?.[monthKey] || {};
-  const todayData = currentHabit?.days?.[today] || {};
+  const todayData = currentHabit?.days?.[todayKey] || {};
+
+  // remaining days from start date -> next 30 days
+  let remainingDays = 0;
+
+  if (startDate) {
+    const start = new Date(startDate);
+
+    // end date = start + 30 days
+    const endDate = new Date(start);
+    endDate.setDate(endDate.getDate() + 30);
+
+    // difference between today and end date
+    const diffTime = endDate - todayDate;
+
+    remainingDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  }
+
+  const formatMonthKey = monthKey => {
+    if (!monthKey) return 'May 2024';
+
+    const [month, year] = monthKey.split('_');
+    console.log('monthKey :>> ', `${month} ${year}`);
+    return `${month} ${year}`;
+  };
+
+  // get first month key from habits
+  const memberSinceKey = Object.keys(habitsData || {})?.[0];
 
   const STATS = [
     {
       label: 'Streak',
-      value: streak || 0,
+      value: currentStreak || 0,
       emoji: '🔥',
     },
     {
@@ -215,14 +225,14 @@ export default function Profile({ navigation }) {
     //   value: currentHabit?.title || 'None',
     //   emoji: '🎯',
     // },
-    // {
-    //   label: 'Target',
-    //   value: currentHabit?.target || '--',
-    //   emoji: '🥅',
-    // },
     {
-      label: 'Today',
-      value: todayData?.progress || '0',
+      label: 'Target',
+      value: habitsData?.[monthKey]?.target || '--',
+      emoji: '🥅',
+    },
+    {
+      label: 'Days Left',
+      value: remainingDays || '0',
       emoji: '📊',
     },
     // {
@@ -264,12 +274,12 @@ export default function Profile({ navigation }) {
           <Text style={styles.userName}>{profile?.name || 'User'}</Text>
 
           <Text style={{ ...styles.userHandle, marginBottom: 0 }}>
-            {profile?.habit?.[monthKey]?.title || 'No habit set'}
+            {habitsData?.[monthKey]?.title || 'No habit set'}
           </Text>
 
           <Text style={styles.userHandle}>
             {profile?.username || '@username'} · Member since{' '}
-            {profile?.memberSince || '2024'}
+            {formatMonthKey(memberSinceKey)}
           </Text>
 
           {/* Stats row */}

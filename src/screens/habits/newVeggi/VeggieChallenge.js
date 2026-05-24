@@ -4,35 +4,25 @@ import {
   Text,
   TouchableOpacity,
   Image,
-  ScrollView,
   TextInput,
   StyleSheet,
   StatusBar,
   Platform,
 } from 'react-native';
-import Svg, {
-  Path,
-  Defs,
-  LinearGradient,
-  Stop,
-  Rect,
-  Circle,
-} from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
 import { launchCamera } from 'react-native-image-picker';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
+import moment from 'moment';
 
 const user = auth().currentUser;
-const today = new Date();
-const CURRENT_MONTH_KEY = `${today.toLocaleString('default', {
-  month: 'long',
-})}_${today.getFullYear()}`;
+const CURRENT_MONTH_KEY = moment().format('MMMM_YYYY');
 const USER_ID = user?.uid;
 const DAYS_PER_WEEK = 1;
-const MAX_WEEKS = 4;
+const MAX_WEEKS = 5;
 const defaultWeeks = {
   week1: {
     uri: '',
@@ -69,6 +59,17 @@ function CameraIcon() {
   );
 }
 
+const getWeekUnlockData = (goalStartDate, weekNumber) => {
+  const unlockDate = moment(goalStartDate).add((weekNumber - 1) * 7, 'days');
+
+  const unlocked = moment().isSameOrAfter(unlockDate);
+
+  return {
+    unlocked,
+    unlockDate,
+  };
+};
+
 const VeggieChallenge = ({ navigation }) => {
   const [goalStartDate, setGoalStartDate] = useState(null);
   const [weeks, setWeeks] = useState({});
@@ -79,11 +80,11 @@ const VeggieChallenge = ({ navigation }) => {
 
     const goalRef = database().ref(`/users/${USER_ID}/goal`);
     const veggieRef = database().ref(
-      `/users/${USER_ID}/habits/${CURRENT_MONTH_KEY}`,
+      `/users/${USER_ID}/habits/newVeggie/${CURRENT_MONTH_KEY}`,
     );
 
     goalRef.once('value').then(snap => {
-      setGoalStartDate(snap.val()?.startDate || Date.now());
+      setGoalStartDate(snap.val()?.startDate || moment().valueOf());
     });
 
     const listener = veggieRef.on('value', snapshot => {
@@ -106,33 +107,39 @@ const VeggieChallenge = ({ navigation }) => {
 
         setWeeks(starterWeeks);
 
-        veggieRef.set({
+        veggieRef.update({
           weeks: starterWeeks,
-          updatedAt: Date.now(),
+          updatedAt: moment().valueOf(),
         });
         return;
       }
 
       const data = snapshot.val();
 
-      let normalized = data?.weeks || defaultWeeks;
+      let normalized = data?.weeks || {};
 
-      // first time fallback
-      if (Object.keys(normalized).length === 0) {
-        normalized = [
-          {
-            startDate: Date.now(),
-            entries: Array(DAYS_PER_WEEK).fill(null),
-          },
-          {
-            startDate: null,
-            entries: Array(DAYS_PER_WEEK).fill(null),
-            locked: true,
-          },
-        ];
+      const generatedWeeks = {};
+
+      for (let i = 1; i <= MAX_WEEKS; i++) {
+        const existingWeek = normalized[`week${i}`];
+
+        const { unlocked, unlockDate } = getWeekUnlockData(
+          goalStartDate || moment().valueOf(),
+          i,
+        );
+
+        generatedWeeks[`week${i}`] = {
+          uri: existingWeek?.uri || '',
+          label: existingWeek?.label || '',
+          timestamp: existingWeek?.timestamp || null,
+
+          locked: !unlocked,
+
+          unlockDate: unlockDate.valueOf(),
+        };
       }
 
-      setWeeks(normalized);
+      setWeeks(generatedWeeks);
     });
     return () => veggieRef.off('value', listener);
   }, [goalStartDate]);
@@ -140,10 +147,10 @@ const VeggieChallenge = ({ navigation }) => {
   const updateWeeks = async newWeeks => {
     try {
       await database()
-        .ref(`/users/${USER_ID}/habits/${CURRENT_MONTH_KEY}`)
+        .ref(`/users/${USER_ID}/habits/newVeggie/${CURRENT_MONTH_KEY}`)
         .update({
           weeks: newWeeks,
-          updatedAt: Date.now(),
+          updatedAt: moment().valueOf(),
         });
 
       console.log('SAVE SUCCESS');
@@ -185,35 +192,10 @@ const VeggieChallenge = ({ navigation }) => {
               ...weeks[weekKey],
               uri,
               label: weeks[weekKey]?.label || '',
-              timestamp: Date.now(),
+              timestamp: moment().valueOf(),
               locked: false,
             },
           };
-
-          const currentWeekNumber = Number(weekKey.replace('week', ''));
-
-          const nextWeekNumber = currentWeekNumber + 1;
-
-          if (
-            nextWeekNumber <= MAX_WEEKS &&
-            !updated[`week${nextWeekNumber}`]
-          ) {
-            updated[`week${nextWeekNumber}`] = {
-              uri: '',
-              label: '',
-              timestamp: null,
-              locked: true,
-            };
-          }
-
-          // unlock next week ONLY after current week completed
-          if (updated[weekKey]?.uri) {
-            const nextWeekKey = `week${nextWeekNumber}`;
-
-            if (updated[nextWeekKey]) {
-              updated[nextWeekKey].locked = true;
-            }
-          }
 
           setWeeks(updated);
 
@@ -262,8 +244,9 @@ const VeggieChallenge = ({ navigation }) => {
   };
 
   const safeWeeks = Object.values(weeks || {});
-  const activeWeekIndex = Object.values(weeks).findIndex(item => !item?.uri);
-
+  const activeWeekIndex = Object.values(weeks).findIndex(
+    item => !item?.uri && !item?.locked,
+  );
   const completedWeeks = safeWeeks.filter(w => !!w?.uri).length;
 
   const progress = MAX_WEEKS ? completedWeeks / MAX_WEEKS : 0;
@@ -297,6 +280,13 @@ const VeggieChallenge = ({ navigation }) => {
           </Text>
         </View>
         {Object.entries(weeks)
+          .filter(([weekKey, week], index) => {
+            // always show first 2 cards
+            if (index < 2) return true;
+
+            // show card only after unlock
+            return !week?.locked;
+          })
           .sort(([a], [b]) => {
             return (
               Number(a.replace('week', '')) - Number(b.replace('week', ''))
@@ -330,15 +320,7 @@ const VeggieChallenge = ({ navigation }) => {
                 </View>
 
                 {/* BODY */}
-                {!unlocked ? (
-                  <View style={styles.lockedBox}>
-                    <Text style={styles.lockEmoji}>🔒</Text>
-
-                    <Text style={styles.lockedSub}>
-                      Unlocks 7 days after previous week completion
-                    </Text>
-                  </View>
-                ) : hasImage ? (
+                {hasImage ? (
                   <>
                     <View style={styles.entryCard}>
                       <Image

@@ -23,12 +23,10 @@ const USER_ID = auth().currentUser?.uid;
 const MONTH_KEY = 'May_2026';
 
 const LABELS = [
-  { key: 'start', label: 'Start Weight' },
-  { key: 'week1', label: 'Week 1' },
+  { key: 'week1', label: 'Start Weight' },
   { key: 'week2', label: 'Week 2' },
   { key: 'week3', label: 'Week 3' },
-  { key: 'week4', label: 'Week 4' },
-  { key: 'end', label: 'End Weight' },
+  { key: 'week4', label: 'End Weight' },
 ];
 
 const parseWeight = val => {
@@ -46,19 +44,19 @@ export default function WeightChallengeUI() {
   const [startDate, setStartDate] = useState(null);
 
   const [weights, setWeights] = useState({
-    start: '',
     week1: '',
     week2: '',
     week3: '',
     week4: '',
-    end: '',
   });
 
   /* ======================================================
       FIREBASE PATHS
   ====================================================== */
 
-  const habitRef = database().ref(`users/${USER_ID}/habits/${MONTH_KEY}`);
+  const habitRef = database().ref(
+    `users/${USER_ID}/habits/weightChallenge/${MONTH_KEY}`,
+  );
 
   const goalRef = database().ref(`users/${USER_ID}/goal`);
 
@@ -81,12 +79,10 @@ export default function WeightChallengeUI() {
       if (!data) return;
 
       const mappedWeights = {
-        start: data?.weight?.start || '',
-        week1: data?.weight?.week1 || '',
-        week2: data?.weight?.week2 || '',
-        week3: data?.weight?.week3 || '',
-        week4: data?.weight?.week4 || '',
-        end: data?.weight?.end || '',
+        week1: data?.weeks?.week1?.weight || '',
+        week2: data?.weeks?.week2?.weight || '',
+        week3: data?.weeks?.week3?.weight || '',
+        week4: data?.weeks?.week4?.weight || '',
       };
 
       setWeights(mappedWeights);
@@ -98,7 +94,6 @@ export default function WeightChallengeUI() {
           nextStep = i;
           break;
         }
-
         nextStep = i + 1;
       }
 
@@ -110,6 +105,10 @@ export default function WeightChallengeUI() {
       habitRef.off('value', listener);
     };
   }, []);
+
+  useEffect(() => {
+    setStep(prev => Math.min(prev, allowedStep));
+  }, [allowedStep]);
 
   /* ======================================================
       WEEK LOCK SYSTEM
@@ -126,22 +125,12 @@ export default function WeightChallengeUI() {
 
     const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
 
-    // 0-6 days => start
-    // 7-13 => week1
-    // 14-20 => week2
-    // 21-27 => week3
-    // 28-34 => week4
-    // 35+ => end
+    if (diffDays < 7) return 0; // Start
+    if (diffDays < 14) return 1; // Week 2
+    if (diffDays < 21) return 2; // Week 3
 
-    if (diffDays < 7) return 0;
-    if (diffDays < 14) return 1;
-    if (diffDays < 21) return 2;
-    if (diffDays < 28) return 3;
-    if (diffDays < 35) return 4;
-
-    return 5;
+    return 3; // End unlocked after week 3+
   };
-
   const allowedStep = getAllowedStepByDate();
 
   /* ======================================================
@@ -167,7 +156,7 @@ export default function WeightChallengeUI() {
   ).length;
 
   const chartData = {
-    labels: ['Start', 'W1', 'W2', 'W3', 'W4', 'End'],
+    labels: ['Start', 'W2', 'W3', 'End'],
     datasets: [
       {
         data: weightArray.map(v => v || 0.01),
@@ -187,12 +176,7 @@ export default function WeightChallengeUI() {
 
       if (!currentValue) return;
 
-      let weekKey = 'week1';
-
-      if (currentKey === 'week2') weekKey = 'week2';
-      if (currentKey === 'week3') weekKey = 'week3';
-      if (currentKey === 'week4') weekKey = 'week4';
-      if (currentKey === 'end') weekKey = 'week4';
+      const weekKey = LABELS[step].key;
 
       const snapshot = await habitRef.once('value');
 
@@ -202,14 +186,7 @@ export default function WeightChallengeUI() {
         ...existingData,
 
         title: 'Weight Challenge',
-
         target: 'Lose ≤ 2 lbs/week',
-
-        weight: {
-          ...(existingData.weight || {}),
-          [currentKey]: currentValue,
-        },
-
         weeks: {
           ...(existingData.weeks || {}),
 
@@ -217,13 +194,13 @@ export default function WeightChallengeUI() {
             ...(existingData.weeks?.[weekKey] || {}),
 
             completed: true,
-
+            weight: currentValue,
             updatedAt: database.ServerValue.TIMESTAMP,
           },
         },
       };
 
-      await habitRef.set(updatedData);
+      await habitRef.update(updatedData);
 
       if (step < LABELS.length - 1) {
         setStep(prev => prev + 1);
@@ -270,7 +247,8 @@ export default function WeightChallengeUI() {
   };
 
   const feedback = getFeedback();
-
+  const isLocked = step > allowedStep;
+  const canEdit = step <= allowedStep;
   /* ======================================================
       UI
   ====================================================== */
@@ -292,24 +270,30 @@ export default function WeightChallengeUI() {
 
         <View style={styles.stepDots}>
           {LABELS.map((l, i) => {
-            const locked = i !== allowedStep;
+            const locked = i > allowedStep;
+            const done = !!weights[l.key];
 
             return (
-              <View
-                key={i}
-                style={[
-                  styles.stepDot,
-
-                  i < completedSteps && styles.stepDotDone,
-
-                  i === step && styles.stepDotActive,
-
-                  locked && {
-                    opacity: 0.4,
-                  },
-                ]}
-              >
-                <Text style={styles.stepDotNum}>{locked ? '🔒' : i + 1}</Text>
+              <View key={l.key} style={styles.stepItem}>
+                <View
+                  style={[
+                    styles.stepDot,
+                    done && styles.stepDotDone,
+                    i === step && styles.stepDotActive,
+                    locked && { opacity: 0.35 },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: colors.white,
+                      fontSize: 11,
+                      fontFamily: fontFamily.montserratMedium,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {locked ? '🔒' : l.label}
+                  </Text>
+                </View>
               </View>
             );
           })}
@@ -383,14 +367,14 @@ export default function WeightChallengeUI() {
           <TextInput
             value={weights[LABELS[step].key]}
             onChangeText={val => {
-              if (step !== allowedStep) return;
+              if (!canEdit) return;
 
               setWeights(prev => ({
                 ...prev,
                 [LABELS[step].key]: val,
               }));
             }}
-            editable={step === allowedStep}
+            editable={canEdit}
             keyboardType="numeric"
             style={styles.input}
             placeholder={`Enter ${LABELS[step].label}`}
@@ -401,15 +385,15 @@ export default function WeightChallengeUI() {
             style={[
               styles.nextBtn,
 
-              step !== allowedStep && {
+              isLocked && {
                 opacity: 0.5,
               },
             ]}
-            disabled={step !== allowedStep}
+            disabled={!canEdit}
             onPress={saveWeight}
           >
             <Text style={styles.nextBtnText}>
-              {step !== allowedStep
+              {!canEdit
                 ? '🔒 Locked'
                 : step === LABELS.length - 1
                 ? 'Done ✓'
@@ -456,9 +440,9 @@ const styles = StyleSheet.create({
   },
 
   stepDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    height: 36,
+    paddingHorizontal: 10,
+    borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.07)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
@@ -475,10 +459,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderColor: colors.secondary,
   },
-
   stepDotNum: {
     color: colors.white,
-    fontSize: 12,
+    fontSize: 10,
     fontFamily: fontFamily.montserratSemiBold,
   },
 

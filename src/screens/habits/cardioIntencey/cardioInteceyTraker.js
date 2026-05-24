@@ -25,14 +25,6 @@ const getDateKey = () => moment().format('YYYY-MM-DD');
 
 const getMonthKey = () => moment().format('MMMM_YYYY'); // May_2026
 
-const getWeekIndex = startDate => {
-  if (!startDate) return 1;
-
-  const diffDays = moment().diff(moment(startDate), 'days');
-  const week = Math.floor(diffDays / 7) + 1;
-
-  return Math.min(Math.max(week, 1), 4);
-};
 const { width: SW } = Dimensions.get('window');
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   return (
@@ -108,7 +100,7 @@ export default function CardioTrackerUI({ navigation }) {
     const week = getWeekIndex(startDate);
 
     return database().ref(
-      `users/${USER_ID}/habits/${monthKey}/weeks/week${week}`,
+      `users/${USER_ID}/habits/cardio/${monthKey}/weeks/week${week}`,
     );
   };
 
@@ -132,7 +124,7 @@ export default function CardioTrackerUI({ navigation }) {
 
       // cardio weeks
       const monthKey = moment().format('MMMM_YYYY');
-      const weeks = data?.habits?.[monthKey]?.weeks || {};
+      const weeks = data?.habits?.cardio?.[monthKey]?.weeks || {};
 
       setWeeksData(weeks);
     });
@@ -234,22 +226,22 @@ export default function CardioTrackerUI({ navigation }) {
       const end = moment();
       setEndTime(end);
 
-      const dateKey = end.format('YYYY-MM-DD');
-      const monthKey = end.format('MMMM_YYYY');
+      // 👉 TAKE END PHOTO FIRST
+      const uri = await openCamera('end');
 
-      const start = startTime ? moment(startTime) : null;
-
-      const duration =
-        startTime && endTime
-          ? moment(endTime).diff(moment(startTime), 'minutes')
-          : 0;
+      const duration = startTime
+        ? moment(end).diff(moment(startTime), 'minutes')
+        : 0;
 
       const intensity = getIntensity(duration).label;
+
+      const dateKey = end.format('YYYY-MM-DD');
+      const monthKey = end.format('MMMM_YYYY');
 
       const week = getWeekIndex(startDate);
 
       const weekRef = database().ref(
-        `users/${USER_ID}/habits/${monthKey}/weeks/week${week}`,
+        `users/${USER_ID}/habits/cardio/${monthKey}/weeks/week${week}`,
       );
 
       const snapshot = await weekRef.once('value');
@@ -259,28 +251,27 @@ export default function CardioTrackerUI({ navigation }) {
         type: 'timer',
         duration,
         intensity,
-        startTime: start ? start.toISOString() : null,
+        startTime: startTime ? moment(startTime).toISOString() : null,
         endTime: end.toISOString(),
         startPhoto,
-        endPhoto: endPhoto || null,
+        endPhoto: uri, // ✅ use direct result
         createdAt: moment().toISOString(),
       };
 
       await weekRef.update({
         title: goal?.title || 'Cardio Challenge',
         target: goal?.target || '150 min/week',
-
         totalMinutes: (prev.totalMinutes || 0) + duration,
         sessions: (prev.sessions || 0) + 1,
         avgIntensity: intensity,
-
         [`days/${dateKey}`]: entry,
       });
+
+      setEndPhoto(uri); // optional UI update
     } catch (e) {
       console.log('❌ handleStop error:', e);
     }
   };
-
   const duration =
     startTime && endTime
       ? moment(endTime).diff(moment(startTime), 'minutes')

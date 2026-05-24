@@ -31,40 +31,49 @@ const PADDING = 20;
 const BAR_WIDTH = 14;
 const ITEM_WIDTH = 30;
 
-const getDateKey = (date = new Date()) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`; // "2026-04-01"
+const getDateKey = (date = moment()) => {
+  return moment(date).format('YYYY-MM-DD');
 };
 
-export default function SugarChart30Days({ navigation }) {
+export default function SugarChart30Days() {
   const [product, setProduct] = useState('');
   const [sugarInput, setSugarInput] = useState('');
   const [selected, setSelected] = useState(10);
-  const [rawData, setRawData] = useState([]);
   const [gender, setGender] = useState('female');
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [todayString, setTodayString] = useState(new Date().toDateString());
-  const [startDate, setStartDate] = useState(new Date());
-  const goal = gender == 'female' ? 24 : 38;
-  const todayKey = getDateKey();
+  const [errorMsg, setErrorMsg] = useState('');
+  const [habitDays, setHabitDays] = useState({});
+  const [todayString, setTodayString] = useState(moment().format('YYYY-MM-DD'));
+  const [startDate, setStartDate] = useState(moment().toDate());
+  const goal = gender?.toLowerCase() === 'female' ? 24 : 38;
+  const cycleStart = useMemo(() => {
+    const todayDate = moment().startOf('day');
 
-  const todayDate = new Date();
-  todayDate.setHours(0, 0, 0, 0);
+    const base = moment(startDate).startOf('day');
 
-  const base = new Date(startDate);
-  base.setHours(0, 0, 0, 0);
+    const diffDays = todayDate.diff(base, 'days');
 
-  const diffDays = Math.floor((todayDate - base) / (1000 * 60 * 60 * 24));
+    const cycle = Math.floor(diffDays / 30);
 
-  // 👉 cycle index (0 = first 30 days, 1 = next 30 days, etc)
-  const cycle = Math.floor(diffDays / 30);
+    return moment(base).add(cycle * 30, 'days');
+  }, [startDate]);
 
-  // 👉 start of current cycle
-  const cycleStart = new Date(base);
-  cycleStart.setDate(base.getDate() + cycle * 30);
+  const rawData = useMemo(() => {
+    const baseData = Array.from({ length: 30 }, (_, i) => {
+      const date = moment(cycleStart).add(i, 'days').toDate();
+
+      return {
+        key: getDateKey(date),
+        date,
+        sugar: 0,
+      };
+    });
+
+    return baseData.map(item => ({
+      ...item,
+      items: habitDays?.[item.key]?.items || [],
+      sugar: Number(habitDays?.[item.key]?.progress || 0),
+    }));
+  }, [cycleStart, habitDays]);
 
   useEffect(() => {
     if (!rawData.length) return;
@@ -80,8 +89,10 @@ export default function SugarChart30Days({ navigation }) {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const now = new Date().toDateString();
-      if (now !== todayString) setToday(now);
+      const now = moment().format('YYYY-MM-DD');
+      if (now !== todayString) {
+        setTodayString(now);
+      }
     }, 60000);
     return () => clearInterval(interval);
   }, [todayString]);
@@ -96,50 +107,38 @@ export default function SugarChart30Days({ navigation }) {
       const data = snapshot.val() || {};
 
       const startDateRaw = data?.goal?.startDate;
-      const startDate = startDateRaw ? new Date(startDateRaw) : new Date();
+      const dbStartDate = startDateRaw
+        ? moment(startDateRaw).toDate()
+        : moment().toDate();
 
-      const habits = data?.habits || {};
+      setStartDate(dbStartDate);
+
+      const habits = data?.habits?.sugarIntake || {};
       const gen = data?.profile?.gender;
       setGender(gen);
 
       // const goal = gender === 'female' ? 24 : 36;
 
-      setStartDate(startDate);
-
       // 👉 create 30 day base
-      const baseData = Array.from({ length: 30 }, (_, i) => {
-        const date = new Date(startDate);
-        date.setDate(date.getDate() + i);
-
-        return {
-          key: getDateKey(date),
-          date,
-          sugar: 0,
-        };
-      });
-
-      // ✅ find latest habit (NO Sugar_ filter anymore)
       const habitEntries = Object.entries(habits || {});
 
       if (!habitEntries.length) {
-        setRawData(baseData);
+        setHabitDays({});
         return;
       }
 
-      // pick latest month-based habit (May_2026, June_2026, etc.)
       const latestHabit = habitEntries
-        .sort((a, b) => a[0].localeCompare(b[0]))
+        .sort((a, b) => {
+          const dateA = moment(a[0], 'MMMM_YYYY');
+          const dateB = moment(b[0], 'MMMM_YYYY');
+
+          return dateA.valueOf() - dateB.valueOf();
+        })
         .at(-1);
 
       const days = latestHabit?.[1]?.days || {};
 
-      const formatted = baseData.map(item => ({
-        ...item,
-        items: days?.[item.key]?.items || [],
-        sugar: Number(days?.[item.key]?.progress || 0),
-      }));
-
-      setRawData(formatted);
+      setHabitDays(days);
     };
 
     userRef.on('value', onValueChange);
@@ -147,9 +146,7 @@ export default function SugarChart30Days({ navigation }) {
     return () => userRef.off('value', onValueChange);
   }, []);
 
-  const formatDate = date =>
-    date.toLocaleDateString('en-US', { day: 'numeric' });
-
+  const formatDate = date => moment(date).format('D');
   const data = useMemo(() => {
     return rawData.map(d => ({
       ...d,
@@ -192,17 +189,27 @@ export default function SugarChart30Days({ navigation }) {
     .join(' ');
 
   const handleAddSugar = async () => {
-    if (!product || !sugarInput) return;
+    const sugarValue = Number(sugarInput);
+
+    if (!product?.trim() || !sugarInput || sugarValue <= 0) {
+      return;
+    }
+
+    if (sugarValue > 40) {
+      setErrorMsg('You cannot add more than 40g of sugar at one time.');
+      return;
+    }
 
     const newItem = {
-      name: product,
-      sugar: Number(sugarInput),
+      name: product.trim(),
+      sugar: sugarValue,
     };
 
     await saveSugarData(newItem);
 
     setProduct('');
     setSugarInput('');
+    setErrorMsg('');
   };
 
   const saveSugarData = async newItem => {
@@ -210,13 +217,12 @@ export default function SugarChart30Days({ navigation }) {
     if (!uid) return;
 
     const dateKey = getDateKey();
-    const monthName = new Date().toLocaleString('en-US', { month: 'long' });
-    const year = new Date().getFullYear();
-
+    const monthName = moment().format('MMMM');
+    const year = moment().format('YYYY');
     const habitKey = `${monthName}_${year}`;
 
     const ref = database().ref(
-      `users/${uid}/habits/${habitKey}/days/${dateKey}`,
+      `users/${uid}/habits/sugarIntake/${habitKey}/days/${dateKey}`,
     );
 
     const snapshot = await ref.once('value');
@@ -230,7 +236,7 @@ export default function SugarChart30Days({ navigation }) {
       {
         name: newItem.name,
         sugar: Number(newItem.sugar),
-        createdAt: Date.now(),
+        createdAt: moment().valueOf(),
       },
     ];
 
@@ -239,7 +245,7 @@ export default function SugarChart30Days({ navigation }) {
       0,
     );
 
-    await ref.set({
+    await ref.update({
       items: updatedItems,
       progress: totalProgress,
     });
@@ -405,11 +411,7 @@ export default function SugarChart30Days({ navigation }) {
         <View style={styles.detailCard}>
           <View style={styles.detailHeader}>
             <Text style={styles.detailTitle}>
-              🍽{' '}
-              {data[selected]?.date.toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-              })}
+              🍽 {moment(data[selected]?.date).format('MMM D')}
             </Text>
             <View
               style={[
@@ -469,6 +471,18 @@ export default function SugarChart30Days({ navigation }) {
               placeholderTextColor="rgba(255,255,255,0.25)"
               style={[styles.input, { marginBottom: 0 }]}
             />
+
+            {errorMsg && (
+              <Text
+                style={{
+                  color: colors.danger,
+                  fontFamily: fontFamily.montserratRegular,
+                  fontSize: 11,
+                }}
+              >
+                {errorMsg}
+              </Text>
+            )}
 
             <TouchableOpacity
               style={[

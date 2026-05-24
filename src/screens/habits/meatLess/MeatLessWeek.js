@@ -27,21 +27,19 @@ import { Header, Wrapper } from '../../../components';
 import storage from '@react-native-firebase/storage';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
+import moment from 'moment';
 
 const { width: SW } = Dimensions.get('window');
 
 const user = auth().currentUser;
 const USER_ID = user?.uid || 'USER_UID';
+
 const TOTAL_WEEKS = 4;
 const MAX_MEALS = 4;
 
-const today = new Date();
+const today = moment();
 
-const CURRENT_MONTH_KEY = `${today.toLocaleString('default', {
-  month: 'long',
-})}_${today.getFullYear()}`;
-
-// const CURRENT_WEEK = Math.min(Math.ceil(today.getDate() / 7), TOTAL_WEEKS);
+const CURRENT_MONTH_KEY = today.format('MMMM_YYYY');
 
 function GradientBg({ id, c1, c2, r = 20 }) {
   return (
@@ -84,26 +82,28 @@ export default function MeatlessChallenge({ navigation }) {
     target: '4 Meals Per Week',
     weeks: {},
   });
+
   const [startDate, setStartDate] = useState(null);
   const [labels, setLabels] = useState({});
+
   const weeks = habitData?.weeks || {};
 
   const totalMeals = Object.values(weeks).reduce((sum, week) => {
-    return sum + Object.keys(week?.meals || {}).length;
+    return sum + Object.keys(week || {}).length;
   }, 0);
 
   const progress = totalMeals / (TOTAL_WEEKS * MAX_MEALS);
+
   const getCurrentWeek = () => {
     if (!startDate) return 1;
 
-    const diffDays = Math.floor(
-      (new Date() - startDate) / (1000 * 60 * 60 * 24),
-    );
+    const diffDays = moment().diff(startDate, 'days');
 
     return Math.min(Math.max(Math.floor(diffDays / 7) + 1, 1), TOTAL_WEEKS);
   };
 
   const CURRENT_WEEK = getCurrentWeek();
+
   useEffect(() => {
     if (!USER_ID) return;
 
@@ -114,11 +114,11 @@ export default function MeatlessChallenge({ navigation }) {
 
       // START DATE
       if (data?.goal?.startDate) {
-        setStartDate(new Date(data.goal.startDate));
+        setStartDate(moment(data.goal.startDate, 'YYYY-MM-DD'));
       }
 
       // HABIT DATA
-      const challenge = data?.habits?.[CURRENT_MONTH_KEY];
+      const challenge = data?.habits?.meatLess?.[CURRENT_MONTH_KEY];
 
       if (challenge) {
         setHabitData(challenge);
@@ -126,7 +126,7 @@ export default function MeatlessChallenge({ navigation }) {
         const tempLabels = {};
 
         Object.entries(challenge?.weeks || {}).forEach(([weekKey, week]) => {
-          Object.entries(week?.meals || {}).forEach(([mealKey, meal]) => {
+          Object.entries(week || {}).forEach(([mealKey, meal]) => {
             tempLabels[`${weekKey}_${mealKey}`] = meal?.label || '';
           });
         });
@@ -146,12 +146,12 @@ export default function MeatlessChallenge({ navigation }) {
 
   const saveMeal = async (weekKey, mealKey, mealData) => {
     await database()
-      .ref(`users/${USER_ID}/habits/${CURRENT_MONTH_KEY}`)
+      .ref(`users/${USER_ID}/habits/meatLess/${CURRENT_MONTH_KEY}`)
       .update({
         title: 'Meatless Challenge',
         target: '4 Meals Per Week',
 
-        [`weeks/${weekKey}/meals/${mealKey}`]: mealData,
+        [`weeks/${weekKey}/${mealKey}`]: mealData,
       });
   };
 
@@ -160,7 +160,7 @@ export default function MeatlessChallenge({ navigation }) {
 
     if (weekNumber !== CURRENT_WEEK) return;
 
-    const meals = weeks?.[weekKey]?.meals || {};
+    const meals = weeks?.[weekKey] || {};
 
     if (Object.keys(meals).length >= MAX_MEALS) {
       Alert.alert('Limit reached', 'Max 4 meals per week');
@@ -168,6 +168,7 @@ export default function MeatlessChallenge({ navigation }) {
     }
 
     const granted = await requestCameraPermission();
+
     if (!granted) return;
 
     launchCamera({ mediaType: 'photo', quality: 0.7 }, async res => {
@@ -190,7 +191,7 @@ export default function MeatlessChallenge({ navigation }) {
       await saveMeal(weekKey, mealKey, {
         uri,
         label: '',
-        timestamp: new Date().toISOString(),
+        timestamp: moment().toISOString(),
       });
     });
   };
@@ -198,7 +199,7 @@ export default function MeatlessChallenge({ navigation }) {
   const updateLabel = async (weekKey, mealKey, text) => {
     await database()
       .ref(
-        `users/${USER_ID}/habits/${CURRENT_MONTH_KEY}/weeks/${weekKey}/meals/${mealKey}`,
+        `users/${USER_ID}/habits/meatLess/${CURRENT_MONTH_KEY}/weeks/${weekKey}/${mealKey}`,
       )
       .update({
         label: text,
@@ -208,22 +209,13 @@ export default function MeatlessChallenge({ navigation }) {
   const deleteMeal = async (weekKey, mealKey) => {
     await database()
       .ref(
-        `users/${USER_ID}/habits/${CURRENT_MONTH_KEY}/weeks/${weekKey}/meals/${mealKey}`,
+        `users/${USER_ID}/habits/meatLess/${CURRENT_MONTH_KEY}/weeks/${weekKey}/${mealKey}`,
       )
       .remove();
   };
 
-  // const uploadImage = async (uri, userId, weekIndex, mealIndex) => {
-  //   const filename = `meal_${Date.now()}.jpg`;
-  //   const refPath = `meals/${userId}/week_${weekIndex}/${filename}`;
-
-  //   await storage().ref(refPath).putFile(uri);
-  //   return await storage().ref(refPath).getDownloadURL();
-  // };
-
   return (
     <View style={styles.root}>
-      {/* Header with gradient */}
       <Header
         header={'Meatless Challenge'}
         headerContainer={{
@@ -231,34 +223,42 @@ export default function MeatlessChallenge({ navigation }) {
           paddingHorizontal: 24,
         }}
       />
+
       <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
         <View style={styles.heroBg}>
           <Text style={styles.heroTitle}>🌿 Meatless Day Challenge</Text>
+
           <Text style={styles.heroSub}>
             Upload meals for 1 meatless day each week (4 weeks)
           </Text>
 
-          {/* Progress */}
           <View style={styles.progressRow}>
             <View style={styles.progressBg}>
               <View
                 style={[styles.progressFill, { width: `${progress * 100}%` }]}
               />
             </View>
+
             <Text style={styles.progressLabel}>
               {totalMeals}/{TOTAL_WEEKS * MAX_MEALS} meals
             </Text>
           </View>
         </View>
+
         {Array.from({ length: TOTAL_WEEKS }).map((_, wi) => {
           const weekKey = `week${wi + 1}`;
           const weekNumber = wi + 1;
+
           const isPast = weekNumber < CURRENT_WEEK;
           const isCurrent = weekNumber === CURRENT_WEEK;
           const isLocked = weekNumber > CURRENT_WEEK;
-          const mealsObject = weeks?.[weekKey]?.meals || {};
+
+          const mealsObject = weeks?.[weekKey] || {};
+
           const mealsArray = Object.entries(mealsObject);
+
           const weekDone = mealsArray.length >= MAX_MEALS;
+
           return (
             <View
               key={wi}
@@ -276,7 +276,6 @@ export default function MeatlessChallenge({ navigation }) {
                 />
               )}
 
-              {/* Week header */}
               <View style={styles.weekHeader}>
                 <View
                   style={[
@@ -294,19 +293,23 @@ export default function MeatlessChallenge({ navigation }) {
                     {weekDone ? '✓' : wi + 1}
                   </Text>
                 </View>
+
                 <Text style={[styles.weekTitle, isLocked && styles.lockedText]}>
                   Week {wi + 1}
                 </Text>
+
                 {weekDone && (
                   <View style={styles.completedPill}>
                     <Text style={styles.completedPillText}>Completed</Text>
                   </View>
                 )}
+
                 {isCurrent && (
                   <View style={styles.currentPill}>
                     <Text style={styles.currentPillText}>Active</Text>
                   </View>
                 )}
+
                 {isLocked && (
                   <View style={styles.lockedPill}>
                     <Text style={styles.lockedPillText}>🔒 Locked</Text>
@@ -314,14 +317,13 @@ export default function MeatlessChallenge({ navigation }) {
                 )}
               </View>
 
-              {/* Locked */}
               {isLocked ? (
                 <View style={styles.lockedBox}>
                   <Text style={styles.lockEmoji}>🔒</Text>
+
                   <Text style={styles.lockedSub}>Unlocks in a future week</Text>
                 </View>
               ) : isPast && mealsArray?.length === 0 ? (
-                /* Past week with no uploaded meals — show completed summary */
                 <View style={styles.pastSummary}>
                   <View style={styles.pastIconWrap}>
                     <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
@@ -334,8 +336,10 @@ export default function MeatlessChallenge({ navigation }) {
                       />
                     </Svg>
                   </View>
+
                   <View style={styles.pastTextWrap}>
                     <Text style={styles.pastTitle}>Week completed</Text>
+
                     <Text style={styles.pastSub}>
                       Meatless day challenge met for this week
                     </Text>
@@ -343,7 +347,6 @@ export default function MeatlessChallenge({ navigation }) {
                 </View>
               ) : (
                 <>
-                  {/* Meal thumbnails */}
                   {mealsArray?.length > 0 && (
                     <ScrollView
                       horizontal
@@ -353,9 +356,10 @@ export default function MeatlessChallenge({ navigation }) {
                       {mealsArray.map(([mealKey, meal], mi) => (
                         <View key={mi} style={styles.mealThumb}>
                           <Image
-                            source={{ uri: meal.uri }}
+                            source={{ uri: meal?.uri }}
                             style={styles.mealImg}
                           />
+
                           {isCurrent && (
                             <TouchableOpacity
                               style={styles.mealDelete}
@@ -364,6 +368,13 @@ export default function MeatlessChallenge({ navigation }) {
                               <Text style={styles.mealDeleteText}>✕</Text>
                             </TouchableOpacity>
                           )}
+
+                          <Text style={styles.mealDate}>
+                            {meal?.timestamp
+                              ? moment(meal.timestamp).format('DD MMM YYYY')
+                              : ''}
+                          </Text>
+
                           <TextInput
                             value={labels[`${weekKey}_${mealKey}`] || ''}
                             onChangeText={t => {
@@ -389,7 +400,6 @@ export default function MeatlessChallenge({ navigation }) {
                     </ScrollView>
                   )}
 
-                  {/* Past week with uploaded meals — show completion banner */}
                   {isPast && mealsArray?.length > 0 && (
                     <View style={styles.mealsDoneBanner}>
                       <Text style={styles.mealsDoneText}>
@@ -398,7 +408,6 @@ export default function MeatlessChallenge({ navigation }) {
                     </View>
                   )}
 
-                  {/* Upload / add button */}
                   {isCurrent && mealsArray?.length < MAX_MEALS && (
                     <TouchableOpacity
                       style={styles.uploadBtn}
@@ -406,6 +415,7 @@ export default function MeatlessChallenge({ navigation }) {
                       activeOpacity={0.8}
                     >
                       <CameraIcon />
+
                       <Text style={styles.uploadText}>
                         {mealsArray.length === 0
                           ? 'Upload Meal Photo'
@@ -433,7 +443,12 @@ export default function MeatlessChallenge({ navigation }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.dark },
-
+  mealDate: {
+    marginTop: 4,
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 9,
+    fontFamily: fontFamily.montserratRegular,
+  },
   heroBg: { paddingBottom: 20, overflow: 'hidden' },
   header: {
     flexDirection: 'row',

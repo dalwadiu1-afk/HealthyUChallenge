@@ -19,12 +19,13 @@ import auth from '@react-native-firebase/auth';
 
 import { launchCamera } from 'react-native-image-picker';
 import { requestCameraPermission } from '../../../utils/helper';
+import moment from 'moment';
 
 const TOTAL = 8; // 4 weeks × 2 photos
 const WEEKLY_TARGET = 2;
 
 const USER_ID = auth().currentUser?.uid;
-
+const monthKey = moment().format('MMMM_YYYY');
 const TOTAL_WEEKS = TOTAL / WEEKLY_TARGET;
 
 function CameraIcon() {
@@ -104,16 +105,10 @@ export default function WeightTrainingUI() {
   let currentUnlockedWeek = 0;
 
   if (startDate) {
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
+    const start = moment(startDate).startOf('day');
+    const now = moment().startOf('day');
 
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-
-    const diffMs = now - start;
-
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
+    const diffDays = now.diff(start, 'days');
     currentUnlockedWeek = Math.floor(diffDays / 7);
 
     if (currentUnlockedWeek < 0) {
@@ -129,14 +124,9 @@ export default function WeightTrainingUI() {
       FETCH SAVED WORKOUTS
   ========================================= */
   useEffect(() => {
-    const monthKey = new Date().toLocaleString('default', {
-      month: 'long',
-      year: 'numeric',
-    });
-
-    const formattedMonth = monthKey.replace(' ', '_');
-
-    const ref = database().ref(`users/${USER_ID}/habits/${formattedMonth}`);
+    const ref = database().ref(
+      `users/${USER_ID}/habits/weightTraining/${monthKey}`,
+    );
 
     const listener = ref.on('value', snapshot => {
       const data = snapshot.val();
@@ -211,7 +201,7 @@ export default function WeightTrainingUI() {
 
     const photoData = {
       photo: uri,
-      timestamp: new Date().toISOString(),
+      timestamp: moment().toISOString(),
     };
 
     tempPhotos.current[index] = photoData;
@@ -236,15 +226,8 @@ export default function WeightTrainingUI() {
 
       const positionInsideWeek = index % WEEKLY_TARGET;
 
-      const monthKey = new Date().toLocaleString('default', {
-        month: 'long',
-        year: 'numeric',
-      });
-
-      const formattedMonth = monthKey.replace(' ', '_');
-
       const ref = database().ref(
-        `users/${USER_ID}/habits/${formattedMonth}/weeks/week${weekNumber}`,
+        `users/${USER_ID}/habits/weightTraining/${monthKey}/weeks/week${weekNumber}`,
       );
 
       const snapshot = await ref.once('value');
@@ -368,7 +351,9 @@ export default function WeightTrainingUI() {
           </TouchableOpacity>
 
           {done && timestamp && (
-            <Text style={styles.timestamp}>Uploaded {timestamp}</Text>
+            <Text style={styles.timestamp}>
+              Uploaded {moment(timestamp).format('MMM D, YYYY • h:mm A')}
+            </Text>
           )}
         </View>
       </Animated.View>

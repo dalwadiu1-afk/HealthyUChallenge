@@ -7,13 +7,10 @@ import {
   Animated,
   Pressable,
   TouchableOpacity,
-  StatusBar,
-  Dimensions,
 } from 'react-native';
 import { colors, fontFamily } from '../../constant';
 import { Wrapper } from '../../components';
-import database from '@react-native-firebase/database';
-import auth from '@react-native-firebase/auth';
+import { useSelector } from 'react-redux';
 
 const CATEGORIES = ['All', 'Fitness', 'Nutrition', 'Sleep', 'Wellness'];
 
@@ -104,7 +101,12 @@ function FlipCard({ item, navigation, index }) {
         onPress={() => {
           flipCard();
           if (item.screenName !== 'HabitsList') {
-            setTimeout(() => navigation?.navigate(item.screenName), 300);
+            setTimeout(() => {
+              navigation?.navigate(item.screenName, {
+                goalTitle: item.title,
+                goalId: item.id,
+              });
+            }, 300);
           }
         }}
       >
@@ -156,15 +158,13 @@ function FlipCard({ item, navigation, index }) {
 ======================= */
 export default function HabitsList({ navigation }) {
   const [activeCategory, setActiveCategory] = useState('All');
-  const [appointmentScreen, setAppointmentScreen] =
-    useState('BookAnAppointment');
-  const userId = auth().currentUser.uid;
+
   const ALL_HABITS = [
     {
       id: 1,
       title: 'Nutrition Session',
       description: 'Book and attend a free nutrition counseling session',
-      screenName: appointmentScreen,
+      screenName: 'BookAnAppointment',
       category: 'Nutrition',
     },
     {
@@ -178,7 +178,7 @@ export default function HabitsList({ navigation }) {
       id: 3,
       title: 'Fiber Goal',
       description: 'Eat 25–38g fiber daily for at least 20 days',
-      screenName: 'DailyFiberCounts', // ✅ FIXED
+      screenName: 'DailyFiberCounts',
       category: 'Nutrition',
     },
     {
@@ -288,26 +288,28 @@ export default function HabitsList({ navigation }) {
     },
     {
       id: 19,
-      title: 'Custom Goal',
+      title: 'Personalized Goal 1',
+      description: 'Add your own personal health goal',
+      screenName: 'FutureIdeasUI',
+      category: 'Wellness',
+    },
+    {
+      id: 20,
+      title: 'Personalized Goal 2',
+      description: 'Add your own personal health goal',
+      screenName: 'FutureIdeasUI',
+      category: 'Wellness',
+    },
+    {
+      id: 21,
+      title: 'Personalized Goal 3',
       description: 'Add your own personal health goal',
       screenName: 'FutureIdeasUI',
       category: 'Wellness',
     },
   ];
-  const [profile, setProfile] = useState(null);
-
-  useEffect(() => {
-    if (!userId) return;
-
-    const ref = database().ref(`users/${userId}/profile`);
-
-    const listener = ref.on('value', snapshot => {
-      const data = snapshot.val();
-      setProfile(data || null);
-    });
-
-    return () => ref.off('value', listener);
-  }, []);
+  const profileData = useSelector(state => state.user);
+  const profile = profileData?.profile;
 
   const filtered =
     activeCategory === 'All'
@@ -324,44 +326,6 @@ export default function HabitsList({ navigation }) {
       useNativeDriver: true,
     }).start();
   }, []);
-
-  const checkAppointmentProgress = async () => {
-    const now = Date.now();
-
-    const monthKey = new Date()
-      .toLocaleString('en-US', { month: 'long', year: 'numeric' })
-      .replace(' ', '_');
-
-    const snapshot = await database()
-      .ref(`users/${userId}/habits/${monthKey}`)
-      .once('value');
-
-    const habitData = snapshot.val();
-
-    if (!habitData) {
-      setAppointmentScreen('BookAnAppointment');
-      return;
-    }
-
-    let isActive = false;
-
-    Object.values(habitData).forEach(item => {
-      if (!item?.createdAt || !item?.doctorId) return;
-
-      const startDate = item.createdAt;
-      const endDate = startDate + 7 * 24 * 60 * 60 * 1000;
-
-      if (now >= startDate && now <= endDate) {
-        isActive = true;
-      }
-    });
-
-    if (isActive) {
-      setAppointmentScreen('SessionActiveScreen'); // 🔥 during 7 days
-    } else {
-      setAppointmentScreen('SessionConfirmation'); // after
-    }
-  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();

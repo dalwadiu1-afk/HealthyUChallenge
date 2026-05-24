@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,9 @@ import {
 } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
-import moment from 'moment';
+import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
+import { Header } from '../../../components';
 
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   return (
@@ -36,12 +38,69 @@ function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   );
 }
 
-export default function ConfirmationCode({ navigation }) {
+const monthKey = new Date()
+  .toLocaleString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  })
+  .replace(' ', '_');
+
+const getRemainingDays = createdAt => {
+  const expiresAt = createdAt + 7 * 24 * 60 * 60 * 1000;
+  const diff = expiresAt - Date.now();
+
+  if (diff <= 0) return 0;
+
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+};
+
+export default function ConfirmationCode({ navigation, route }) {
+  const { doctor } = route.params || {};
+  console.log('route?.params :>> ', route?.params);
+  const uid = auth().currentUser.uid;
+
+  console.log('doctor :>> ', doctor);
   const [showOtp, setShowOtp] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '']);
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   const inputs = [useRef(null), useRef(null), useRef(null), useRef(null)];
+  const [booking, setBooking] = useState(null);
+  const [bookingKey, setBookingKey] = useState(null);
+
+  const fetchBooking = async () => {
+    const snap = await database()
+      .ref(`/users/${uid}/habits/booking/${monthKey}`)
+      .once('value');
+    console.log('auth :>> ', snap);
+
+    if (snap.exists()) {
+      const data = snap.val();
+
+      // get latest booking (or first one)
+      const latestKey = Object.keys(data)[0];
+      console.log('latestKey :>> ', latestKey);
+      setBookingKey(latestKey);
+      setBooking(data[latestKey]);
+    }
+  };
+
+  useEffect(() => {
+    fetchBooking();
+  }, []);
+
+  const verifyOtp = async inputCode => {
+    console.log('objectdfg :>> ', otp, booking);
+    if (otp?.join('') === booking?.code) {
+      await database()
+        .ref(`/users/${uid}/habits/booking/${monthKey}/${bookingKey}`)
+        .update({
+          status: 'attended',
+          used: true,
+        });
+      closeOtp();
+    }
+  };
 
   const openOtp = () => {
     setShowOtp(true);
@@ -97,95 +156,111 @@ export default function ConfirmationCode({ navigation }) {
       <View style={styles.photoWrap}>
         <Image
           source={{
-            uri: 'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
+            uri:
+              doctor?.image ||
+              'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
           }}
           style={styles.photo}
           resizeMode="cover"
         />
-        <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none">
-          <Defs>
-            <LinearGradient id="photoFade2" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0.4" stopColor="transparent" stopOpacity="0" />
-              <Stop offset="1" stopColor={colors.dark} stopOpacity="1" />
-            </LinearGradient>
-          </Defs>
-          <Rect width="100%" height="100%" fill="url(#photoFade2)" />
-        </Svg>
 
-        {/* Back button */}
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation?.goBack()}
-          activeOpacity={0.8}
-        >
-          <Svg width={9} height={16} viewBox="0 0 9 16" fill="none">
-            <Path
-              d="M8 1L1 8L8 15"
-              stroke="#FFFFFF"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
-        </TouchableOpacity>
+        <Header
+          headerContainer={{
+            paddingHorizontal: 23,
+            zIndex: 2,
+            position: 'absolute',
+            width: '100%',
+            paddingTop: StatusBar.currentHeight,
+          }}
+          leftBtnStyle={{ backgroundColor: 'rgba(7, 4, 19, 0.6)' }}
+        />
       </View>
 
       {/* Doctor info card */}
       <View style={styles.doctorCard}>
         <GradientBg id="docCard2" c1="#2D4A25" c2="#1A2818" r={20} />
-        <Text style={styles.doctorName}>Dr. Smith Sras</Text>
-        <Text style={styles.doctorSpec}>Cardiologist Specialist</Text>
+        <Text style={styles.doctorName}>{doctor?.name}</Text>
+        <Text style={styles.doctorSpec}>{doctor?.specialty}</Text>
         <Text style={styles.doctorOrg}>Montclair State University</Text>
       </View>
 
-      {/* Booking info */}
       <View style={styles.bookingCard}>
+        {/* STATUS */}
         <View style={styles.bookingRow}>
           <View style={styles.bookingIcon}>
             <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
               <Path
-                d="M22 11.08V12a10 10 0 11-5.93-9.14"
+                d="M5 13l4 4L19 7"
                 stroke={colors.secondary}
-                strokeWidth={1.8}
-                strokeLinecap="round"
-              />
-              <Path
-                d="M22 4L12 14.01l-3-3"
-                stroke={colors.secondary}
-                strokeWidth={1.8}
-                strokeLinecap="round"
-                strokeLinejoin="round"
+                strokeWidth={2}
               />
             </Svg>
           </View>
+
           <View style={{ flex: 1 }}>
-            <Text style={styles.bookingLabel}>Appointment Booked</Text>
-            <Text style={styles.bookingValue}>
-              {moment().format('MMMM Do YYYY')}
+            <Text style={styles.bookingLabel}>Session Status</Text>
+            <Text
+              style={[
+                styles.bookingValue,
+                {
+                  color:
+                    booking?.status === 'attended' ? colors.secondary : '#fff',
+                },
+              ]}
+            >
+              {booking?.status === 'attended'
+                ? 'Attended'
+                : 'Pending Attendance'}
             </Text>
           </View>
         </View>
+
         <View style={styles.bookingDivider} />
+
+        {/* TIMER */}
         <View style={styles.bookingRow}>
           <View style={styles.bookingIcon}>
             <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+              <Path d="M12 8v4l3 3" stroke={colors.secondary} strokeWidth={2} />
               <Path
-                d="M12 2a10 10 0 100 20A10 10 0 0012 2z"
+                d="M12 22a10 10 0 100-20 10 10 0 000 20z"
                 stroke={colors.secondary}
-                strokeWidth={1.8}
-              />
-              <Path
-                d="M12 6v6l4 2"
-                stroke={colors.secondary}
-                strokeWidth={1.8}
-                strokeLinecap="round"
+                strokeWidth={1.5}
               />
             </Svg>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.bookingLabel}>Time</Text>
+            <Text style={styles.bookingLabel}>Time Remaining</Text>
             <Text style={styles.bookingValue}>
-              {moment().format('hh:mm A')}
+              {doctor?.createdAt
+                ? `${getRemainingDays(doctor?.createdAt)} days left`
+                : '---'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.bookingDivider} />
+
+        {/* OTP */}
+        <View style={styles.bookingRow}>
+          <View style={styles.bookingIcon}>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+              <Path d="M12 2v20" stroke={colors.secondary} strokeWidth={2} />
+            </Svg>
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bookingLabel}>Session Status</Text>
+
+            <Text
+              style={[
+                styles.bookingValue,
+                {
+                  color: booking?.used ? colors.secondary : '#fff',
+                },
+              ]}
+            >
+              {booking?.used ? 'Completed' : 'Awaiting Verification'}
             </Text>
           </View>
         </View>
@@ -276,7 +351,7 @@ export default function ConfirmationCode({ navigation }) {
               ]}
               activeOpacity={0.85}
               disabled={!otpFilled}
-              onPress={closeOtp}
+              onPress={verifyOtp}
             >
               {otpFilled && (
                 <GradientBg

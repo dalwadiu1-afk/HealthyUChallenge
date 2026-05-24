@@ -13,15 +13,21 @@ import { fontFamily, colors } from '../../constant';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const { height } = Dimensions.get('window');
+const RING_SIZE = 38;
+const RING_BORDER = 4;
+
+// Replace hardcoded stroke color inside SVG string so icon renders white
+const whiteIcon = svg => svg.replace(/stroke="[^"]+"/g, 'stroke="#FFFFFF"');
+const leftIconWhite = whiteIcon(leftIcon);
+const rightIconWhite = whiteIcon(rightIcon);
+
 // ===== HELPERS =====
 
-// Fix timezone
 const formatDate = d =>
   new Date(d.getTime() - d.getTimezoneOffset() * 60000)
     .toISOString()
     .split('T')[0];
 
-// Safe parse
 const parseLocalDate = dateStr => {
   const [y, m, d] = dateStr.split('-');
   return new Date(y, m - 1, d);
@@ -33,51 +39,37 @@ const addDays = (date, days) => {
   return d;
 };
 
-// Month label
 const getMonthLabel = (startDate, cycle) => {
   const base = parseLocalDate(startDate);
   const date = addDays(base, cycle * 30);
-
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    year: 'numeric',
-  });
+  return date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
 };
 
-// 🔥 30 DAY DATA WITH OVERFLOW
 const get30DaysData = (startDate, cycle) => {
   const base = parseLocalDate(startDate);
   const offset = cycle * 30;
-
   const start = addDays(base, offset);
   const arr = [];
-
   const firstDay = start.getDay();
 
-  // previous days (grey)
   for (let i = firstDay - 1; i >= 0; i--) {
     const d = addDays(start, -i - 1);
     arr.push({ date: d, current: false });
   }
-
-  // current 30 days
   for (let i = 0; i < 30; i++) {
     const d = addDays(start, i);
     arr.push({ date: d, current: true });
   }
-
-  // next days to fill grid
   while (arr.length % 7 !== 0) {
     const last = arr[arr.length - 1].date;
-    const next = addDays(last, 1);
-    arr.push({ date: next, current: false });
+    arr.push({ date: addDays(last, 1), current: false });
   }
 
   return arr;
 };
 
 export function StreakCalendar({
-  startDate = '2026-04-10',
+  startDate = '2026-04-01',
   showInsight = false,
   setShowInsight,
   container,
@@ -93,9 +85,7 @@ export function StreakCalendar({
   ]);
 
   const today = new Date();
-
   const completedSet = useMemo(() => new Set(completedDates), [completedDates]);
-
   const data = useMemo(
     () => get30DaysData(startDate, cycle),
     [startDate, cycle],
@@ -109,73 +99,53 @@ export function StreakCalendar({
 
   const isCompleted = date => date && completedSet.has(formatDate(date));
 
-  // streak logic
-  const getStreakType = date => {
-    if (!date || !isCompleted(date)) return null;
-
-    const prev = formatDate(addDays(date, -1));
-    const next = formatDate(addDays(date, 1));
-
-    const hasPrev = completedSet.has(prev);
-    const hasNext = completedSet.has(next);
-
-    if (!hasPrev && hasNext) return 'start';
-    if (hasPrev && hasNext) return 'middle';
-    if (hasPrev && !hasNext) return 'end';
-    return 'single';
-  };
-
-  // auto next cycle
   useEffect(() => {
     const realDays = data.filter(d => d.current);
-
     const allDone =
       realDays.length > 0 &&
       realDays.every(d => completedSet.has(formatDate(d.date)));
-
     if (allDone) {
-      setTimeout(() => {
-        setCycle(prev => prev + 1);
-      }, 300);
+      setTimeout(() => setCycle(prev => prev + 1), 300);
     }
   }, [completedDates, data]);
 
   const renderItem = ({ item }) => {
     const { date, current } = item;
-
     const todayMatch = isToday(date);
     const completed = current && isCompleted(date);
-    const streakType = current ? getStreakType(date) : null;
 
     return (
-      <View
-        style={[
-          styles.dayBox,
-          completed && styles.completedBox,
-          streakType === 'start' && styles.streakStart,
-          streakType === 'middle' && styles.streakMiddle,
-          streakType === 'end' && styles.streakEnd,
-          todayMatch && styles.activeBox,
-        ]}
-      >
-        <TouchableOpacity
-        // onPress={() => setShowInsight(!showInsight)}
-        >
-          {/* {!showInsight ? ( */}
+      <View style={styles.dayBox}>
+        {/* Date number */}
+        {todayMatch ? (
+          <View style={styles.todayCircle}>
+            <Text style={styles.todayText}>{date.getDate()}</Text>
+          </View>
+        ) : (
           <Text
             style={[
-              styles.dayText,
+              styles.dateText,
               current ? styles.currentText : styles.outsideText,
-              completed && styles.completedText,
-              todayMatch && styles.activeText,
             ]}
           >
             {date.getDate()}
           </Text>
-          {/* ) : (
-            <View />
-          )} */}
-        </TouchableOpacity>
+        )}
+
+        {/* Ring */}
+        <View
+          style={[
+            styles.ring,
+            current
+              ? completed
+                ? styles.ringOn
+                : styles.ringOff
+              : styles.ringHidden,
+          ]}
+        />
+
+        {/* Today dot */}
+        {todayMatch && <View style={styles.todayDot} />}
       </View>
     );
   };
@@ -186,28 +156,22 @@ export function StreakCalendar({
       <View style={styles.navRow}>
         <TouchableOpacity
           onPress={() => setCycle(c => Math.max(0, c - 1))}
-          style={{ padding: 12, backgroundColor: '#DBD9EC', borderRadius: 5 }}
+          style={styles.navBtn}
         >
-          <SvgImg iconName={leftIcon} height={15} width={15} />
+          <SvgImg iconName={leftIconWhite} height={14} width={14} />
         </TouchableOpacity>
 
         <Text style={styles.navTitle}>{getMonthLabel(startDate, cycle)}</Text>
 
         <TouchableOpacity
-          onPress={() => setCycle(c => Math.max(0, c + 1))}
-          style={{ padding: 12, backgroundColor: '#DBD9EC', borderRadius: 5 }}
+          onPress={() => setCycle(c => c + 1)}
+          style={styles.navBtn}
         >
-          <SvgImg iconName={rightIcon} height={15} width={15} />
+          <SvgImg iconName={rightIconWhite} height={14} width={14} />
         </TouchableOpacity>
       </View>
 
-      <View
-        style={{
-          marginTop: 10,
-          borderBottomWidth: 1,
-          borderColor: colors.primary,
-        }}
-      />
+      <View style={styles.divider} />
 
       {/* WEEK HEADER */}
       <View style={styles.weekRow}>
@@ -218,19 +182,14 @@ export function StreakCalendar({
         ))}
       </View>
 
-      <View
-        style={{
-          borderBottomWidth: 1,
-          borderColor: colors.primary,
-        }}
-      />
+      <View style={styles.divider} />
 
       {/* GRID */}
       <FlatList
         data={data}
         numColumns={7}
         scrollEnabled={false}
-        keyExtractor={(item, index) => index.toString()}
+        keyExtractor={(_, index) => index.toString()}
         renderItem={renderItem}
       />
     </View>
@@ -243,8 +202,7 @@ const styles = StyleSheet.create({
     padding: 10,
     top: height * 0.069,
     alignSelf: 'center',
-    // marginHorizontal: 10,
-    backgroundColor: '#DBD9EC',
+    backgroundColor: colors.dark,
     borderRadius: 10,
     position: 'absolute',
     zIndex: 1,
@@ -262,82 +220,106 @@ const styles = StyleSheet.create({
   },
 
   navBtn: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#7B83FF',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(143, 175, 120, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(143, 175, 120, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   navTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#262135',
+    fontFamily: fontFamily.montserratSemiBold,
+    color: colors.white,
+  },
+
+  divider: {
+    marginTop: 10,
+    borderBottomWidth: 1,
+    borderColor: colors.bubbleDark,
   },
 
   weekRow: {
     flexDirection: 'row',
-    marginVertical: 10,
+    marginVertical: 8,
   },
 
   weekText: {
     flex: 1,
     textAlign: 'center',
-    color: colors.primary,
+    color: colors.grey,
+    fontSize: 11,
     fontFamily: fontFamily.CircularRegular,
   },
 
+  // Each day cell: column with date number + ring
   dayBox: {
     flex: 1,
-    height: 44,
-    margin: 2,
-    justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 10,
+    paddingVertical: 4,
+    minHeight: RING_SIZE + 28,
   },
 
-  dayText: {
-    fontSize: 14,
-    fontFamily: fontFamily.montserratBold,
-  },
-
-  outsideText: {
-    color: '#727179',
+  dateText: {
+    fontSize: 11,
     fontFamily: fontFamily.montserratMedium,
+    marginBottom: 4,
+    lineHeight: 14,
   },
 
   currentText: {
-    color: '#444',
+    color: colors.white,
   },
 
-  activeBox: {
-    backgroundColor: '#7B83FF',
-    zIndex: 2,
+  outsideText: {
+    color: colors.grey,
+    fontFamily: fontFamily.montserratMedium,
   },
 
-  activeText: {
-    color: '#fff',
-    fontFamily: fontFamily.montserratSemiBold,
+  todayCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.secondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
   },
 
-  completedBox: {
-    backgroundColor: '#2EE59D',
+  todayText: {
+    fontSize: 11,
+    fontFamily: fontFamily.montserratBold,
+    color: colors.dark,
+    lineHeight: 14,
   },
 
-  completedText: {
-    color: '#06291d',
-    fontWeight: '600',
+  todayDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.secondary,
+    marginTop: 3,
   },
 
-  streakStart: {
-    borderTopLeftRadius: 20,
-    borderBottomLeftRadius: 20,
+  ring: {
+    width: RING_SIZE,
+    height: RING_SIZE,
+    borderRadius: RING_SIZE / 2,
+    borderWidth: RING_BORDER,
   },
 
-  streakMiddle: {
-    borderRadius: 0,
+  ringOn: {
+    borderColor: colors.secondary,
   },
 
-  streakEnd: {
-    borderTopRightRadius: 20,
-    borderBottomRightRadius: 20,
+  ringOff: {
+    borderColor: 'rgba(77, 102, 68, 0.3)',
+  },
+
+  ringHidden: {
+    borderColor: 'transparent',
   },
 });

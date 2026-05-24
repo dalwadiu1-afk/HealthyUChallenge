@@ -26,15 +26,11 @@ import Svg, {
 import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
 import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet';
-const today = new Date();
+import moment from 'moment';
 
-const CURRENT_MONTH_KEY = `${today.toLocaleString('default', {
-  month: 'long',
-})}_${today.getFullYear()}`;
+const CURRENT_MONTH_KEY = moment().format('MMMM_YYYY');
 const user = auth().currentUser;
 const USER_ID = user?.uid || 'USER_UID';
-const CORRECT_OTP = '1234';
-const { height } = Dimensions.get('window');
 
 const generateCode = () => {
   return Math.floor(1000 + Math.random() * 9000).toString();
@@ -130,10 +126,9 @@ const BodyFatGoalScreen = ({ navigation }) => {
   const [goalType, setGoalType] = useState('decrease');
   const [startBFP, setStartBFP] = useState(25);
   const [targetBFP, setTargetBFP] = useState(18);
-  const [showOtp, setShowOtp] = useState(false);
   const [editable, setEditable] = useState(false);
+  const [locked, setLocked] = useState(true);
   const [otpVerified, setOtpVerified] = useState(false);
-  const [locked, setLocked] = useState(false);
   const otpSheetRef = useRef(null);
   const [otp, setOtp] = useState(['', '', '', '']);
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -168,23 +163,35 @@ const BodyFatGoalScreen = ({ navigation }) => {
         .ref(`/users/${USER_ID}/bodyFatGoal`)
         .once('value');
 
+      // if (snapshot.exists()) {
+      //   const data = snapshot.val();
+
+      //   const now = moment().valueOf();
+      //   const diffDays = Math.floor(
+      //     (now - data.createdAt) / (1000 * 60 * 60 * 24),
+      //   );
+
+      //   if (diffDays === 0) {
+      //     setLocked(false);
+      //   } else if (diffDays < 30) {
+      //     setLocked(true);
+      //     setEditable(false);
+      //   } else {
+      //     setLocked(false);
+      //   }
+
+      //   setStartBFP(data.startBFP);
+      //   setTargetBFP(data.targetBFP);
+      //   setGoalType(data.goalType);
       if (snapshot.exists()) {
         const data = snapshot.val();
 
-        const now = Date.now();
-        const diffDays = Math.floor(
-          (now - data.createdAt) / (1000 * 60 * 60 * 24),
-        );
+        const now = moment().valueOf();
+        const diffDays = moment().diff(moment(data.createdAt), 'days');
 
-        if (diffDays === 0) {
-          // same day → allow edit
-          setLocked(false);
-        } else if (diffDays < 30) {
-          setLocked(true);
-          setEditable(false);
-        } else {
-          setLocked(false);
-        }
+        // ALWAYS LOCK
+        setLocked(true);
+        setEditable(false);
 
         setStartBFP(data.startBFP);
         setTargetBFP(data.targetBFP);
@@ -198,19 +205,19 @@ const BodyFatGoalScreen = ({ navigation }) => {
   const initCode = async () => {
     const code = generateCode();
 
-    const now = Date.now();
-    const baseURL = `/users/${USER_ID}/habits`;
+    const now = moment().valueOf();
+    const baseURL = `/users/${USER_ID}/habits/bodyFatGoal`;
 
-    await database().ref(`${baseURL}`).set({
+    await database().ref(`${baseURL}`).update({
       title: 'Body Fat',
       target: 'Twice a month',
     });
     await database()
       .ref(`${baseURL}/sessionCode`)
-      .set({
+      .update({
         code,
         createdAt: now,
-        expiresAt: now + 10 * 60 * 1000, // 10 min expiry
+        expiresAt: moment().add(10, 'minutes').valueOf(), // 10 min expiry
         used: false,
       });
 
@@ -288,7 +295,7 @@ const BodyFatGoalScreen = ({ navigation }) => {
     }
 
     try {
-      const now = Date.now();
+      const now = moment().valueOf();
 
       const updates = {};
 
@@ -324,7 +331,7 @@ const BodyFatGoalScreen = ({ navigation }) => {
       };
 
       // 🔹 MONTHLY HABIT TABLE
-      updates[`users/${user.uid}/habits/${CURRENT_MONTH_KEY}`] = {
+      updates[`users/${user.uid}/habits/bodyFatGoal/${CURRENT_MONTH_KEY}`] = {
         title: 'Body Fat',
         target: `${targetBFP}%`,
 
@@ -377,7 +384,7 @@ const BodyFatGoalScreen = ({ navigation }) => {
         },
 
         logs: {
-          [`${new Date().getDate()}`]: {
+          [`${moment().date()}`]: {
             currentBFP: startBFP,
             note: 'Initial body fat setup',
             completed: true,
@@ -387,7 +394,7 @@ const BodyFatGoalScreen = ({ navigation }) => {
       };
 
       // 🔹 SESSION CODE
-      updates[`users/${user.uid}/habits/sessionCode`] = {
+      updates[`users/${user.uid}/habits/bodyFatGoal/sessionCode`] = {
         code: generateCode(),
         createdAt: now,
         expiresAt: now + 10 * 60 * 1000,
@@ -436,7 +443,14 @@ const BodyFatGoalScreen = ({ navigation }) => {
               <TouchableOpacity
                 key={opt.key}
                 style={[styles.toggleBtn, isActive && styles.toggleBtnActive]}
-                onPress={() => setGoalType(opt.key)}
+                onPress={() => {
+                  if (!editable) {
+                    otpSheetRef.current?.show();
+                    return;
+                  }
+
+                  setGoalType(opt.key);
+                }}
                 activeOpacity={0.85}
               >
                 {isActive && (
@@ -533,7 +547,7 @@ const BodyFatGoalScreen = ({ navigation }) => {
               keyboardType="numeric"
               value={String(startBFP)}
               onChangeText={val => setStartBFP(Number(val) || 0)}
-              editable={!locked || editable}
+              editable={editable}
             />
           </View>
 
@@ -549,7 +563,7 @@ const BodyFatGoalScreen = ({ navigation }) => {
               keyboardType="numeric"
               value={String(targetBFP)}
               onChangeText={val => setTargetBFP(Number(val) || 0)}
-              editable={!locked || editable}
+              editable={editable}
             />
           </View>
           {/* Current slider */}
@@ -572,14 +586,15 @@ const BodyFatGoalScreen = ({ navigation }) => {
                 </Text>
               </View>
             </View>
-            <View pointerEvents={editable || !locked ? 'auto' : 'none'}>
+            {/* <View pointerEvents={editable || !locked ? 'auto' : 'none'}> */}
+            <View pointerEvents={editable ? 'auto' : 'none'}>
               <Slider
                 value={startBFP}
                 onValueChange={val => {
-                  if (!editable && locked) return;
+                  if (!editable) return;
                   setStartBFP(val);
                 }}
-                style={{ opacity: editable || !locked ? 1 : 0.4 }}
+                style={{ opacity: editable ? 1 : 0.4 }}
                 minimumValue={5}
                 maximumValue={50}
                 step={0.5}
@@ -621,7 +636,7 @@ const BodyFatGoalScreen = ({ navigation }) => {
                   if (!editable || locked) return;
                   setTargetBFP(val);
                 }}
-                style={{ opacity: editable || !locked ? 1 : 0.4 }}
+                style={{ opacity: editable ? 1 : 0.4 }}
                 minimumValue={5}
                 maximumValue={50}
                 step={0.5}
@@ -778,19 +793,21 @@ const BodyFatGoalScreen = ({ navigation }) => {
               const enteredOtp = otp.join('');
 
               database()
-                .ref(`/users/${USER_ID}/habits`)
+                .ref(`/users/${USER_ID}/habits/bodyFatGoal/sessionCode`)
                 .once('value')
                 .then(snapshot => {
-                  const fetchData = snapshot.val();
-                  const data = fetchData?.sessionCode;
-                  console.log('data :>> ', data);
-                  if (data?.code === enteredOtp && !data?.used) {
+                  const data = snapshot.val();
+
+                  if (
+                    data?.code === enteredOtp &&
+                    !data?.used &&
+                    moment().isBefore(moment(data?.expiresAt))
+                  ) {
                     setEditable(true);
                     setOtpVerified(true);
 
-                    // mark as used
                     database()
-                      .ref(`/users/${USER_ID}/habits/sessionCode`)
+                      .ref(`/users/${USER_ID}/habits/bodyFatGoal/sessionCode`)
                       .update({ used: true });
                   } else {
                     setEditable(false);

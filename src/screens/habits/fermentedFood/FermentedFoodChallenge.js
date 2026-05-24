@@ -28,11 +28,10 @@ import moment from 'moment';
 const TOTAL_DAYS = 7;
 const TOTAL_WEEKS = 4;
 const USER_ID = auth().currentUser?.uid;
-const today = new Date();
-const CURRENT_MONTH_KEY = `${today.toLocaleString('default', {
-  month: 'long',
-})}_${today.getFullYear()}`;
 
+const today = moment();
+
+const CURRENT_MONTH_KEY = today.format('MMMM_YYYY');
 function GradientBg({ id, c1, c2, r = 20, horizontal = false }) {
   const x2 = horizontal ? '1' : '1';
   const y2 = horizontal ? '0' : '1';
@@ -105,7 +104,8 @@ const FermentedFoodChallenge = ({ navigation }) => {
         Array(TOTAL_DAYS).fill(null),
       );
 
-      const weeksData = data?.habits?.[CURRENT_MONTH_KEY]?.weeks || {};
+      const weeksData =
+        data?.habits?.fermentedFood?.[CURRENT_MONTH_KEY]?.weeks || {};
 
       Object.entries(weeksData).forEach(([weekKey, weekValue]) => {
         const weekIndex = parseInt(weekKey.replace('week', ''), 10) - 1;
@@ -157,7 +157,7 @@ const FermentedFoodChallenge = ({ navigation }) => {
   const saveToDB = async updatedWeeks => {
     if (!USER_ID) return;
 
-    const basePath = `users/${USER_ID}/habits/${CURRENT_MONTH_KEY}`;
+    const basePath = `users/${USER_ID}/habits/fermentedFood/${CURRENT_MONTH_KEY}`;
 
     const updates = {
       [`${basePath}/title`]: 'fermented Food Challenge',
@@ -198,7 +198,7 @@ const FermentedFoodChallenge = ({ navigation }) => {
         nw[currentWeek][dayIndex] = {
           uri: response.assets[0].uri,
           label: '',
-          timestamp: new Date().toLocaleString(),
+          timestamp: moment().format('MMMM D, YYYY hh:mm A'),
         };
         setWeeks(nw);
         saveToDB(nw);
@@ -227,7 +227,7 @@ const FermentedFoodChallenge = ({ navigation }) => {
 
     await database()
       .ref(
-        `users/${USER_ID}/habits/${CURRENT_MONTH_KEY}/weeks/${weekKey}/${dayKey}`,
+        `users/${USER_ID}/habits/fermentedFood/${CURRENT_MONTH_KEY}/weeks/${weekKey}/${dayKey}`,
       )
       .update({
         label: text,
@@ -254,7 +254,7 @@ const FermentedFoodChallenge = ({ navigation }) => {
 
     await database()
       .ref(
-        `users/${USER_ID}/habits/${CURRENT_MONTH_KEY}/weeks/${weekKey}/${dayKey}`,
+        `users/${USER_ID}/habits/fermentedFood/${CURRENT_MONTH_KEY}/weeks/${weekKey}/${dayKey}`,
       )
       .remove();
   };
@@ -272,7 +272,7 @@ const FermentedFoodChallenge = ({ navigation }) => {
         canEditLabel: false,
       };
     }
-    const start = moment(startDate, 'YYYY-MM-DD').startOf('day');
+    const start = moment(startDate).startOf('day');
 
     const today = moment().startOf('day');
 
@@ -305,7 +305,7 @@ const FermentedFoodChallenge = ({ navigation }) => {
 
     await database()
       .ref(
-        `users/${USER_ID}/habits/${CURRENT_MONTH_KEY}/weeks/${weekKey}/${mealKey}`,
+        `users/${USER_ID}/habits/fermentedFood/${CURRENT_MONTH_KEY}/weeks/${weekKey}/${mealKey}`,
       )
       .update({
         ...mealData,

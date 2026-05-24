@@ -77,7 +77,7 @@ export default function Login({ navigation }) {
     email && password && isValidEmail(email) && isValidPassword(password);
 
   const handleLogin = async () => {
-    navigation.replace('Main');
+    // navigation.replace('Main');
     // Reset all errors
     setError({ email: '', password: '', general: '' });
 

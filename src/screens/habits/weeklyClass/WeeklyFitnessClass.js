@@ -16,6 +16,7 @@ import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
 import { launchCamera } from 'react-native-image-picker';
 import moment from 'moment';
+import { requestCameraPermission } from '../../../utils/helper';
 
 const TOTAL = 4;
 const USER_ID = auth().currentUser?.uid;
@@ -23,7 +24,7 @@ const USER_ID = auth().currentUser?.uid;
 const MONTH_KEY = moment().format('MMMM_YYYY');
 const CURRENT_WEEK = 'week1';
 
-const WEEK_PATH = `users/${USER_ID}/habits/${MONTH_KEY}/weeks/${CURRENT_WEEK}`;
+const WEEK_PATH = `users/${USER_ID}/habits/fitness/${MONTH_KEY}/weeks/${CURRENT_WEEK}`;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -97,7 +98,11 @@ export default function FitnessClassUI() {
       setPhotos(formattedPhotos);
 
       /* AUTO LOCK IF EXPIRED */
-      if (data?.expiresAt && Date.now() > data.expiresAt && !data?.locked) {
+      if (
+        data?.expiresAt &&
+        moment().valueOf() > data.expiresAt &&
+        !data?.locked
+      ) {
         ref.update({
           locked: true,
         });
@@ -107,7 +112,8 @@ export default function FitnessClassUI() {
     return () => ref.off('value', listener);
   }, []);
 
-  const isExpired = weekData?.expiresAt && Date.now() > weekData?.expiresAt;
+  const isExpired =
+    weekData?.expiresAt && moment().valueOf() > weekData?.expiresAt;
 
   const isLocked = weekData?.locked || isExpired;
 
@@ -119,33 +125,37 @@ export default function FitnessClassUI() {
         return;
       }
 
-      const result = await launchCamera({
-        mediaType: 'photo',
-        quality: 0.7,
+      const granted = await requestCameraPermission();
+      if (!granted) return;
+
+      return new Promise(async resolve => {
+        launchCamera({ mediaType: 'photo', quality: 0.7 }, response => {
+          // change save path and camera is not working
+
+          if (response.didCancel) return;
+
+          const uri = response.assets?.[0]?.uri;
+
+          if (!uri) return;
+
+          tempPhotos[index] = uri;
+
+          /* instant UI */
+          setPhotos(prev => {
+            const updated = [...prev];
+
+            updated[index] = {
+              uri,
+              caption: `I'm at workout #${index + 1}!`,
+              uploadedAt: moment().valueOf(),
+            };
+
+            return updated;
+          });
+
+          saveWorkout(index, uri);
+        });
       });
-
-      if (result.didCancel) return;
-
-      const uri = result.assets?.[0]?.uri;
-
-      if (!uri) return;
-
-      tempPhotos[index] = uri;
-
-      /* instant UI */
-      setPhotos(prev => {
-        const updated = [...prev];
-
-        updated[index] = {
-          uri,
-          caption: `I'm at workout #${index + 1}!`,
-          uploadedAt: Date.now(),
-        };
-
-        return updated;
-      });
-
-      await saveWorkout(index, uri);
     } catch (e) {
       console.log(e);
     }
@@ -160,7 +170,7 @@ export default function FitnessClassUI() {
 
       const data = snapshot.val() || {};
 
-      const now = Date.now();
+      const now = moment().valueOf();
 
       /* LOCK CHECK */
       if (data?.locked) {
@@ -230,18 +240,23 @@ export default function FitnessClassUI() {
   const getRemainingTime = () => {
     if (!weekData?.expiresAt) return '24h remaining';
 
-    const diff = weekData.expiresAt - Date.now();
+    const diff = weekData.expiresAt - moment().valueOf();
 
     if (diff <= 0) return 'Expired';
 
-    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const duration = moment.duration(diff);
 
-    return `${hours}h remaining`;
+    const hours = Math.floor(duration.asHours());
+    const minutes = duration.minutes();
+
+    return `${hours}h ${minutes}m remaining`;
   };
 
   /* CARD */
   const WorkoutCard = ({ index, photo }) => {
+    console.log('photo :>> ', photo);
     const anim = useRef(new Animated.Value(0)).current;
+    const done = !!photo;
 
     useEffect(() => {
       Animated.timing(anim, {
@@ -315,6 +330,13 @@ export default function FitnessClassUI() {
               </View>
             )}
           </TouchableOpacity>
+
+          {done && photo?.uploadedAt && (
+            <Text style={styles.timestamp}>
+              Uploaded{' '}
+              {moment(photo?.uploadedAt).format('MMM D, YYYY • h:mm A')}
+            </Text>
+          )}
         </View>
       </Animated.View>
     );
@@ -578,5 +600,11 @@ const styles = StyleSheet.create({
   uploadImage: {
     width: '100%',
     height: '100%',
+  },
+  timestamp: {
+    marginTop: 8,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.3)',
+    fontFamily: fontFamily.montserratRegular,
   },
 });

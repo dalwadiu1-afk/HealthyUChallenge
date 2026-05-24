@@ -7,10 +7,12 @@ import { colors, fontFamily } from '../../constant';
 import { Header, RadioBtn, Wrapper } from '../../components';
 import InputBox from '../../components/common/InputBox';
 import { requestCameraPermission } from '../../utils/helper';
+import auth from '@react-native-firebase/auth';
 
 export default function EditProfile({ navigation }) {
   const actionSheetRef = useRef(null);
   const [selected, setSelected] = useState('');
+  const userId = auth().currentUser.uid;
   const [form, setForm] = useState({
     name: '',
     username: '',
@@ -89,8 +91,6 @@ export default function EditProfile({ navigation }) {
   // SAVE
   const handleSave = async () => {
     try {
-      const userId = 'USER_UID';
-
       await database().ref(`users/${userId}/profile`).update({
         name: form?.name,
         username: form?.username,
@@ -107,8 +107,7 @@ export default function EditProfile({ navigation }) {
   };
 
   useEffect(() => {
-    const userId = 'USER_UID'; // or auth().currentUser.uid
-
+    console.log('userId :>> ', userId);
     const ref = database().ref(`users/${userId}/profile`);
 
     const listener = ref.on('value', snapshot => {

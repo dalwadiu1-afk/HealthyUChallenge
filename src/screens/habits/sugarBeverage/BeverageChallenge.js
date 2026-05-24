@@ -29,9 +29,7 @@ import moment from 'moment';
 const USER_ID = auth().currentUser?.uid;
 const getMonthKey = () => moment().format('MMMM_YYYY');
 
-const getDateKey = () => {
-  return new Date().toISOString().split('T')[0];
-};
+const getDateKey = () => moment().format('YYYY-MM-DD');
 
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   return (
@@ -78,7 +76,9 @@ export default function BeverageChallengeUI({ navigation }) {
         setLabel(data.name || '');
         setIngredients(data.ingredients || []);
         setTimestamp(
-          data.timestamp ? new Date(data.timestamp).toLocaleString() : '',
+          data.timestamp
+            ? moment(data.timestamp).format('MMM D, YYYY • h:mm A')
+            : '',
         );
       }
     });
@@ -115,7 +115,7 @@ export default function BeverageChallengeUI({ navigation }) {
         }
 
         setPhoto(uri);
-        setTimestamp(new Date().toLocaleString());
+        setTimestamp(moment().format('MMM D, YYYY • h:mm A'));
 
         resolve(uri);
       });
@@ -154,7 +154,7 @@ export default function BeverageChallengeUI({ navigation }) {
         photo,
         name: label,
         ingredients,
-        timestamp: new Date().toISOString(),
+        timestamp: moment().toISOString(),
         type: 'beverage',
         postId,
       };
@@ -162,7 +162,7 @@ export default function BeverageChallengeUI({ navigation }) {
       // save inside habit
       await database()
         .ref(`users/${USER_ID}/habits/beverage/${monthKey}/days/${dateKey}`)
-        .set(entry);
+        .update(entry);
 
       // create post object
       const postData = {
@@ -177,11 +177,11 @@ export default function BeverageChallengeUI({ navigation }) {
         type: 'beverage',
         likes: {},
         comments: {},
-        createdAt: Date.now(),
+        createdAt: moment().valueOf(),
       };
 
       // save in posts
-      await postRef.set(postData);
+      await postRef.update(postData);
 
       // save reference inside user
       await database().ref(`users/${USER_ID}/posts/${postId}`).set(true);

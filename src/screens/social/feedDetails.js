@@ -88,7 +88,7 @@ export default function FeedDetails({ navigation, route }) {
     if (post?.isLiked) {
       likeRef.remove(); // unlike
     } else {
-      likeRef.set(true); // like
+      likeRef.update(true); // like
     }
   };
 
@@ -144,17 +144,21 @@ export default function FeedDetails({ navigation, route }) {
           <View style={styles.postWrap}>
             <ChatCard
               item={{
-                name: post.name,
-                message: post.message,
-                picture: post.image,
-                time: formatTime(post.createdAt),
-                likes: post.likesCount,
-                comments: post.commentsCount,
-                isLiked: post.isLiked,
+                name: post?.name,
+                message: post?.message || post?.text,
+                picture: post?.image,
+                time: formatTime(post?.createdAt),
+                likes: post?.likesCount,
+                comments: post?.commentsCount,
+                isLiked: post?.isLiked,
 
                 beverageName: post.beverageName,
                 ingredients: post.ingredients || [],
                 type: post.type,
+
+                snackName: post?.snackName,
+                qty: post?.qty,
+                type: post?.type,
               }}
               onLikePress={handleLike}
               onCommentPress={() => setShowCommentBox(!showCommentBox)}

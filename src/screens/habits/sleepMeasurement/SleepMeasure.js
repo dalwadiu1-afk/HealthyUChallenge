@@ -138,21 +138,20 @@ export default function SleepClock({ navigation }) {
     { key: 'manually', label: 'Manually' },
   ];
 
+  const monthKey = moment().format('MMMM_YYYY');
+  const dayKey = moment().format('YYYY-MM-DD');
   const init = async () => {
     const ref = database().ref(`users/${USER_ID}`);
     const snapshot = await ref.once('value');
+    // month/day keys
     const data = snapshot.val();
     // create if not exists
     if (!data) {
-      await ref.set({
+      await ref.update({
         goal: {
           selectedGoal: '8',
           startDate: new Date().toISOString().split('T')[0],
         },
-        activities: {
-          sleep: `${hours}h ${mins}m`,
-        },
-        logs: {},
       });
     }
 
@@ -268,22 +267,22 @@ export default function SleepClock({ navigation }) {
 
     // month + day keys
     const monthKey = moment(date, 'ddd, MMMM Do').format('MMMM_YYYY');
-    const dayKey = moment(date, 'ddd, MMMM Do').format('DD');
 
     // target
     const targetHours = Number(goalInput || sleepData?.goal?.selectedGoal || 8);
 
     await database()
-      .ref(`users/${USER_ID}/habits/${monthKey}`)
+      .ref(`users/${USER_ID}/habits/sleep/${monthKey}`)
       .update({
         title: 'sleep',
         target: `${targetHours} hr`,
       });
 
+    console.log('object :>> ', dayKey);
     // save day data
     await database()
-      .ref(`users/${USER_ID}/habits/${monthKey}/days/${dayKey}`)
-      .set({
+      .ref(`users/${USER_ID}/habits/sleep/${monthKey}/days/${dayKey}`)
+      .update({
         sleep: `${totalHours.toFixed(1)} hr`,
         completed: totalHours >= targetHours,
         bedTime,
@@ -292,6 +291,7 @@ export default function SleepClock({ navigation }) {
         updatedAt: Date.now(),
       });
   };
+
   const handleSleepToggle = async () => {
     const now = new Date();
 
@@ -342,16 +342,12 @@ export default function SleepClock({ navigation }) {
 
     const totalHours = duration.hours + duration.mins / 60;
 
-    // month/day keys
-    const monthKey = moment().format('MMMM_YYYY');
-    const dayKey = moment().format('DD');
-
     // target
     const targetHours = Number(goalInput || sleepData?.goal?.selectedGoal || 8);
 
     // create habit parent
     await database()
-      .ref(`users/${USER_ID}/habits/${monthKey}`)
+      .ref(`users/${USER_ID}/habits/sleep/${monthKey}`)
       .update({
         title: 'sleep',
         target: `${targetHours} hr`,
@@ -359,8 +355,8 @@ export default function SleepClock({ navigation }) {
 
     // save sleep log inside days
     await database()
-      .ref(`users/${USER_ID}/habits/${monthKey}/days/${dayKey}`)
-      .set({
+      .ref(`users/${USER_ID}/habits/sleep/${monthKey}/days/${dayKey}`)
+      .update({
         sleep: `${totalHours.toFixed(1)} hr`,
         completed: totalHours >= targetHours,
         bedTime,

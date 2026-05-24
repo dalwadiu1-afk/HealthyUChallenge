@@ -185,7 +185,23 @@ export default function Feeds({ navigation }) {
         }
         renderItem={({ item, index }) => (
           <ChatCard
-            item={item}
+            item={{
+              name: item?.name,
+              message: item?.message || item?.text,
+              picture: item?.image,
+              time: formatTime(item?.createdAt),
+              likes: item?.likesCount,
+              comments: item?.commentsCount,
+              isLiked: item?.isLiked,
+
+              beverageName: item.beverageName,
+              ingredients: item.ingredients || [],
+              type: item.type,
+
+              snackName: item?.snackName,
+              qty: item?.qty,
+              type: item?.type,
+            }}
             index={index}
             onCardPress={() => navigation.navigate('FeedDetails')}
           />

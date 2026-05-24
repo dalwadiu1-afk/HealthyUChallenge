@@ -25,13 +25,15 @@ import {
 } from 'react-native-gesture-handler';
 import database from '@react-native-firebase/database';
 import ChatCard from '../../components/social/chatCard';
-import { seedUserData } from '../../../seedUserData';
 import Svg, { Path } from 'react-native-svg';
 import auth from '@react-native-firebase/auth';
 import { Header } from '../../components';
+import { useSelector } from 'react-redux';
+import { calculateStreak } from '../../utils/helper';
+import moment from 'moment';
 
 const { height, width } = Dimensions.get('window');
-const userId = auth().currentUser || 'USER_UID';
+const userId = auth().currentUser?.uid || 'USER_UID';
 const SHEET_MIN = height * 0.55;
 const SHEET_MAX = height * 0.81;
 
@@ -86,25 +88,59 @@ function TabBar({ currentIndex, onPress }) {
 function StatsTab({ statsData = [] }) {
   return (
     <View style={styles.statsGrid}>
-      {statsData.map((s, i) => (
-        <View key={i} style={styles.statsCard}>
-          <Text style={styles.statsEmoji}>{s.emoji}</Text>
-          <Text style={styles.statsCardValue}>{s.value}</Text>
-          <Text style={styles.statsCardLabel}>{s.label}</Text>
-        </View>
-      ))}
+      {statsData.map(
+        (s, i) =>
+          !s?.value?.startsWith('0') && (
+            <View key={i} style={styles.statsCard}>
+              <Text style={styles.statsEmoji}>{s.emoji}</Text>
+              <Text style={styles.statsCardValue}>{s.value}</Text>
+              <Text style={styles.statsCardLabel}>{s.label}</Text>
+            </View>
+          ),
+      )}
     </View>
   );
 }
 
-function ProgressTab({ weeklyData = [], badges = [] }) {
+function ProgressTab({ monthData = {}, badges = [] }) {
   const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const MAX_BAR_HEIGHT = 100; // or 100
 
-  const DATA = DAYS.map((_, i) => {
-    const value = weeklyData[i]?.done || 0;
-    return Math.min(value * 20, 100);
+  const daysData = monthData?.days || {};
+
+  const target = monthData?.target || '25-38g';
+
+  const targetMatch = target.match(/\d+/);
+
+  const targetValue = Number(targetMatch?.[0] || 1);
+
+  const getPercent = item => {
+    if (!item) return 0;
+
+    const progress = Number(item.progress || 0);
+
+    return Math.min((progress / targetValue) * 100, 100);
+  };
+
+  // Current week Monday
+  const today = new Date();
+
+  const monday = moment().isoWeekday(1);
+
+  const weekDates = Array.from({ length: 7 }, (_, i) =>
+    moment(monday).add(i, 'days').format('YYYY-MM-DD'),
+  );
+  console.log('weekDates :>> ', weekDates);
+
+  // Create graph data
+  const DATA = weekDates.map(date => {
+    const item = daysData?.[date];
+
+    if (!item?.progress) return 0;
+
+    return getPercent(item);
   });
-
+  console.log('DATA :>> ', DATA);
   return (
     <View style={{ paddingTop: 4 }}>
       <Text style={styles.progressTitle}>Weekly Activity</Text>
@@ -113,37 +149,43 @@ function ProgressTab({ weeklyData = [], badges = [] }) {
         {DAYS.map((day, i) => (
           <View key={i} style={styles.barCol}>
             <View style={styles.barTrack}>
-              <View style={[styles.barFill, { height: `${DATA[i]}%` }]} />
+              <View
+                style={[
+                  styles.barFill,
+                  {
+                    height: `${DATA[i]}%`,
+                  },
+                ]}
+              />
             </View>
+
             <Text style={styles.barLabel}>{day}</Text>
           </View>
         ))}
-      </View>
-
-      <View style={styles.progressBadgesRow}>
-        {badges
-          .filter(b => b.show)
-          .map((badge, i) => (
-            <View key={i} style={styles.progressBadge}>
-              <Text style={styles.progressBadgeText}>
-                {badge.emoji} {badge.label}
-              </Text>
-            </View>
-          ))}
       </View>
     </View>
   );
 }
 
+const demo = {
+  '2026-05-10': {},
+  '2026-05-11': {},
+  '2026-05-12': {},
+  '2026-05-13': {},
+  // '2026-05-17': {},
+};
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ProfileDetails({ navigation }) {
   const [currentTabIndex, setCurrentTabIndex] = useState(0);
-  const [profile, setProfile] = useState(null);
   const [stats, setStats] = useState(null);
   const [posts, setPosts] = useState([]);
   const [weeklyData, setWeeklyData] = useState([]);
-
+  const startDate = useSelector(state => state.user?.goal?.startDate);
+  const data = useSelector(state => state.user);
+  const profile = data?.profile;
+  const habitsData = data?.habits;
   const translateY = useSharedValue(0);
 
   const panGesture = Gesture.Pan()
@@ -185,8 +227,7 @@ export default function ProfileDetails({ navigation }) {
       const data = snapshot.val();
       if (!data) return;
 
-      setProfile(data.profile);
-      setStats(data.stats);
+      setStats(data?.stats);
 
       // weekly progress
       const weekly = data?.activities?.workout?.weeklyProgress || {};
@@ -194,6 +235,8 @@ export default function ProfileDetails({ navigation }) {
         week: key,
         done: weekly[key].done,
       }));
+
+      console.log('formatted check this :>> ', formatted);
 
       setWeeklyData(formatted);
     });
@@ -236,18 +279,60 @@ export default function ProfileDetails({ navigation }) {
     };
   }, []);
 
+  const currentMonth = new Date().toLocaleString('default', { month: 'short' });
+  const year = new Date().getFullYear();
+  const monthKey = `${currentMonth}_${year}`;
+
+  const days = habitsData?.[monthKey]?.days || {};
+
+  const allDays = Object.values(days || {});
+
+  const activeDays = allDays.length;
+
+  const completedDays = allDays.filter(d => d?.completed).length;
+
+  const completionRate =
+    activeDays > 0 ? Math.round((completedDays / activeDays) * 100) : 0;
+  const { currentStreak, longestStreak } = calculateStreak(days || {});
+
+  // format => YYYY-MM-DD
+  const todayDate = new Date();
+  const todayKey = todayDate.toISOString().split('T')[0];
+
+  const currentHabit = profile?.habit?.[monthKey] || {};
+  const todayData = currentHabit?.days?.[todayKey] || {};
+
+  // remaining days from start date -> next 30 days
+  let remainingDays = 0;
+
+  if (startDate) {
+    const start = new Date(startDate);
+
+    // end date = start + 30 days
+    const endDate = new Date(start);
+    endDate.setDate(endDate.getDate() + 30);
+
+    // difference between today and end date
+    const diffTime = endDate - todayDate;
+
+    remainingDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  }
+
+  // get first month key from habits
+  const memberSinceKey = Object.keys(habitsData || {})?.[0];
+
   const PROFILE_STATS = [
     {
       label: 'Streak',
-      value: `${stats?.streak || 0} 🔥`,
+      value: `${currentStreak || 0} 🔥`,
     },
     {
       label: 'Active Days',
-      value: `${stats?.activeDays || 0} 📅`,
+      value: `${activeDays || 0} 📅`,
     },
     {
       label: 'Completion',
-      value: `${stats?.completionRate || 0}% ✅`,
+      value: `${completionRate}% ✅`,
     },
   ];
 
@@ -255,7 +340,12 @@ export default function ProfileDetails({ navigation }) {
     {
       emoji: '🔥',
       label: 'Day Streak',
-      value: `${stats?.streak || 0} days`,
+      value: `${currentStreak || 0} days`,
+    },
+    {
+      emoji: '🔥',
+      label: 'Longest Streak',
+      value: `${longestStreak || 0} days`,
     },
     {
       emoji: '✅',
@@ -265,7 +355,7 @@ export default function ProfileDetails({ navigation }) {
     {
       emoji: '📅',
       label: 'Active Days',
-      value: `${stats?.activeDays || 0} days`,
+      value: `${activeDays || 0} days`,
     },
     {
       emoji: '🏃',
@@ -287,13 +377,13 @@ export default function ProfileDetails({ navigation }) {
   const PROGRESS_BADGES = [
     {
       emoji: '🥇',
-      label: `${stats?.streak || 0}-day streak`,
-      show: stats?.streak >= 1,
+      label: `${currentStreak || 0}-day streak`,
+      show: currentStreak >= 1,
     },
     {
       emoji: '💪',
       label: 'Top 10%',
-      show: stats?.completionRate >= 90,
+      show: completionRate >= 90,
     },
     {
       emoji: '🏆',
@@ -301,6 +391,14 @@ export default function ProfileDetails({ navigation }) {
       show: stats?.totalHabitsDone > 0,
     },
   ];
+
+  const formatMonthKey = monthKey => {
+    if (!monthKey) return 'May 2024';
+
+    const [month, year] = monthKey.split('_');
+    console.log('monthKey :>> ', `${month} ${year}`);
+    return `${month} ${year}`;
+  };
 
   // Name: slides straight up into the nav bar + font shrinks
   const nameStyle = useAnimatedStyle(() => {
@@ -356,7 +454,7 @@ export default function ProfileDetails({ navigation }) {
     if (snapshot.exists()) {
       await likeRef.remove(); // 🔴 unlike
     } else {
-      await likeRef.set(true); // 🟢 like
+      await likeRef.update(true); // 🟢 like
     }
   };
 
@@ -364,12 +462,20 @@ export default function ProfileDetails({ navigation }) {
     <ChatCard
       item={{
         name: item?.name,
-        message: item?.message,
+        message: item?.message || item?.text,
         picture: item?.image,
         time: formatTime(item?.createdAt),
         likes: item?.likesCount,
         comments: item?.commentsCount,
         isLiked: item?.isLiked,
+
+        beverageName: item.beverageName,
+        ingredients: item.ingredients || [],
+        type: item.type,
+
+        snackName: item?.snackName,
+        qty: item?.qty,
+        type: item?.type,
       }}
       index={index}
       onLikePress={() => toggleLike(item.id)}
@@ -449,7 +555,7 @@ export default function ProfileDetails({ navigation }) {
         {/* Handle + stats + buttons — fade out when sheet rises */}
         <Animated.View style={[styles.heroInfo, heroInfoStyle]}>
           <Text style={styles.heroHandle}>
-            {profile?.username} · Member since {profile?.memberSince}
+            {profile?.username}· Member since {formatMonthKey(memberSinceKey)}
           </Text>
 
           {/* Stat pills */}
@@ -511,7 +617,10 @@ export default function ProfileDetails({ navigation }) {
           <FlatList
             data={[{ key: 'progress' }]}
             renderItem={() => (
-              <ProgressTab weeklyData={weeklyData} badges={PROGRESS_BADGES} />
+              <ProgressTab
+                monthData={habitsData?.[monthKey] || {}}
+                badges={PROGRESS_BADGES}
+              />
             )}
             keyExtractor={item => item.key}
             showsVerticalScrollIndicator={false}
@@ -770,20 +879,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: fontFamily.montserratMedium,
     letterSpacing: 2,
-    marginBottom: 14,
   },
   barChart: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    height: 110,
+    // height: 110,
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.07)',
     paddingHorizontal: 12,
-    paddingVertical: 12,
     gap: 6,
     marginBottom: 16,
+    marginTop: 10,
   },
   barCol: {
     flex: 1,
@@ -792,7 +899,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   barTrack: {
-    flex: 1,
+    height: 100,
     width: '70%',
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 6,

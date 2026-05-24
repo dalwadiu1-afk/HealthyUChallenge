@@ -7,6 +7,8 @@ import {
   ScrollView,
   StyleSheet,
   StatusBar,
+  Alert,
+  TextInput,
 } from 'react-native';
 import Svg, {
   Path,
@@ -30,10 +32,10 @@ const getMonthKey = () => moment().format('MMM_YYYY');
 
 const getWeekKey = startDate => getWeekFromStart(startDate);
 
-const getDateKey = (startDate, date = new Date()) =>
+const getDateKey = (startDate, date = moment()) =>
   moment(date).format('YYYY-MM-DD');
 
-const getWeekFromStart = (startDate, currentDate = new Date()) => {
+const getWeekFromStart = (startDate, currentDate = moment()) => {
   const start = moment(startDate);
   const now = moment(currentDate);
 
@@ -83,6 +85,7 @@ export default function FruitTrackerUI({ navigation }) {
   const [photo, setPhoto] = useState(null);
   const [startDate, setStartDate] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [customServing, setCustomServing] = useState('');
   const [weeksData, setWeeksData] = useState({});
   const [fruits, setFruits] = useState(FRUITS);
   const [showList, setShowList] = useState(false);
@@ -102,9 +105,8 @@ export default function FruitTrackerUI({ navigation }) {
       if (val) {
         setStartDate(val); // should be ISO string or timestamp
       } else {
-        const today = new Date().toISOString();
-
-        ref.set(today);
+        const today = moment().toISOString();
+        ref.update(today);
         setStartDate(today);
       }
     });
@@ -142,7 +144,7 @@ export default function FruitTrackerUI({ navigation }) {
     const dateKey = getDateKey(startDate);
 
     const ref = database().ref(
-      `users/${USER_ID}/habits/${monthKey}/${weekKey}`,
+      `users/${USER_ID}/habits/dailyFruits/${monthKey}/${weekKey}`,
     );
 
     const listener = ref.on('value', snapshot => {
@@ -174,7 +176,24 @@ export default function FruitTrackerUI({ navigation }) {
   };
 
   const addLog = async () => {
-    if (!selectedFruit || !startDate) return;
+    if (!selectedFruit || !startDate) {
+      Alert.alert('Missing Data', 'Please select a fruit.');
+      return;
+    }
+
+    if (selectedFruit.name === 'Other' && !customServing.trim()) {
+      Alert.alert('Serving Required', 'Please enter serving amount.');
+      return;
+    }
+
+    // PHOTO VALIDATION
+    if (!photo) {
+      Alert.alert(
+        'Photo Required',
+        'Please take a photo before logging your fruit.',
+      );
+      return;
+    }
 
     try {
       const monthKey = getMonthKey(startDate);
@@ -182,7 +201,7 @@ export default function FruitTrackerUI({ navigation }) {
       const dateKey = getDateKey(startDate);
 
       const dayRef = database().ref(
-        `users/${USER_ID}/habits/${monthKey}/${weekKey}/${dateKey}`,
+        `users/${USER_ID}/habits/dailyFruits/${monthKey}/${weekKey}/${dateKey}`,
       );
 
       const entryRef = dayRef.child('entries').push();
@@ -193,20 +212,27 @@ export default function FruitTrackerUI({ navigation }) {
       const currentTotal = existing?.total || 0;
       const newTotal = currentTotal + 1;
 
-      await entryRef.set({
+      await entryRef.update({
         fruit: selectedFruit.name,
-        serving: selectedFruit.serving,
+        serving:
+          selectedFruit.name === 'Other'
+            ? `${customServing} g`
+            : selectedFruit.serving,
         emoji: selectedFruit.emoji,
-        photo: photo || null,
-        createdAt: Date.now(),
+        photo,
+        createdAt: moment().valueOf(),
+        createdDate: moment().format('YYYY-MM-DD'),
+        createdTime: moment().format('hh:mm A'),
       });
 
       await dayRef.update({
         total: newTotal,
         completed: newTotal >= DAILY_GOAL,
+        updatedAt: moment().valueOf(),
       });
 
       setSelectedFruit(null);
+      setCustomServing('');
       setPhoto(null);
     } catch (e) {
       console.log('Error saving fruit log:', e);
@@ -347,11 +373,33 @@ export default function FruitTrackerUI({ navigation }) {
           </ScrollView>
 
           {/* Serving info */}
+          {/* Serving info */}
           {selectedFruit && (
-            <View style={styles.servingRow}>
-              <Text style={styles.servingLabel}>1 Serving =</Text>
-              <Text style={styles.servingValue}>{selectedFruit.serving}</Text>
-            </View>
+            <>
+              <View style={styles.servingRow}>
+                <Text style={styles.servingLabel}>1 Serving =</Text>
+
+                {selectedFruit.name === 'Other' ? (
+                  <TextInput
+                    value={customServing}
+                    onChangeText={text => {
+                      // numbers only + max 3 digits
+                      const cleaned = text.replace(/[^0-9]/g, '').slice(0, 3);
+                      setCustomServing(cleaned);
+                    }}
+                    placeholder="Enter grams"
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    keyboardType="number-pad"
+                    maxLength={3}
+                    style={styles.customInput}
+                  />
+                ) : (
+                  <Text style={styles.servingValue}>
+                    {selectedFruit.serving}
+                  </Text>
+                )}
+              </View>
+            </>
           )}
 
           {/* Photo */}
@@ -636,6 +684,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     marginBottom: 12,
+  },
+  customInput: {
+    flex: 1,
+    color: colors.white,
+    fontSize: 12,
+    fontFamily: fontFamily.montserratMedium,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   logCard: {
     flexDirection: 'row',

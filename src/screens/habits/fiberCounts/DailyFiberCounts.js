@@ -21,47 +21,26 @@ import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
 import { getSmartTips } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+import moment from 'moment';
 
 const CHART_HEIGHT = 200;
 const PADDING = 20;
 const BAR_WIDTH = 14;
 const ITEM_WIDTH = 30;
 
-const START_DATE = new Date('2026-04-15');
-
-const buildFiberTemplate = startDateStr => {
-  const start = new Date(startDateStr);
-  start.setHours(0, 0, 0, 0);
+const buildFiberTemplate = startDate => {
+  const start = moment(startDate).startOf('day');
 
   return Array.from({ length: 30 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-
-    const key = d.toISOString().split('T')[0]; // YYYY-MM-DD
+    const d = moment(start).add(i, 'days');
 
     return {
-      key,
+      key: d.format('YYYY-MM-DD'),
       fiber: 0,
       date: d,
     };
   });
 };
-
-function BackIcon() {
-  return (
-    <Svg width={9} height={16} viewBox="0 0 9 16" fill="none">
-      <Path
-        d="M8 1L1 8L8 15"
-        stroke="#FFFFFF"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
 
 function StatRow({ emoji, label, value, last }) {
   return (
@@ -77,6 +56,10 @@ function StatRow({ emoji, label, value, last }) {
     </>
   );
 }
+
+export const getDateKey = (date = new Date()) => {
+  return moment(date).format('YYYY-MM-DD');
+};
 
 export default function FiberChartDays({ navigation }) {
   const [tips, setTips] = useState([]);
@@ -107,6 +90,8 @@ export default function FiberChartDays({ navigation }) {
         const startDate = data?.goal?.startDate || '2026-04-15';
         const habits = data?.habits || {};
         const gender = data?.profile?.gender;
+
+        console.log('START DATE =>', startDate);
 
         const goal =
           gender === 'male' ? { min: 30, max: 38 } : { min: 21, max: 25 };
@@ -155,8 +140,8 @@ export default function FiberChartDays({ navigation }) {
     if (!max) return 0;
     return (val / max) * graphHeight;
   };
-  const formatDate = date =>
-    date.toLocaleDateString('en-US', { day: 'numeric' });
+
+  const formatDate = date => moment(date).format('D');
 
   /* ───────── ADD FIBER ───────── */
   const addFiber = async () => {
@@ -166,36 +151,39 @@ export default function FiberChartDays({ navigation }) {
     setInput('');
 
     const uid = auth().currentUser?.uid;
-    const today = new Date();
+    const today = moment();
 
-    const day = today.toISOString().split('T')[0];
-    const monthName = today.toLocaleString('en-US', { month: 'long' });
-    const year = today.getFullYear();
+    const day = moment().format('YYYY-MM-DD');
+    const monthName = today.format('MMMM');
+    const year = today.format('YYYY');
 
     const habitKey = `${monthName}_${year}`;
 
     // find existing value
-    const current = fiberData.find(d => d.date.getDate() === today.getDate());
-
+    const current = fiberData.find(
+      d => moment(d.date).format('YYYY-MM-DD') === today.format('YYYY-MM-DD'),
+    );
     const newFiber = (current?.fiber || 0) + val;
 
     try {
       await database()
-        .ref(`users/${uid}/habits/${habitKey}/days/${day}`)
+        .ref(`users/${uid}/habits/fiber/${habitKey}/days/${day}`)
         .update({
           progress: String(newFiber),
           completed: newFiber >= goalRange.min,
         });
 
       // optional: set meta (only once)
-      await database().ref(`users/${uid}/habits/${habitKey}`).update({
+      await database().ref(`users/${uid}/habits/fiber/${habitKey}`).update({
         title: 'Fiber Intake',
         target: '25-38g',
       });
 
       setFiberData(prev =>
         prev.map(d =>
-          d.date.getDate() === today.getDate() ? { ...d, fiber: newFiber } : d,
+          moment(d.date).format('YYYY-MM-DD') === today.format('YYYY-MM-DD')
+            ? { ...d, fiber: newFiber }
+            : d,
         ),
       );
     } catch (e) {

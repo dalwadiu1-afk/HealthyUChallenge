@@ -29,7 +29,7 @@ import moment from 'moment';
 const getMonthKey = () => moment().format('MMMM_YYYY');
 
 const getDateKey = () => {
-  return new Date().toISOString().split('T')[0];
+  return moment().format('YYYY-MM-DD');
 };
 
 const USER_ID = auth().currentUser?.uid;
@@ -127,12 +127,12 @@ export default function SnackSystemUI({ navigation }) {
     try {
       const ref = database().ref(`users/${USER_ID}/snacks/requests`).push();
 
-      await ref.set({
+      await ref.update({
         name: snackName.trim(),
         qty: qty.trim(),
         image: image || '',
         status: 'pending',
-        createdAt: Date.now(),
+        createdAt: moment().valueOf(),
         type: 'snack',
       });
 
@@ -146,12 +146,21 @@ export default function SnackSystemUI({ navigation }) {
 
   const updateStatus = async (item, status) => {
     try {
-      // only when approved
+      // ✅ UPDATE STATUS IN FIREBASE
+      await database()
+        .ref(`users/${USER_ID}/snacks/requests/${item.id}`)
+        .update({
+          status,
+          updatedAt: moment().valueOf(),
+        });
+
+      // =========================
+      // APPROVED FLOW
+      // =========================
       if (status === 'approved') {
         const monthKey = getMonthKey();
         const dateKey = getDateKey();
 
-        // save inside habits
         const habitRef = database().ref(
           `users/${USER_ID}/habits/snacks/${monthKey}/days/${dateKey}`,
         );
@@ -160,27 +169,27 @@ export default function SnackSystemUI({ navigation }) {
 
         const existing = snapshot.val();
 
-        let snackList = [];
+        let snackList = existing?.snacks || [];
 
-        if (existing?.snacks) {
-          snackList = existing.snacks;
+        // prevent duplicates
+        const alreadyExists = snackList.find(s => s.requestId === item.id);
+
+        if (!alreadyExists) {
+          snackList.push({
+            requestId: item.id,
+            name: item.name,
+            qty: item.qty,
+            image: item.image || '',
+            approvedAt: moment().valueOf(),
+            status: 'approved',
+          });
+
+          await habitRef.update({
+            snacks: snackList,
+            updatedAt: moment().valueOf(),
+          });
         }
 
-        snackList.push({
-          requestId: item.id,
-          name: item.name,
-          qty: item.qty,
-          image: item.image || '',
-          approvedAt: Date.now(),
-          status: 'approved',
-        });
-        console.log('snackList :>> ', snackList);
-        await habitRef.set({
-          snacks: snackList,
-          updatedAt: Date.now(),
-        });
-
-        // admin custom message popup
         Alert.alert(
           'Post to Social Feed',
           'Do you want to post this approved snack?',
@@ -199,13 +208,15 @@ export default function SnackSystemUI({ navigation }) {
 
                   const postId = postRef.key;
 
-                  const postData = {
+                  await postRef.set({
                     postId,
                     userId: USER_ID,
 
                     avatar: currentUser?.photoURL || '',
                     name: currentUser?.displayName || 'Admin',
+
                     requestId: item.id,
+
                     text: `✅ Approved snack: ${item.name}`,
 
                     snackName: item.name,
@@ -214,13 +225,11 @@ export default function SnackSystemUI({ navigation }) {
                     image: item.image || '',
                     type: 'snack',
 
-                    createdAt: Date.now(),
+                    createdAt: moment().valueOf(),
 
                     likes: {},
                     comments: {},
-                  };
-
-                  await postRef.set(postData);
+                  });
 
                   await database()
                     .ref(`users/${USER_ID}/posts/${postId}`)
@@ -237,8 +246,8 @@ export default function SnackSystemUI({ navigation }) {
       }
 
       // =========================
-      // REJECT FLOW (FIXED)
-      // =========================.
+      // REJECT FLOW
+      // =========================
       if (status === 'rejected') {
         const postsSnap = await database()
           .ref('posts')
@@ -247,23 +256,18 @@ export default function SnackSystemUI({ navigation }) {
           .once('value');
 
         const posts = postsSnap.val();
-        console.log('object :>> ', posts);
+
         if (posts) {
-          const deletePromises = await Promise.all(
-            Object.keys(posts).map(postKey => {
-              database().ref(`posts/${postKey}`).remove();
-              database().ref(`users/${USER_ID}/posts/${postKey}`).remove();
+          await Promise.all(
+            Object.keys(posts).map(async postKey => {
+              await database().ref(`posts/${postKey}`).remove();
+
+              await database()
+                .ref(`users/${USER_ID}/posts/${postKey}`)
+                .remove();
             }),
           );
-          await Promise.all(deletePromises);
         }
-      }
-
-      // =========================
-      // PENDING RESET (optional)
-      // =========================
-      if (status === 'pending') {
-        // just keep request, no action needed
       }
     } catch (e) {
       console.log('Update error:', e);
@@ -582,43 +586,55 @@ export default function SnackSystemUI({ navigation }) {
                         </Text>
                       </View>
                     </View>
-
+                    {console.log('item.status >> ', item.status)}
                     <View style={styles.adminBtnRow}>
-                      <TouchableOpacity
-                        style={styles.approveBtn}
-                        onPress={() => updateStatus(item, 'approved')}
-                        activeOpacity={0.85}
-                      >
-                        <GradientBg
-                          id={`apr${item.id}`}
-                          c1="#22c55e"
-                          c2="#15803d"
-                          r={10}
-                          horizontal
-                        />
-                        <Text style={styles.adminBtnText}>Approve</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.rejectBtn}
-                        onPress={() => updateStatus(item, 'rejected')}
-                        activeOpacity={0.85}
-                      >
-                        <GradientBg
-                          id={`rej${item.id}`}
-                          c1="#ef4444"
-                          c2="#b91c1c"
-                          r={10}
-                          horizontal
-                        />
-                        <Text style={styles.adminBtnText}>Reject</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.resetBtn}
-                        onPress={() => updateStatus(item, 'pending')}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.resetBtnText}>Reset</Text>
-                      </TouchableOpacity>
+                      {/* SHOW APPROVE ONLY IF NOT APPROVED */}
+                      {item.status !== 'approved' && (
+                        <TouchableOpacity
+                          style={styles.approveBtn}
+                          onPress={() => updateStatus(item, 'approved')}
+                          activeOpacity={0.85}
+                        >
+                          <GradientBg
+                            id={`apr${item.id}`}
+                            c1="#22c55e"
+                            c2="#15803d"
+                            r={10}
+                            horizontal
+                          />
+                          <Text style={styles.adminBtnText}>Approve</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* SHOW REJECT ONLY IF NOT REJECTED */}
+                      {item.status !== 'rejected' && (
+                        <TouchableOpacity
+                          style={styles.rejectBtn}
+                          onPress={() => updateStatus(item, 'rejected')}
+                          activeOpacity={0.85}
+                        >
+                          <GradientBg
+                            id={`rej${item.id}`}
+                            c1="#ef4444"
+                            c2="#b91c1c"
+                            r={10}
+                            horizontal
+                          />
+                          <Text style={styles.adminBtnText}>Reject</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* SHOW RESET ONLY IF NOT PENDING */}
+                      {item.status !== 'pending' && (
+                        <TouchableOpacity
+                          style={styles.resetBtn}
+                          onPress={() => updateStatus(item, 'pending')}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.resetBtnText}>Reset</Text>
+                        </TouchableOpacity>
+                      )}
+
                       <TouchableOpacity
                         style={styles.deleteBtn}
                         onPress={() => deleteRequest(item.id)}

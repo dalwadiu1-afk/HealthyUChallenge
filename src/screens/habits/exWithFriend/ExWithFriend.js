@@ -26,6 +26,7 @@ import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
+import moment from 'moment';
 const user = auth().currentUser;
 const USER_ID = user?.uid;
 const getMonthKey = () => {
@@ -64,6 +65,7 @@ export default function FriendWorkoutChallenge({ navigation }) {
   const TOTAL_WEEKS = 4;
   const WORKOUTS_PER_WEEK = 4;
   const [startDate, setStartDate] = useState(null);
+  const [weekError, setWeekError] = useState({});
   const [weeks, setWeeks] = useState(
     Array.from({ length: TOTAL_WEEKS }, (_, i) => ({
       week: i + 1,
@@ -87,13 +89,13 @@ export default function FriendWorkoutChallenge({ navigation }) {
       // ------------------------
       const startDateRaw = data?.goal?.startDate;
       if (startDateRaw) {
-        setStartDate(new Date(startDateRaw));
+        setStartDate(moment(startDateRaw));
       }
 
       // ------------------------
       // WEEKS DATA
       // ------------------------
-      const weeksData = data?.habits?.[monthKey]?.weeks || {};
+      const weeksData = data?.habits?.exWithFriend?.[monthKey]?.weeks || {};
 
       const formattedWeeks = Array.from({ length: TOTAL_WEEKS }, (_, i) => {
         const weekData = weeksData[`week${i + 1}`] || {};
@@ -116,15 +118,30 @@ export default function FriendWorkoutChallenge({ navigation }) {
 
     if (!week) return;
 
-    if (week.week !== activeWeek?.week) {
-      Alert.alert('Locked Week', 'Complete previous week first 🔒');
+    const weekIndex = week.week - 1;
+
+    if (weekIndex !== currentWeekIndex) {
+      setWeekError(prev => ({
+        ...prev,
+        [week.week]: '🔒 Only current week is accessible',
+      }));
+
       return;
     }
 
     if (week.workoutPhotos.length >= WORKOUTS_PER_WEEK) {
-      Alert.alert('Week already completed ✅');
+      setWeekError(prev => ({
+        ...prev,
+        [week.week]: '✅ Week already completed',
+      }));
+
       return;
     }
+
+    setWeekError(prev => ({
+      ...prev,
+      [week.week]: '',
+    }));
 
     const granted = await requestCameraPermission();
 
@@ -145,7 +162,7 @@ export default function FriendWorkoutChallenge({ navigation }) {
         const newWorkout = {
           uri,
           friend: '',
-          timestamp: new Date().toISOString(),
+          timestamp: moment().toISOString(),
         };
 
         const updatedPhotos = [...week.workoutPhotos, newWorkout];
@@ -170,9 +187,9 @@ export default function FriendWorkoutChallenge({ navigation }) {
   const getCurrentWeekIndex = () => {
     if (!startDate) return 0;
 
-    const now = new Date();
-    const diffTime = now - startDate;
-    const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7));
+    const now = moment();
+
+    const diffWeeks = now.diff(startDate, 'weeks');
 
     return Math.min(diffWeeks, TOTAL_WEEKS - 1);
   };
@@ -206,8 +223,10 @@ export default function FriendWorkoutChallenge({ navigation }) {
       const monthKey = getMonthKey();
 
       await database()
-        .ref(`users/${USER_ID}/habits/${monthKey}/weeks/week${weekNumber}`)
-        .set({
+        .ref(
+          `users/${USER_ID}/habits/exWithFriend/${monthKey}/weeks/week${weekNumber}`,
+        )
+        .update({
           completed: weekData.completed,
           updatedAt: database.ServerValue.TIMESTAMP,
           workoutPhotos: weekData.workoutPhotos,
@@ -299,6 +318,19 @@ export default function FriendWorkoutChallenge({ navigation }) {
   const activeWeek = activeWeekIndex === -1 ? null : weeks[activeWeekIndex];
   const currentWeekIndex = getCurrentWeekIndex();
 
+  const isWeekMissed = weekIndex => {
+    if (!startDate) return false;
+
+    const now = moment();
+
+    const weekEnd = moment(startDate).add(weekIndex + 1, 'weeks');
+
+    return (
+      now.isAfter(weekEnd) &&
+      weeks[weekIndex]?.workoutPhotos?.length < WORKOUTS_PER_WEEK
+    );
+  };
+
   return (
     <View style={styles.root}>
       <Header
@@ -332,9 +364,11 @@ export default function FriendWorkoutChallenge({ navigation }) {
       </View>
       <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
         {weeks.map((weekItem, weekIndex) => {
-          const isLocked = weekIndex !== currentWeekIndex;
-          const isEditableWeek = weekIndex === currentWeekIndex;
+          const missed = isWeekMissed(weekIndex);
 
+          const isLocked = weekIndex > currentWeekIndex || missed;
+
+          const isEditableWeek = weekIndex === currentWeekIndex && !missed;
           return (
             <View
               key={weekIndex}
@@ -342,8 +376,13 @@ export default function FriendWorkoutChallenge({ navigation }) {
             >
               {isLocked && (
                 <View style={styles.lockOverlay}>
-                  <Text style={styles.lockText}>🔒 Week Locked</Text>
+                  <Text style={styles.lockText}>🔒 Future Week</Text>
                 </View>
+              )}
+              {missed && (
+                <Text style={styles.weekErrorText}>
+                  ❌ You missed this week
+                </Text>
               )}
               <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>Week {weekItem.week}</Text>
@@ -450,8 +489,14 @@ export default function FriendWorkoutChallenge({ navigation }) {
 
                   {/* TIMESTAMP */}
                   <Text style={styles.timestampText}>
-                    {new Date(photoItem.timestamp).toLocaleString()}
+                    {moment(photoItem.timestamp).format('MMM D, YYYY • h:mm A')}
                   </Text>
+
+                  {weekError?.[weekItem?.week] ? (
+                    <Text style={styles.weekErrorText}>
+                      {weekError[weekItem?.week]}
+                    </Text>
+                  ) : null}
                 </View>
               ))}
 
@@ -540,7 +585,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
-
+  weekErrorText: {
+    marginTop: 10,
+    color: '#ef4444',
+    fontSize: 12,
+    textAlign: 'center',
+    fontFamily: fontFamily.montserratMedium,
+  },
   imageWrap: {
     borderRadius: 18,
     overflow: 'hidden',
