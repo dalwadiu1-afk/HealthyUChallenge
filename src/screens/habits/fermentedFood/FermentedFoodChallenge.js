@@ -144,8 +144,6 @@ const FermentedFoodChallenge = ({ navigation }) => {
 
     const diffDays = today.diff(start, 'days');
 
-    console.log('diffDays :>> ', diffDays);
-
     const week = Math.min(TOTAL_WEEKS - 1, Math.floor(diffDays / TOTAL_DAYS));
 
     const day = Math.min(TOTAL_DAYS - 1, diffDays % TOTAL_DAYS);
@@ -278,7 +276,6 @@ const FermentedFoodChallenge = ({ navigation }) => {
 
     const diffDays = today.diff(start, 'days');
 
-    console.log('diffDays :>> ', diffDays);
     const globalIndex = week * TOTAL_DAYS + day;
 
     const isPast = globalIndex < diffDays;
@@ -438,9 +435,6 @@ const FermentedFoodChallenge = ({ navigation }) => {
 
           const isCurrent = globalIndex === todayIndex;
 
-          {
-            console.log('item.uri :>> ', item?.uri);
-          }
           return (
             <View
               key={dayIndex}

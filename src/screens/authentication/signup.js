@@ -168,8 +168,6 @@ export default function Signup({ navigation }) {
         displayName: username,
       });
 
-      console.log('User created:', userCredential.user);
-
       navigation.replace('Main');
     } catch (err) {
       console.log(err);

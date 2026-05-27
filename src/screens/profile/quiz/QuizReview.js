@@ -1,10 +1,5 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Wrapper, Header } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
 
@@ -12,6 +7,8 @@ const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 
 export default function QuizReview({ route }) {
   const { questions = [], answers = [] } = route?.params || {};
+
+  console.log('route?.params :>> ', route?.params);
 
   return (
     <Wrapper scrollEnable={false} orbsRight>
@@ -56,11 +53,7 @@ export default function QuizReview({ route }) {
                 {q.options.map((opt, oi) => {
                   const isAnswer = oi === q.answer;
                   const isUserPick = oi === userIdx;
-                  const tone = isAnswer
-                    ? 'ok'
-                    : isUserPick
-                    ? 'bad'
-                    : 'neutral';
+                  const tone = isAnswer ? 'ok' : isUserPick ? 'bad' : 'neutral';
                   return (
                     <View
                       key={oi}

@@ -10,11 +10,11 @@ import {
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
-
 import { colors, fontFamily } from '../../constant';
 import { Wrapper } from '../../components';
-import { calculateStreak } from '../../utils/helper';
+import { calculateStreak, extractUserHabits } from '../../utils/helper';
 import { useSelector } from 'react-redux';
+import moment from 'moment';
 
 const { width, height } = Dimensions.get('window');
 
@@ -28,26 +28,26 @@ const MENU_ITEMS = [
     badge: 'Active',
   },
   {
-    emoji: '🎯',
-    title: 'Goals',
-    subtitle: 'View & edit your health goals',
-    screenName: 'ProfileDetails',
-    badge: null,
+    emoji: '🪪',
+    title: 'Quiz Board ',
+    subtitle: 'Your personalized health overview',
+    screenName: 'QuizBoard',
+    badge: 'Active',
   },
-  {
-    emoji: '💪',
-    title: 'My Body',
-    subtitle: 'BMI, weight, body measurements',
-    screenName: 'ProfileDetails',
-    badge: 'Missing Info',
-  },
-  {
-    emoji: '📋',
-    title: 'Instructions',
-    subtitle: 'App guide and how-to tips',
-    screenName: 'Instructions',
-    badge: 'New',
-  },
+  // {
+  //   emoji: '🎯',
+  //   title: 'Goals',
+  //   subtitle: 'View & edit your health goals',
+  //   screenName: 'ProfileDetails',
+  //   badge: null,
+  // },
+  // {
+  //   emoji: '💪',
+  //   title: 'My Body',
+  //   subtitle: 'BMI, weight, body measurements',
+  //   screenName: 'ProfileDetails',
+  //   badge: 'Missing Info',
+  // },
   {
     emoji: '🏆',
     title: 'Leaderboard',
@@ -56,12 +56,19 @@ const MENU_ITEMS = [
     badge: null,
   },
   {
-    emoji: '⚙️',
-    title: 'Settings',
-    subtitle: 'Notifications, privacy & more',
-    screenName: 'ProfileDetails',
-    badge: null,
+    emoji: '📋',
+    title: 'Instructions',
+    subtitle: 'App guide and how-to tips',
+    screenName: 'Instructions',
+    badge: 'New',
   },
+  // {
+  //   emoji: '⚙️',
+  //   title: 'Settings',
+  //   subtitle: 'Notifications, privacy & more',
+  //   screenName: 'ProfileDetails',
+  //   badge: null,
+  // },
 ];
 
 const demo = {
@@ -144,11 +151,11 @@ function MenuItem({ item, onPress, index }) {
 export default function Profile({ navigation }) {
   const headerAnim = useRef(new Animated.Value(0)).current;
   const avatarScale = useRef(new Animated.Value(0.85)).current;
-  const userId = useSelector(state => state.user?.uid);
-  const startDate = useSelector(state => state.user?.goal?.startDate);
-  const data = useSelector(state => state.user);
-  const profile = data?.profile;
-  const habitsData = data?.habits;
+  const userId =
+    auth().currentUser?.uid || useSelector(state => state.user?.uid);
+  const [profileData, setProfileData] = useState(null);
+  const [leaderboardData, setLeaderboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Animated.parallel([
@@ -164,83 +171,136 @@ export default function Profile({ navigation }) {
       }),
     ]).start();
   }, []);
-  const currentMonth = new Date().toLocaleString('default', { month: 'short' });
-  const year = new Date().getFullYear();
-  const monthKey = `${currentMonth}_${year}`;
 
-  const days = habitsData?.[monthKey]?.days || {};
-  console.log('days :>> ', habitsData);
-
-  const activeDays = Object.keys(days).length;
-
-  const { currentStreak, longestStreak } = calculateStreak(days || {});
-
-  // format => YYYY-MM-DD
   const todayDate = new Date();
-  const todayKey = todayDate.toISOString().split('T')[0];
-
-  const currentHabit = profile?.habit?.[monthKey] || {};
-  const todayData = currentHabit?.days?.[todayKey] || {};
 
   // remaining days from start date -> next 30 days
+
+  useEffect(() => {
+    if (!userId) return;
+
+    // USERS DATA
+    const userRef = database().ref(`/users/${userId}`);
+
+    // LEADERBOARD DATA
+    const leaderboardRef = database().ref(`/leaderboards/${userId}`);
+
+    const userListener = userRef.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (data) {
+        setProfileData(data);
+      }
+    });
+
+    const leaderboardListener = leaderboardRef.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (data) {
+        setLeaderboardData(data);
+      }
+
+      setLoading(false);
+    });
+
+    return () => {
+      userRef.off('value', userListener);
+      leaderboardRef.off('value', leaderboardListener);
+    };
+  }, [userId]);
+
+  // ----------------------
+  // DYNAMIC VALUES
+  // ----------------------
+
+  const profile = profileData?.profile || {};
+  const challenge = leaderboardData?.challenge || {};
+  const status = leaderboardData?.status || {};
+
+  const streak = challenge?.streak || 0;
+
+  const longestStreak =
+    challenge?.longestStreak || profileData?.stats?.longestStreak || 0;
+
+  const consistency = status?.consistency || 0;
+
+  const activeDays = status?.activeDays || 0;
+
+  const totalPoints =
+    challenge?.totalChallengePoints || leaderboardData?.points || 0;
+
+  const challengeStartDate = challenge?.startDate;
+  const challengeEndDate = challenge?.endDate;
+
+  // DAYS LEFT
   let remainingDays = 0;
 
-  if (startDate) {
-    const start = new Date(startDate);
+  if (challengeEndDate) {
+    const today = new Date();
+    const end = new Date(challengeEndDate);
 
-    // end date = start + 30 days
-    const endDate = new Date(start);
-    endDate.setDate(endDate.getDate() + 30);
+    const diff = end - today;
 
-    // difference between today and end date
-    const diffTime = endDate - todayDate;
-
-    remainingDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+    remainingDays = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   }
 
-  const formatMonthKey = monthKey => {
-    if (!monthKey) return 'May 2024';
+  // CURRENT DATE
+  const todayKey = new Date().toISOString().split('T')[0];
 
-    const [month, year] = monthKey.split('_');
-    console.log('monthKey :>> ', `${month} ${year}`);
-    return `${month} ${year}`;
-  };
+  // TODAY QUIZ DATA
+  const todayQuizData = challenge?.days?.[todayKey] || {};
 
-  // get first month key from habits
-  const memberSinceKey = Object.keys(habitsData || {})?.[0];
+  const todayPoints = todayQuizData?.points || 0;
 
+  const todayQuiz =
+    (todayQuizData?.normalQuiz ? 1 : 0) + (todayQuizData?.bonusQuizzes ? 1 : 0);
+
+  // STATS FOR UI
   const STATS = [
     {
       label: 'Streak',
-      value: currentStreak || 0,
+      value: streak,
       emoji: '🔥',
     },
     {
-      label: 'Active Days',
-      value: activeDays || 0,
-      emoji: '📅',
-    },
-    // {
-    //   label: 'Habit',
-    //   value: currentHabit?.title || 'None',
-    //   emoji: '🎯',
-    // },
-    {
-      label: 'Target',
-      value: habitsData?.[monthKey]?.target || '--',
-      emoji: '🥅',
+      label: 'Longest',
+      value: longestStreak,
+      emoji: '🏆',
     },
     {
       label: 'Days Left',
-      value: remainingDays || '0',
-      emoji: '📊',
+      value: remainingDays,
+      emoji: '📅',
     },
-    // {
-    //   label: 'Done',
-    //   value: todayData?.completed ? 'Yes' : 'No',
-    //   emoji: '✅',
-    // },
+    {
+      label: 'Consistency',
+      value: `${consistency}%`,
+      emoji: '⚡',
+    },
   ];
+
+  // USER INITIALS
+  const initials = profile?.name
+    ? profile.name
+        .split(' ')
+        .map(word => word[0])
+        .join('')
+        .substring(0, 2)
+        .toUpperCase()
+    : 'US';
+
+  // MEMBER SINCE
+  const memberSince = profile?.memberSince || new Date().getFullYear();
+
+  // GOALS TEXT
+  const selectedGoalsText =
+    profileData?.goal?.selectedGoals
+      ?.map(item => item?.title)
+      ?.filter(Boolean)
+      ?.join(' • ') || 'No goals selected';
+
+  console.log('PROFILE DATA => ', profileData);
+  console.log('LEADERBOARD DATA => ', leaderboardData);
 
   return (
     <View style={styles.container}>
@@ -274,12 +334,12 @@ export default function Profile({ navigation }) {
           <Text style={styles.userName}>{profile?.name || 'User'}</Text>
 
           <Text style={{ ...styles.userHandle, marginBottom: 0 }}>
-            {habitsData?.[monthKey]?.title || 'No habit set'}
+            {selectedGoalsText || 'No habit set'}
           </Text>
 
           <Text style={styles.userHandle}>
             {profile?.username || '@username'} · Member since{' '}
-            {formatMonthKey(memberSinceKey)}
+            {memberSince || 2026}
           </Text>
 
           {/* Stats row */}
@@ -494,6 +554,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(192,108,91,0.25)',
     backgroundColor: 'rgba(192,108,91,0.08)',
     gap: 8,
+    marginBottom: height / 12,
   },
   logoutIcon: { fontSize: 16 },
   logoutText: {

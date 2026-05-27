@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
+import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
 import { useSelector } from 'react-redux';
 
@@ -44,80 +45,125 @@ function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
 }
 
 export default function Leaderboard({ navigation }) {
-  const userId = useSelector(state => state.user?.uid);
-
+  const userId =
+    useSelector(state => state.user?.uid) || auth()?.currentUser?.uid;
   const [leaderboardData, setLeaderboardData] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // store previous snapshot locally (DO NOT overwrite DB every render)
-  const [prevSnapshot, setPrevSnapshot] = useState({});
-
-  useEffect(() => {
-    const ref = database().ref('/leaderboards');
-
-    const listener = ref.on('value', snapshot => {
-      try {
-        const data = snapshot.val() || {};
-
-        const leaderboardArray = Object.entries(data).map(([uid, item]) => ({
-          uid,
-          ...item,
-        }));
-
-        const sorted = leaderboardArray.sort(
-          (a, b) => (b?.points || 0) - (a?.points || 0),
-        );
-
-        const ranked = sorted.map((item, index) => {
-          return {
-            ...item,
-            currentRank: index + 1,
-          };
-        });
-
-        setLeaderboardData(ranked);
-      } catch (error) {
-        console.log('leaderboard error', error);
-      } finally {
-        setLoading(false);
-      }
-    });
-
-    return () => ref.off('value', listener);
-  }, []);
-
   // ✅ FIXED: previousRank logic (NO OVERWRITE LOOP)
   useEffect(() => {
-    if (!leaderboardData.length) return;
+    const leaderboardRef = database().ref('/leaderboards');
 
-    const updates = {};
+    const onValueChange = leaderboardRef.on('value', snapshot => {
+      const data = snapshot.val() || {};
 
-    const newSnapshot = {};
-
-    leaderboardData.forEach(item => {
-      if (!item.uid) return;
-
-      const oldPrev = item.previousRank;
-
-      // first time → initialize only
-      if (oldPrev == null) {
-        updates[`/leaderboards/${item.uid}/previousRank`] = item.currentRank;
-      } else {
-        // store actual previous state
-        if (oldPrev !== item.currentRank) {
-          updates[`/leaderboards/${item.uid}/previousRank`] = oldPrev;
-        }
+      if (!snapshot.exists()) {
+        setLeaderboardData([]);
+        setLoading(false);
+        return;
       }
 
-      newSnapshot[item.uid] = item.currentRank;
+      const getCurrentWeek = weeklySummary => {
+        if (!weeklySummary) return null;
+
+        const today = new Date();
+
+        return Object.values(weeklySummary).find(week => {
+          const start = new Date(week.start);
+          const end = new Date(week.end);
+
+          return today >= start && today <= end;
+        });
+      };
+
+      const formatted = Object.entries(data).map(([uid, item]) => {
+        const challenge = item?.challenge || {};
+        const days = challenge?.days || {};
+        const weeklySummary = challenge?.weeklySummary || {};
+
+        // total steps
+        const totalSteps = Object.values(days).reduce(
+          (acc, day) => acc + (day?.steps || 0),
+          0,
+        );
+
+        // today
+        const todayKey = new Date().toISOString().split('T')[0];
+
+        const todayData = days?.[todayKey] || {};
+
+        // current week
+        const currentWeek = getCurrentWeek(weeklySummary);
+
+        // completed active days
+        const completedDays = Object.values(days).filter(
+          day => (day?.points || 0) > 0,
+        ).length;
+
+        // consistency %
+        const durationDays = challenge?.durationDays || 1;
+
+        const consistency = Math.round((completedDays / durationDays) * 100);
+
+        // total quizzes (example logic)
+        const quizCompleted = Object.values(days).reduce(
+          (acc, day) => acc + (day?.quizCompleted || 0),
+          0,
+        );
+
+        return {
+          uid,
+
+          name: item?.name || 'User',
+
+          avatar: item?.avatar || item?.profile || 'https://i.pravatar.cc/300',
+
+          // main score
+          totalPoints: challenge?.totalChallengePoints || 0,
+
+          // stats
+          streak: challenge?.streak || 0,
+
+          totalSteps,
+
+          todaySteps: todayData?.steps || 0,
+
+          todayPoints: todayData?.points || 0,
+
+          weeklyPoints: currentWeek?.points || 0,
+
+          // NEW
+          quizCompleted,
+
+          consistency,
+
+          completedDays,
+
+          previousRank:
+            typeof item?.previousRank === 'number' ? item.previousRank : null,
+
+          challenge,
+        };
+      });
+
+      // SORT
+      const sorted = formatted.sort(
+        (a, b) => (b.totalPoints || 0) - (a.totalPoints || 0),
+      );
+
+      // ADD RANK
+      const ranked = sorted.map((item, index) => ({
+        ...item,
+        currentRank: index + 1,
+        previousRank: item.previousRank == null ? index + 1 : item.previousRank,
+      }));
+
+      setLeaderboardData(ranked);
+      setLoading(false);
     });
 
-    setPrevSnapshot(newSnapshot);
-
-    if (Object.keys(updates).length > 0) {
-      database().ref().update(updates);
-    }
-  }, [leaderboardData]);
+    return () => leaderboardRef.off('value', onValueChange);
+  }, []);
 
   const order = [3, 1, 2];
 
@@ -143,6 +189,7 @@ export default function Leaderboard({ navigation }) {
     rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : '#CD7F32';
 
   const TopRankingCard = ({ rank, item }) => {
+    const isMe = item?.uid === userId;
     const size =
       rank === 1 ? height * 0.13 : rank === 2 ? height * 0.11 : height * 0.09;
 
@@ -191,62 +238,87 @@ export default function Leaderboard({ navigation }) {
         </Text>
 
         <Text style={[styles.topPts, { fontSize: rank === 1 ? 13 : 11 }]}>
-          {item?.points || 0} pts
+          {item?.totalPoints || 0} pts
         </Text>
       </View>
     );
   };
 
-  const RankingRow = ({ item, isMe }) => (
-    <View style={[styles.rankRow, isMe && styles.rankRowMe]}>
-      {isMe && (
-        <GradientBg
-          id={`me${item.currentRank}`}
-          c1="rgba(106,148,85,0.3)"
-          c2="rgba(58,90,42,0.2)"
-          r={14}
-        />
-      )}
-
-      <Text style={[styles.rankNum, isMe && styles.rankNumMe]}>
-        {item.currentRank}
-      </Text>
-
-      <View style={styles.rankAvatarWrap}>
-        <Image
-          source={{
-            uri: item?.avatar || 'https://i.pravatar.cc/300',
-          }}
-          style={styles.rankAvatar}
-        />
-      </View>
-
-      <Text
-        style={[styles.rankName, isMe && styles.rankNameMe]}
-        numberOfLines={1}
+  const RankingRow = ({ item, isMe, index }) => {
+    const hasMoved =
+      typeof item.previousRank === 'number' &&
+      item.previousRank !== item.currentRank;
+    return (
+      <View
+        style={[
+          styles.rankRow,
+          { marginBottom: index == data1?.length - 1 ? height / 13 : 10 },
+          isMe && styles.rankRowMe,
+        ]}
       >
-        {item?.name}
-      </Text>
+        {isMe && (
+          <GradientBg
+            id={`me${item.currentRank}`}
+            c1="rgba(106,148,85,0.3)"
+            c2="rgba(58,90,42,0.2)"
+            r={14}
+          />
+        )}
 
-      <View style={styles.rankRight}>
-        <Text style={[styles.rankPts, isMe && styles.rankPtsMe]}>
-          {item?.points || 0} pts
+        <Text style={[styles.rankNum, isMe && styles.rankNumMe]}>
+          {item.currentRank}
         </Text>
 
-        {item?.currentRank !== item?.previousRank ? (
-          <SvgImg
-            iconName={
-              item?.currentRank < item?.previousRank ? upIcon : downIcon
-            }
-            height={12}
-            width={12}
+        <View style={styles.rankAvatarWrap}>
+          <Image
+            source={{
+              uri: item?.avatar || 'https://i.pravatar.cc/300',
+            }}
+            style={styles.rankAvatar}
           />
-        ) : (
-          <View style={{ width: 12, height: 12 }} />
-        )}
+        </View>
+
+        <View style={{ flex: 1 }}>
+          <Text
+            style={[styles.rankName, isMe && styles.rankNameMe]}
+            numberOfLines={1}
+          >
+            {item?.name}
+          </Text>
+          <Text
+            style={{
+              fontSize: 10,
+              fontFamily: fontFamily.montserratRegular,
+              color: colors.white,
+            }}
+            numberOfLines={2}
+          >
+            🎯 {item?.quizCompleted || 0} quizzes · 🔥 {item?.streak || 0}{' '}
+            streak ·{'\n'}
+            📊 {item?.consistency || 0}% consistency
+          </Text>
+        </View>
+
+        <View style={styles.rankRight}>
+          <Text style={[styles.rankPts, isMe && styles.rankPtsMe]}>
+            {item?.totalPoints || 0} pts
+          </Text>
+
+          {hasMoved ? (
+            <SvgImg
+              iconName={
+                item.currentRank < item.previousRank ? upIcon : downIcon
+              }
+              height={12}
+              width={12}
+            />
+          ) : (
+            <View style={{ width: 12, height: 12 }} />
+          )}
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -262,56 +334,49 @@ export default function Leaderboard({ navigation }) {
   }
 
   return (
-    <Wrapper orbsRight containerStyle={{ paddingHorizontal: 0 }}>
-      {/* <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() =>navigation ?.goBack()}
-        >
-          <Svg width={9} height={16} viewBox="0 0 9 16" fill="none">
-            <Path
-              d="M8 1L1 8L8 15"
-              stroke="#FFFFFF"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+    <View style={{ flex: 1 }}>
+      <Wrapper
+        orbsRight
+        containerStyle={{ paddingHorizontal: 0 }}
+        scrollEnable={false}
+      >
+        <Header
+          header="Leaderboard"
+          headerContainer={{ paddingHorizontal: 23 }}
+        />
+
+        <View style={styles.podium}>
+          {ranking.map(item => (
+            <TopRankingCard
+              key={item.uid}
+              rank={item.currentRank}
+              item={item}
             />
-          </Svg>
-        </TouchableOpacity>
-
-        <Text style={styles.headerTitle}>Leaderboard</Text>
-
-        <View style={{ width: 44 }} />
-      </View> */}
-
-      <Header
-        header="Leaderboard"
-        headerContainer={{ paddingHorizontal: 23 }}
-      />
-
-      <View style={styles.podium}>
-        {ranking.map(item => (
-          <TopRankingCard key={item.uid} rank={item.currentRank} item={item} />
-        ))}
-      </View>
-
-      <View style={styles.listCard}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 100 }}
-        >
-          {data1.map(item => (
-            <RankingRow key={item.uid} item={item} isMe={false} />
           ))}
-        </ScrollView>
+        </View>
 
-        {mineData && (
-          <View style={styles.pinnedMe}>
-            <RankingRow item={mineData} isMe />
-          </View>
-        )}
-      </View>
-    </Wrapper>
+        <View style={styles.listCard}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 100 }}
+          >
+            {data1.map((item, index) => (
+              <RankingRow
+                key={item.uid}
+                item={item}
+                index={index}
+                isMe={false}
+              />
+            ))}
+          </ScrollView>
+        </View>
+      </Wrapper>
+      {mineData && (
+        <View style={styles.pinnedMe}>
+          <RankingRow item={mineData} isMe />
+        </View>
+      )}
+    </View>
   );
 }
 const styles = StyleSheet.create({
@@ -375,12 +440,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: fontFamily.montserratSemiBold,
   },
-  topName: {
-    color: 'rgba(255,255,255,0.8)',
-    fontFamily: fontFamily.montserratMedium,
-    textAlign: 'center',
-    width: width * 0.25,
-  },
+
   topPts: {
     color: colors.secondary,
     fontFamily: fontFamily.montserratSemiBold,
@@ -403,11 +463,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 14,
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 14,
     marginBottom: 8,
     overflow: 'hidden',
+    minHeight: 74,
   },
   rankRowMe: {
     borderWidth: 1,
@@ -436,16 +497,16 @@ const styles = StyleSheet.create({
   rankName: {
     flex: 1,
     fontSize: 14,
-    fontFamily: fontFamily.poppinsMedium,
+    fontFamily: fontFamily.CircularRegular,
     color: 'rgba(255,255,255,0.8)',
   },
   rankNameMe: {
     color: colors.white,
   },
   rankRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
   },
   rankPts: {
     fontSize: 13,
@@ -459,8 +520,32 @@ const styles = StyleSheet.create({
 
   pinnedMe: {
     position: 'absolute',
-    bottom: 12,
-    left: 16,
-    right: 16,
+    bottom: height / 10,
+    width: '100%',
+    paddingHorizontal: 18,
+  },
+  topSub: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.45)',
+    fontFamily: fontFamily.montserratRegular,
+    marginTop: 2,
+    marginBottom: 2,
+  },
+
+  rankInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+
+  rankSub: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.45)',
+    fontFamily: fontFamily.montserratRegular,
+    marginTop: 2,
+  },
+  topName: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.45)',
+    fontFamily: fontFamily.montserratMedium,
   },
 });

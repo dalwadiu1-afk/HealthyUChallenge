@@ -7,12 +7,26 @@ import {
   Animated,
   Pressable,
   TouchableOpacity,
+  TextInput,
 } from 'react-native';
 import { colors, fontFamily } from '../../constant';
 import { Wrapper } from '../../components';
 import { useSelector } from 'react-redux';
+import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
+import moment from 'moment';
+import Modal from 'react-native-modal';
 
 const CATEGORIES = ['All', 'Fitness', 'Nutrition', 'Sleep', 'Wellness'];
+
+const getGreeting = () => {
+  const hour = new Date().getHours();
+
+  if (hour < 12) return 'Good Morning 🌿';
+  if (hour < 17) return 'Good Afternoon ☀️';
+  if (hour < 21) return 'Good Evening 🌙';
+  return 'Good Night 🌌';
+};
 
 const CATEGORY_STYLE = {
   Fitness: {
@@ -48,10 +62,26 @@ const CATEGORY_STYLE = {
 /* =======================
    FLIP CARD
 ======================= */
-function FlipCard({ item, navigation, index }) {
+function FlipCard({
+  item,
+  navigation,
+  index,
+  selectedGoals,
+  setSelectedGoals,
+  selectionMode,
+  setConfirmVisible,
+  uid,
+  tempSelected,
+  setTempSelected,
+}) {
   const animVal = useRef(new Animated.Value(0)).current;
   const entranceVal = useRef(new Animated.Value(0)).current;
   const [flipped, setFlipped] = useState(false);
+  const selectedGoalData = selectedGoals.find(g => g.id === item.id);
+
+  const [goalText, setGoalText] = useState(selectedGoalData?.goalText || '');
+
+  const goalSaved = !!selectedGoalData?.goalText;
   const cs = CATEGORY_STYLE[item.category] || CATEGORY_STYLE.Wellness;
 
   useEffect(() => {
@@ -94,22 +124,88 @@ function FlipCard({ item, navigation, index }) {
     ],
   };
 
+  const onFlipCard = () => {
+    // ======================
+    // SELECTION MODE
+    // ======================
+    if (selectionMode) {
+      const alreadySelected = tempSelected.some(g => g.id === item.id);
+
+      if (alreadySelected) {
+        setTempSelected(prev => prev.filter(g => g.id !== item.id));
+
+        return;
+      }
+
+      if (tempSelected.length >= 3 && !alreadySelected) return;
+
+      const updated = [...tempSelected, item];
+
+      setTempSelected(updated);
+
+      // VISUAL TEMP FLIP
+      flipCard();
+
+      setTimeout(() => {
+        Animated.spring(animVal, {
+          toValue: 0,
+          friction: 8,
+          useNativeDriver: true,
+        }).start();
+
+        setFlipped(false);
+      }, 700);
+
+      if (updated.length === 3) {
+        setTimeout(() => {
+          setConfirmVisible(true);
+        }, 800);
+      }
+
+      return;
+    }
+
+    // ======================
+    // AFTER CONFIRM
+    // ======================
+
+    const allowed = selectedGoals.some(g => g.id === item.id);
+
+    if (!allowed) return;
+
+    // goal already saved
+    if (goalSaved) {
+      flipCard();
+
+      setTimeout(() => {
+        Animated.spring(animVal, {
+          toValue: 0,
+          friction: 8,
+          useNativeDriver: true,
+        }).start();
+
+        setFlipped(false);
+      }, 700);
+
+      if (item.screenName !== 'HabitsList') {
+        setTimeout(() => {
+          navigation?.navigate(item.screenName, {
+            goalTitle: item.title,
+            goalId: item.id,
+          });
+        }, 300);
+      }
+
+      return;
+    }
+
+    // first goal entry
+    flipCard();
+  };
+
   return (
     <Animated.View style={[styles.cardWrapper, entranceStyle]}>
-      <Pressable
-        style={{ flex: 1 }}
-        onPress={() => {
-          flipCard();
-          if (item.screenName !== 'HabitsList') {
-            setTimeout(() => {
-              navigation?.navigate(item.screenName, {
-                goalTitle: item.title,
-                goalId: item.id,
-              });
-            }, 300);
-          }
-        }}
-      >
+      <Pressable style={{ flex: 1 }} onPress={onFlipCard}>
         {/* FRONT */}
         <Animated.View
           style={[
@@ -121,6 +217,31 @@ function FlipCard({ item, navigation, index }) {
           <Text style={styles.cardEmoji}>{cs.emoji}</Text>
           <Text style={styles.cardTitle}>{item.title}</Text>
           <Text style={styles.cardDesc}>{item.description}</Text>
+          {selectionMode && tempSelected.some(g => g.id === item.id) && (
+            <View
+              style={{
+                position: 'absolute',
+                top: 10,
+                right: 10,
+                width: 26,
+                height: 26,
+                borderRadius: 13,
+                backgroundColor: colors.secondary,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text
+                style={{
+                  color: '#fff',
+                  fontSize: 14,
+                  fontWeight: 'bold',
+                }}
+              >
+                ✓
+              </Text>
+            </View>
+          )}
           <View style={[styles.categoryDot, { backgroundColor: cs.dot }]} />
         </Animated.View>
 
@@ -140,13 +261,86 @@ function FlipCard({ item, navigation, index }) {
             },
           ]}
         >
-          <Text style={styles.cardEmoji}>{cs.emoji}</Text>
-          <Text style={[styles.cardTitle, { color: colors.white }]}>
-            {item.title}
-          </Text>
-          <Text style={[styles.cardDesc, { color: 'rgba(255,255,255,0.7)' }]}>
-            {item.description}
-          </Text>
+          {!goalSaved && selectedGoals?.length === 3 ? (
+            <>
+              <Text style={styles.cardEmoji}>{cs.emoji}</Text>
+
+              <Text style={[styles.cardTitle, { color: colors.white }]}>
+                {item.title}
+              </Text>
+
+              <TextInput
+                placeholder="Enter your goal..."
+                placeholderTextColor="rgba(255,255,255,0.3)"
+                value={goalText}
+                onChangeText={setGoalText}
+                style={{
+                  marginTop: 10,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.1)',
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  color: '#fff',
+                  height: 50,
+                }}
+              />
+
+              <TouchableOpacity
+                style={{
+                  marginTop: 10,
+                  backgroundColor: colors.secondary,
+                  paddingVertical: 10,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                }}
+                onPress={async () => {
+                  const updatedGoals = selectedGoals.map(goal => {
+                    if (goal.id === item.id) {
+                      return {
+                        ...goal,
+                        goalText,
+                      };
+                    }
+
+                    return goal;
+                  });
+
+                  await database().ref(`/users/${uid}/goal`).update({
+                    selectedGoals: updatedGoals,
+                  });
+
+                  setSelectedGoals(updatedGoals);
+
+                  Animated.spring(animVal, {
+                    toValue: 0,
+                    friction: 8,
+                    useNativeDriver: true,
+                  }).start();
+
+                  setFlipped(false);
+                }}
+              >
+                <Text
+                  style={{
+                    color: '#fff',
+                    fontFamily: fontFamily.montserratSemiBold,
+                  }}
+                >
+                  Save Goal
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={styles.cardEmoji}>{cs.emoji}</Text>
+
+              <Text style={styles.cardTitle}>{item.title}</Text>
+
+              <Text style={styles.cardDesc}>{item.description}</Text>
+
+              <View style={[styles.categoryDot, { backgroundColor: cs.dot }]} />
+            </>
+          )}
         </Animated.View>
       </Pressable>
     </Animated.View>
@@ -157,7 +351,12 @@ function FlipCard({ item, navigation, index }) {
    MAIN SCREEN
 ======================= */
 export default function HabitsList({ navigation }) {
+  const uid = auth().currentUser?.uid;
   const [activeCategory, setActiveCategory] = useState('All');
+  const [selectedGoals, setSelectedGoals] = useState([]);
+  const [tempSelected, setTempSelected] = useState([]);
+  const [selectionMode, setSelectionMode] = useState(true);
+  const [confirmVisible, setConfirmVisible] = useState(false);
 
   const ALL_HABITS = [
     {
@@ -166,6 +365,7 @@ export default function HabitsList({ navigation }) {
       description: 'Book and attend a free nutrition counseling session',
       screenName: 'BookAnAppointment',
       category: 'Nutrition',
+      key: 'booking',
     },
     {
       id: 2,
@@ -173,6 +373,7 @@ export default function HabitsList({ navigation }) {
       description: 'Walk your target number of steps every day',
       screenName: 'WalkingRewardBoard',
       category: 'Fitness',
+      key: 'steps',
     },
     {
       id: 3,
@@ -180,6 +381,7 @@ export default function HabitsList({ navigation }) {
       description: 'Eat 25–38g fiber daily for at least 20 days',
       screenName: 'DailyFiberCounts',
       category: 'Nutrition',
+      key: 'fiber',
     },
     {
       id: 4,
@@ -187,6 +389,7 @@ export default function HabitsList({ navigation }) {
       description: 'Get 7–9 hours of sleep each night',
       screenName: 'SleepMeasure',
       category: 'Sleep',
+      key: 'sleep',
     },
     {
       id: 5,
@@ -194,6 +397,7 @@ export default function HabitsList({ navigation }) {
       description: 'Join a weekly fitness class',
       screenName: 'WeeklyFitnessClass',
       category: 'Fitness',
+      key: 'fitness',
     },
     {
       id: 6,
@@ -201,6 +405,7 @@ export default function HabitsList({ navigation }) {
       description: 'Do weight training at least 2x per week',
       screenName: 'WeightResistanceTraining',
       category: 'Fitness',
+      key: 'weightTraining',
     },
     {
       id: 7,
@@ -208,6 +413,7 @@ export default function HabitsList({ navigation }) {
       description: 'Lose no more than 2 lbs per week for 4 weeks',
       screenName: 'WeightChallengeUI',
       category: 'Wellness',
+      key: 'weightChallenge',
     },
     {
       id: 8,
@@ -215,6 +421,7 @@ export default function HabitsList({ navigation }) {
       description: 'Make half your plate fruits & veggies once daily',
       screenName: 'HalfPlateFruitsVeggies',
       category: 'Nutrition',
+      key: 'halfPlateChallenge',
     },
     {
       id: 9,
@@ -222,6 +429,7 @@ export default function HabitsList({ navigation }) {
       description: 'Go meat-free at least once per week',
       screenName: 'MeatlessChallenge',
       category: 'Nutrition',
+      key: 'meatLess',
     },
     {
       id: 10,
@@ -229,6 +437,7 @@ export default function HabitsList({ navigation }) {
       description: 'Eat 1 fermented food daily for 7 days',
       screenName: 'FermentedFoodChallenge',
       category: 'Nutrition',
+      key: 'fermentedFood',
     },
     {
       id: 11,
@@ -236,6 +445,7 @@ export default function HabitsList({ navigation }) {
       description: 'Improve body fat percentage over time',
       screenName: 'BodyFatGoalScreen',
       category: 'Wellness',
+      key: 'bodyFatGoal',
     },
     {
       id: 12,
@@ -243,6 +453,7 @@ export default function HabitsList({ navigation }) {
       description: 'Eat 1 new vegetable per week (2 weeks)',
       screenName: 'VeggieChallenge',
       category: 'Nutrition',
+      key: 'newVeggie',
     },
     {
       id: 13,
@@ -250,6 +461,7 @@ export default function HabitsList({ navigation }) {
       description: 'Stay under daily added sugar limit for 21 days',
       screenName: 'SugarChartDays',
       category: 'Nutrition',
+      key: 'sugarIntake',
     },
     {
       id: 14,
@@ -257,6 +469,7 @@ export default function HabitsList({ navigation }) {
       description: 'Exercise with a friend 4 times',
       screenName: 'FriendWorkoutChallenge',
       category: 'Fitness',
+      key: 'exWithFriend',
     },
     {
       id: 15,
@@ -264,6 +477,7 @@ export default function HabitsList({ navigation }) {
       description: 'Increase cardio time or intensity',
       screenName: 'CardioTrackerUI',
       category: 'Fitness',
+      key: 'cardio',
     },
     {
       id: 16,
@@ -271,6 +485,7 @@ export default function HabitsList({ navigation }) {
       description: 'Create a no-added-sugar drink combo',
       screenName: 'BeverageChallengeUI',
       category: 'Nutrition',
+      key: 'beverage',
     },
     {
       id: 17,
@@ -278,6 +493,7 @@ export default function HabitsList({ navigation }) {
       description: 'Build and shop a healthy snack list',
       screenName: 'SnackListingUI',
       category: 'Nutrition',
+      key: 'snacks',
     },
     {
       id: 18,
@@ -285,6 +501,7 @@ export default function HabitsList({ navigation }) {
       description: 'Eat 2–3 servings of fruit every day',
       screenName: 'FruitTrackerUI',
       category: 'Nutrition',
+      key: 'dailyFruits',
     },
     {
       id: 19,
@@ -292,6 +509,7 @@ export default function HabitsList({ navigation }) {
       description: 'Add your own personal health goal',
       screenName: 'FutureIdeasUI',
       category: 'Wellness',
+      key: 'Personalized Goal 1',
     },
     {
       id: 20,
@@ -299,6 +517,7 @@ export default function HabitsList({ navigation }) {
       description: 'Add your own personal health goal',
       screenName: 'FutureIdeasUI',
       category: 'Wellness',
+      key: 'Personalized Goal 2',
     },
     {
       id: 21,
@@ -306,15 +525,21 @@ export default function HabitsList({ navigation }) {
       description: 'Add your own personal health goal',
       screenName: 'FutureIdeasUI',
       category: 'Wellness',
+      key: 'Personalized Goal 3',
     },
   ];
+
   const profileData = useSelector(state => state.user);
   const profile = profileData?.profile;
 
+  const visibleHabits = selectionMode
+    ? ALL_HABITS
+    : ALL_HABITS.filter(h => selectedGoals.some(g => g.id === h.id));
+
   const filtered =
     activeCategory === 'All'
-      ? ALL_HABITS
-      : ALL_HABITS.filter(h => h.category === activeCategory);
+      ? visibleHabits
+      : visibleHabits.filter(h => h.category === activeCategory);
 
   const headerFade = useRef(new Animated.Value(0)).current;
 
@@ -327,13 +552,59 @@ export default function HabitsList({ navigation }) {
     }).start();
   }, []);
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
+  useEffect(() => {
+    if (!uid) return;
 
-    if (hour < 12) return 'Good Morning 🌿';
-    if (hour < 17) return 'Good Afternoon ☀️';
-    if (hour < 21) return 'Good Evening 🌙';
-    return 'Good Night 🌌';
+    const ref = database().ref(`/users/${uid}/goal`);
+
+    const listener = ref.on('value', snap => {
+      const data = snap.val() || {};
+
+      const savedGoals = data?.selectedGoals || [];
+      const createdAt = data?.createdAt;
+
+      // no goals yet
+      if (!savedGoals.length) {
+        setSelectionMode(true);
+        setSelectedGoals([]);
+        return;
+      }
+
+      // check 30 days expiry
+      const expired =
+        createdAt && moment().diff(moment(createdAt), 'days') >= 30;
+
+      if (expired) {
+        ref.remove();
+
+        setSelectedGoals([]);
+        setSelectionMode(true);
+        return;
+      }
+
+      setSelectedGoals(savedGoals);
+      setSelectionMode(false);
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
+
+  const confirmGoalSelection = async () => {
+    if (tempSelected.length !== 3) return;
+
+    setSelectedGoals(tempSelected);
+
+    await database()
+      .ref(`/users/${uid}/goal`)
+      .set({
+        selectedGoals: tempSelected,
+        createdAt: moment().valueOf(),
+        startDate: moment().format('YYYY-MM-DD'),
+        goalNotes: {},
+      });
+
+    setSelectionMode(false);
+    setConfirmVisible(false);
   };
 
   const greeting = getGreeting();
@@ -342,13 +613,25 @@ export default function HabitsList({ navigation }) {
     <View style={styles.container}>
       <Wrapper containerStyle={{ paddingHorizontal: 0 }} orbsRight>
         <FlatList
+          key={selectionMode ? 'two-columns' : 'one-column'}
           data={filtered}
-          numColumns={2}
+          numColumns={selectionMode ? 2 : 1}
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           renderItem={({ item, index }) => (
-            <FlipCard item={item} navigation={navigation} index={index} />
+            <FlipCard
+              item={item}
+              navigation={navigation}
+              index={index}
+              selectedGoals={selectedGoals}
+              setSelectedGoals={setSelectedGoals}
+              selectionMode={selectionMode}
+              setConfirmVisible={setConfirmVisible}
+              uid={uid}
+              tempSelected={tempSelected}
+              setTempSelected={setTempSelected}
+            />
           )}
           ListHeaderComponent={
             <Animated.View style={{ opacity: headerFade }}>
@@ -411,6 +694,80 @@ export default function HabitsList({ navigation }) {
           }
         />
       </Wrapper>
+      <Modal isVisible={confirmVisible} backdropOpacity={0.6} useNativeDriver>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: '#1c1c1c',
+              borderRadius: 20,
+              padding: 20,
+            }}
+          >
+            <Text
+              style={{
+                color: '#fff',
+                fontSize: 18,
+                fontFamily: fontFamily.montserratBold,
+              }}
+            >
+              Select Goal?
+            </Text>
+
+            <Text
+              style={{
+                color: 'rgba(255,255,255,0.7)',
+                marginTop: 10,
+              }}
+            >
+              You selected {tempSelected.length} goals
+            </Text>
+
+            <View
+              style={{
+                flexDirection: 'row',
+                marginTop: 20,
+              }}
+            >
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  padding: 14,
+                  borderRadius: 12,
+                  backgroundColor: '#333',
+                  marginRight: 8,
+                  alignItems: 'center',
+                }}
+                onPress={() => {
+                  setConfirmVisible(false);
+                  setTempSelected([]);
+                }}
+              >
+                <Text style={{ color: '#fff' }}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  padding: 14,
+                  borderRadius: 12,
+                  backgroundColor: colors.secondary,
+                  alignItems: 'center',
+                }}
+                onPress={confirmGoalSelection}
+              >
+                <Text style={{ color: '#fff' }}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -425,6 +782,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 15,
+    paddingBottom: 120,
   },
   header: {
     flexDirection: 'row',
@@ -490,10 +848,12 @@ const styles = StyleSheet.create({
   cardWrapper: {
     flex: 1,
     margin: 5,
-    height: 148,
+    minHeight: 190,
+    // maxWidth: '48%',
   },
   card: {
     flex: 1,
+    minHeight: 190,
     borderRadius: 20,
     padding: 14,
     borderWidth: 1,

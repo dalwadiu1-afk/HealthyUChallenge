@@ -8,6 +8,7 @@ import {
   TextInput,
   StatusBar,
   ScrollView,
+  Dimensions,
 } from 'react-native';
 import Svg, {
   Circle,
@@ -27,6 +28,7 @@ import database from '@react-native-firebase/database';
 import moment from 'moment';
 import auth from '@react-native-firebase/auth';
 import DateTimePicker from '@react-native-community/datetimepicker';
+const { height } = Dimensions.get('window');
 
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   return (
@@ -738,6 +740,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.dark,
+    paddingBottom: height / 12.5,
   },
   scroll: {
     paddingTop: (StatusBar.currentHeight || 44) + 8,

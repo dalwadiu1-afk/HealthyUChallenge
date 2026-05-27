@@ -13,15 +13,19 @@ import firestore from '@react-native-firebase/firestore';
 
 import { Wrapper, Header } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
+import moment from 'moment';
+import { getDynamicWeekId } from '../../../utils/helper';
 
-const { width } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
-export default function QuizStart({ navigation }) {
+export default function QuizStart({ navigation, route }) {
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(30)).current;
-
   const [quizData, setQuizData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const monthKey = moment().format('MM_YYYY');
+  const dynamicWeekId = getDynamicWeekId();
+  const { isBonus, isCombine } = route?.params || {};
 
   useEffect(() => {
     Animated.parallel([
@@ -36,33 +40,40 @@ export default function QuizStart({ navigation }) {
         useNativeDriver: true,
       }),
     ]).start();
-
     fetchQuiz();
   }, []);
 
   const fetchQuiz = async () => {
     try {
-      // category
-      const categoryDoc = await firestore()
-        .collection('quizCategories')
-        .doc('nutrition')
+      // 1. Get month document
+      const docSnap = await firestore()
+        .collection(isBonus ? 'BonusQuizes' : 'quizCategories')
+        .doc(isBonus ? dynamicWeekId : monthKey)
         .get();
 
-      // global instructions
+      // 2. Pick category (fitness)
+      const categoryData = docSnap.data() || {};
+      if (!categoryData) {
+        console.log('No quiz found for this category');
+        setQuizData(null);
+        return;
+      }
+
+      // 3. Global settings
       const settingsDoc = await firestore()
         .collection('quizSettings')
         .doc('global')
         .get();
 
-      const categoryData = categoryDoc.data() || {};
       const settingsData = settingsDoc.data() || {};
 
-      // merge instructions
+      // 4. Merge instructions
       const instructions = [
         ...(categoryData.customInstructions || []),
         ...(settingsData.generalInstructions || []),
       ];
 
+      // 5. Set final data
       setQuizData({
         ...categoryData,
         instructions,
@@ -76,9 +87,9 @@ export default function QuizStart({ navigation }) {
 
   const startQuiz = () => {
     navigation.navigate('Quiz', {
-      categoryId: quizData?.id,
-      // totalSeconds: (quizData?.totalMinutes || 5) * 60,
-      // questions: quizData?.questions || [],
+      isBonus: isBonus,
+      showQues: quizData?.totalQuestions,
+      isCombine: isCombine,
     });
   };
 
@@ -312,20 +323,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 16,
+    marginBottom: height / 13,
   },
   timerPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-evenly',
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    // paddingHorizontal: 20,
+    minWidth: 100,
+    // paddingVertical: 10,
     borderRadius: 30,
-    gap: 6,
   },
   timerIcon: {
-    fontSize: 14,
+    fontSize: 40,
   },
   timerText: {
     color: colors.white,

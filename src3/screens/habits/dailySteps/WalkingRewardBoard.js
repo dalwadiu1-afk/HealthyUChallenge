@@ -178,7 +178,7 @@ function WeekWinnerCard({ item, index }) {
   );
 }
 
-export default function WalkingRewardBoard({ navigation }) {
+export default function WalkingRewardBoardWalkingRewardBoard({ navigation }) {
   const headerAnim = useRef(new Animated.Value(0)).current;
   const cardsAnim = useRef(new Animated.Value(0)).current;
 

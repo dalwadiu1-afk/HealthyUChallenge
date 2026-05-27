@@ -4,20 +4,20 @@ import {
   Text,
   StatusBar,
   StyleSheet,
-  Dimensions,
   FlatList,
   TouchableOpacity,
   TextInput,
   Animated,
 } from 'react-native';
-import Svg, { Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
-import { colors, fontFamily } from '../../constant/colors';
+import Svg, { Path } from 'react-native-svg';
+import { colors } from '../../constant/colors';
 import { fontFamily as ff } from '../../constant';
 import ChatCard from '../../components/social/chatCard';
 import auth from '@react-native-firebase/auth';
 import ProfileHeader from '../../components/profile/ProfileHeader';
 import { Wrapper } from '../../components';
-import database from '@react-native-firebase/database';
+import database, { onValue } from '@react-native-firebase/database';
+import moment from 'moment';
 
 const STORIES = [
   { id: 0, name: 'Your Story', color: '#4D6644', isOwn: true },
@@ -74,10 +74,22 @@ export default function Feeds({ navigation }) {
   const [hideStories, setHideStories] = useState(false);
   const [loading, setLoading] = useState(true);
   const headerAnim = useRef(new Animated.Value(0)).current;
+  const [userData, setUserData] = useState(null);
   const userId = auth().currentUser?.uid || 'USER_UID';
 
   useEffect(() => {
     const postsRef = database().ref('posts').limitToLast(20);
+    const userRef = database().ref(`users/${userId}`);
+
+    const unsubscribe = onValue(userRef, snapshot => {
+      if (snapshot.exists()) {
+        setUserData(snapshot.val());
+
+        console.log('User Data => ', snapshot.val());
+      } else {
+        console.log('No user found');
+      }
+    });
 
     const listener = postsRef.on('value', snapshot => {
       const data = snapshot.val();
@@ -110,7 +122,10 @@ export default function Feeds({ navigation }) {
       setLoading(false);
     });
 
-    return () => postsRef.off('value', listener);
+    return () => {
+      postsRef.off('value', listener);
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -139,6 +154,8 @@ export default function Feeds({ navigation }) {
     }
   };
 
+  const mergedQuiz = userData?.quizzes?.days || {};
+
   return (
     <View style={styles.container}>
       <View
@@ -148,7 +165,13 @@ export default function Feeds({ navigation }) {
           zIndex: 1,
         }}
       >
-        <ProfileHeader onPress={() => navigation.navigate('AvgSteps')} />
+        <ProfileHeader
+          userData={userData?.profile}
+          startDate={
+            moment(userData?.goal?.startDate)?.format('YYYY-MM-DD') || ''
+          }
+          streakData={mergedQuiz}
+        />
       </View>
       <Wrapper
         orbsRight

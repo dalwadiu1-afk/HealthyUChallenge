@@ -7,15 +7,8 @@ import {
   TouchableOpacity,
   TextInput,
   StatusBar,
-  Dimensions,
 } from 'react-native';
-import Svg, {
-  Rect,
-  Text as SvgText,
-  G,
-  Polyline,
-  Path,
-} from 'react-native-svg';
+import Svg, { Rect, Text as SvgText, G, Polyline } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
@@ -41,7 +34,7 @@ const buildFiberTemplate = startDate => {
     };
   });
 };
-
+// Fix this screen that data is not shoing even it saved in the db and also 
 function StatRow({ emoji, label, value, last }) {
   return (
     <>
@@ -90,8 +83,6 @@ export default function FiberChartDays({ navigation }) {
         const startDate = data?.goal?.startDate || '2026-04-15';
         const habits = data?.habits || {};
         const gender = data?.profile?.gender;
-
-        console.log('START DATE =>', startDate);
 
         const goal =
           gender === 'male' ? { min: 30, max: 38 } : { min: 21, max: 25 };

@@ -16,7 +16,7 @@ import { colors, fontFamily } from '../../../constant';
 import Svg, { Path } from 'react-native-svg';
 
 import ProfileHeader from '../../../components/profile/ProfileHeader';
-
+import auth from '@react-native-firebase/auth';
 /* 🔥 Firebase */
 import {
   getDatabase,
@@ -24,36 +24,9 @@ import {
   onValue,
   off,
 } from '@react-native-firebase/database';
-import { get } from 'react-native/Libraries/NativeComponent/NativeComponentRegistry';
+import moment from 'moment';
 
-const { height, width } = Dimensions.get('window');
-
-const WEEK_WINNERS = [
-  {
-    rank: 1,
-    profile:
-      'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-    name: 'Alfred Owen',
-    workouts: '8 workouts',
-    steps: '151,665',
-  },
-  {
-    rank: 2,
-    profile:
-      'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-    name: 'Alfred Owen',
-    workouts: '8 workouts',
-    steps: '15,169',
-  },
-  {
-    rank: 3,
-    profile:
-      'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-    name: 'Alfred Owen',
-    workouts: '8 workouts',
-    steps: '15,165',
-  },
-];
+const { height } = Dimensions.get('window');
 
 const RANK_COLORS = {
   1: {
@@ -137,26 +110,35 @@ function WeekWinnerCard({ item, index }) {
         />
 
         <View style={styles.winnerInfo}>
-          <Text style={styles.winnerName}>{item?.name}</Text>
-          <Text style={styles.winnerWorkouts}>{item?.workouts}</Text>
+          <Text style={styles.winnerName} numberOfLines={1}>
+            {item?.name}
+          </Text>
+
+          <Text
+            style={styles.winnerWorkouts}
+            numberOfLines={2}
+            ellipsizeMode="tail"
+          >
+            🎯 {item?.quizCompleted || 0} quizzes · 🔥 {item?.streak || 0}{' '}
+            streak · 📊 {item?.consistency || 0}% consistency
+          </Text>
         </View>
 
         <View style={styles.winnerRight}>
           <SvgImg
             iconName={badgeIcon(
-              item?.rank === 1
-                ? 'gold'
-                : item?.rank === 2
-                ? colors.gray
-                : 'brown',
+              item?.rank === 1 ? 'gold' : item?.rank === 2 ? 'white' : 'brown',
             )}
             height={20}
             width={14}
           />
-          <Text style={[styles.winnerSteps, { color: rc.text }]}>
-            {item?.steps}
+
+          <Text
+            style={[styles.winnerSteps, { color: rc.text }]}
+            numberOfLines={1}
+          >
+            {item?.points} Pts
           </Text>
-          <Text style={styles.winnerStepsLabel}> Steps</Text>
         </View>
       </View>
     </Animated.View>
@@ -166,9 +148,14 @@ function WeekWinnerCard({ item, index }) {
 export default function WalkingRewardBoard({ navigation }) {
   const headerAnim = useRef(new Animated.Value(0)).current;
   const cardsAnim = useRef(new Animated.Value(0)).current;
+  const userId = auth()?.currentUser?.uid;
+  const [topPercent, setTopPercent] = useState(null);
+  const [userRank, setUserRank] = useState(null);
 
   /* 🔥 Firebase state */
+  const [weekWinners, setWeekWinners] = useState([]);
   const [userData, setUserData] = useState(null);
+  const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -187,48 +174,268 @@ export default function WalkingRewardBoard({ navigation }) {
   }, []);
 
   useEffect(() => {
+    setLoading(true);
     const db = getDatabase(
       undefined,
       'https://healthyuchallenge-45ec6-default-rtdb.firebaseio.com/',
     );
 
-    const dbRef = ref(db, 'users/1');
+    const uid = auth()?.currentUser?.uid;
+    if (!uid) return;
 
-    const unsubscribe = onValue(
-      dbRef,
-      snapshot => {
-        console.log('EXISTS:', snapshot.exists());
-        console.log('DATA:', snapshot.val());
+    const userRef = ref(db, `leaderboards/${uid}`);
+    const usersRef = ref(db, `users/${uid}`);
+    const leaderboardRef = ref(db, `leaderboards`);
 
-        if (snapshot.exists()) {
-          setUserData(snapshot.val());
-        } else {
-          setUserData(null);
+    const unsubscribeUser = onValue(userRef, snapshot => {
+      setUserData(snapshot.val());
+    });
+
+    const unsubscribeProfile = onValue(usersRef, snapshot => {
+      setProfileData(snapshot.val());
+      setLoading(false);
+    });
+
+    const unsubscribeLeaderboard = onValue(leaderboardRef, snapshot => {
+      const data = snapshot.val() || {};
+      const list = Object.entries(data).map(([uid, item]) => ({
+        uid,
+        ...item,
+      }));
+
+      const getWeeklyPoints = challenge => {
+        const weekly = challenge?.weeklySummary || {};
+        const values = Object.values(weekly);
+
+        if (!values.length) return 0;
+
+        // take latest week by end date
+        const latestWeek = values.reduce((latest, current) => {
+          return new Date(current.end) > new Date(latest.end)
+            ? current
+            : latest;
+        });
+
+        return latestWeek?.points || 0;
+      };
+
+      const sorted = list.sort((a, b) => {
+        const pointsA = getWeeklyPoints(a.challenge);
+        const pointsB = getWeeklyPoints(b.challenge);
+
+        if (pointsB !== pointsA) {
+          return pointsB - pointsA;
         }
 
-        setLoading(false);
-      },
-      error => {
-        console.log('FIREBASE ERROR:', error);
-        setLoading(false);
-      },
-    );
+        const consistencyA = a.status?.consistency || 0;
+        const consistencyB = b.status?.consistency || 0;
 
-    return () => unsubscribe();
+        if (consistencyB !== consistencyA) {
+          return consistencyB - consistencyA;
+        }
+
+        return (b.challenge?.streak || 0) - (a.challenge?.streak || 0);
+      });
+
+      const top3 = sorted.slice(0, 3).map((u, index) => {
+        const days = u.challenge?.days || {};
+
+        const quizTotal = Object.values(days).reduce((acc, d) => {
+          return acc + (d?.normalQuiz ? 1 : 0) + (d?.bonusQuizzes ? 1 : 0);
+        }, 0);
+
+        const stepsTotal = Object.values(days).reduce(
+          (acc, d) => acc + (d?.steps || 0),
+          0,
+        );
+
+        return {
+          rank: index + 1,
+          profile: u.avatar || 'https://i.pravatar.cc/300',
+          name: u.name || 'User',
+
+          steps: `${stepsTotal} steps`,
+          streak: u.challenge?.streak || 0,
+          consistency:
+            u.status?.consistency ||
+            u.stats?.completionRate ||
+            u.stats?.consistency ||
+            0,
+
+          quizCompleted: quizTotal,
+          points: getWeeklyPoints(u.challenge), // ✅ weekly ranking value
+        };
+      });
+
+      const userIndex = sorted.findIndex(item => item.uid === uid);
+
+      const totalUsers = sorted.length;
+
+      let calculatedPercent = null;
+
+      if (userIndex !== -1 && totalUsers > 0) {
+        calculatedPercent = Math.max(
+          1,
+          Math.ceil(((userIndex + 1) / totalUsers) * 100),
+        );
+      }
+
+      const userRank = userIndex !== -1 ? userIndex + 1 : null;
+      setUserRank(userRank);
+      setTopPercent(calculatedPercent);
+      setWeekWinners(top3);
+      setLoading(false);
+    });
+    return () => {
+      unsubscribeUser();
+      unsubscribeLeaderboard();
+      unsubscribeProfile();
+    };
   }, []);
 
   /* 🔥 derived values */
-  const percent = userData?.stepsToday
-    ? Math.min((userData.stepsToday / 5000) * 100, 100)
+
+  const getTodayDate = () => {
+    return new Date().toISOString().split('T')[0];
+  };
+
+  const isCurrentWeek = dateString => {
+    const date = new Date(dateString);
+    const today = new Date();
+
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    return date >= startOfWeek && date <= endOfWeek;
+  };
+
+  const getCurrentWeekKey = challenge => {
+    if (!challenge?.weeklySummary) return null;
+
+    const today = new Date();
+
+    return Object.keys(challenge.weeklySummary).find(key => {
+      const week = challenge.weeklySummary[key];
+
+      const start = new Date(week.start);
+      const end = new Date(week.end);
+
+      return today >= start && today <= end;
+    });
+  };
+
+  const todaySteps = todayData?.steps || 0;
+  const todayKey = moment().format('YYYY-MM-DD');
+
+  const allDays =
+    userData?.challenge?.days || profileData?.challenge?.days || {};
+
+  const todayData = allDays?.[todayKey] || {};
+
+  const todayPoints = todayData?.points || 0;
+
+  const todayQuiz = [
+    todayData?.normalQuiz,
+    todayData?.bonusQuizzes,
+    todayData?.normalQuizCompleted,
+    todayData?.bonusQuizCompleted,
+  ].filter(Boolean).length;
+
+  // WEEK
+  const weeklySteps = Object.entries(allDays).reduce((acc, [date, item]) => {
+    if (!isCurrentWeek(date)) return acc;
+
+    return acc + (item?.steps || 0);
+  }, 0);
+
+  const weeklyQuiz = Object.values(allDays).reduce((acc, item) => {
+    const count = [
+      item?.normalQuiz,
+      item?.bonusQuizzes,
+      item?.normalQuizCompleted,
+      item?.bonusQuizCompleted,
+    ].filter(Boolean).length;
+
+    return acc + count;
+  }, 0);
+
+  // STREAK
+  const streak =
+    userData?.challenge?.streak ||
+    userData?.stats?.streak ||
+    profileData?.challenge?.streak ||
+    profileData?.stats?.streak ||
+    0;
+  // WEEKLY POINTS
+  const currentWeekKey = getCurrentWeekKey(
+    userData?.challenge || profileData?.challenge,
+  );
+  const weeklyPoints = currentWeekKey
+    ? userData?.challenge?.weeklySummary?.[currentWeekKey]?.points ||
+      profileData?.challenge?.weeklySummary?.[currentWeekKey]?.points ||
+      0
     : 0;
+  // CONSISTENCY
+  const consistency =
+    userData?.status?.consistency ||
+    userData?.stats?.completionRate ||
+    userData?.stats?.consistency ||
+    profileData?.status?.consistency ||
+    profileData?.stats?.completionRate ||
+    profileData?.stats?.consistency ||
+    0;
+  // TOTAL POINTS
+  const totalPoints =
+    userData?.points ||
+    userData?.challenge?.totalChallengePoints ||
+    userData?.challenge?.totalPoints ||
+    profileData?.points ||
+    profileData?.challenge?.totalChallengePoints ||
+    profileData?.challenge?.totalPoints ||
+    0;
+  // PROGRESS
+  const percent = todaySteps > 0 ? Math.min((todaySteps / 5000) * 100, 100) : 0;
+
+  const weeklyPercent =
+    weeklyPoints > 0 ? Math.min((weeklyPoints / 5000) * 100, 100) : 0;
+
+  const leaderboardQuiz =
+    userData?.quizzes?.days || userData?.challenge?.days || {};
+
+  const profileQuiz =
+    profileData?.quizzes?.days || profileData?.challenge?.days || {};
+
+  const mergedQuiz = {
+    ...leaderboardQuiz,
+    ...profileQuiz,
+  };
+  const todayProgress =
+    todayPoints > 0 ? Math.min((todayPoints / 50) * 100, 100) : 0;
 
   return (
     <View style={styles.root}>
       {/* HEADER */}
       <View
-        style={{ marginTop: StatusBar.currentHeight, paddingHorizontal: 24 }}
+        style={{
+          marginTop: StatusBar.currentHeight,
+          paddingHorizontal: 15,
+          zIndex: 1,
+        }}
       >
-        <ProfileHeader onPress={() => navigation.navigate('AvgSteps')} />
+        <ProfileHeader
+          userData={userData}
+          profileData={profileData}
+          startDate={
+            moment(userData?.challenge?.startDate)?.format('YYYY-MM-DD') || ''
+          }
+          streakData={mergedQuiz}
+          onPress={() => navigation.navigate('AvgSteps')}
+        />
       </View>
 
       <Wrapper safeAreaPops={{ edges: [''] }}>
@@ -236,24 +443,32 @@ export default function WalkingRewardBoard({ navigation }) {
         <Animated.View style={[styles.statsStrip, { opacity: cardsAnim }]}>
           {[
             {
-              label: 'Today',
-              value: userData?.stepsToday || 2000,
-              unit: 'steps',
+              label: 'Weekly',
+              value: weeklyPoints,
+              unit: 'pts',
+              icon: '🏆',
             },
             {
-              label: 'This Week',
-              value: userData?.stepsWeek || 14320,
-              unit: 'steps',
+              label: 'Rank',
+              value: `#${userRank || '--'}`,
+              unit: 'leaderboard',
+              icon: '🥇',
             },
             {
               label: 'Streak',
-              value: userData?.streak || 7,
+              value: streak,
               unit: 'days',
+              icon: '🔥',
+            },
+            {
+              label: 'Consistency',
+              value: consistency,
+              unit: '%',
             },
           ].map((s, i) => (
             <View
               key={i}
-              style={[styles.statPill, i < 2 && styles.statPillBorder]}
+              style={[styles.statPill, i < 3 && styles.statPillBorder]}
             >
               <Text style={styles.statPillValue}>{s?.value}</Text>
               <Text style={styles.statPillUnit}>{s?.unit}</Text>
@@ -269,27 +484,25 @@ export default function WalkingRewardBoard({ navigation }) {
           </View>
 
           <View style={styles.stepsCardBody}>
-            <Text style={styles.stepsLabel}>Steps</Text>
-            <Text style={styles.stepsValue}>
-              {userData?.stepsToday || 2000} +
-            </Text>
+            <Text style={styles.stepsLabel}>Today Activity</Text>
+            <Text style={styles.stepsValue}>{todayQuiz}</Text>
           </View>
 
           <View style={styles.stepsGoalWrap}>
-            <Text style={styles.stepsGoalPct}>{Math.round(percent)}%</Text>
-            <Text style={styles.stepsGoalLabel}>of daily goal</Text>
+            <Text style={styles.stepsGoalPct}>{todayPoints}</Text>
+            <Text style={styles.stepsGoalLabel}>points today</Text>
           </View>
 
           <View style={styles.stepsProgressBg}>
             <View
-              style={[styles.stepsProgressFill, { width: `${percent}%` }]}
+              style={[styles.stepsProgressFill, { width: `${todayProgress}%` }]}
             />
           </View>
 
           <View style={styles.stepsMsgRow}>
-            <Text style={styles.stepsMsgTitle}>Let's keep going 🔥</Text>
+            <Text style={styles.stepsMsgTitle}>Keep the momentum 🔥</Text>
             <Text style={styles.stepsMsgSub}>
-              Keep participating in weekly challenges
+              Daily activity improves your weekly rank
             </Text>
           </View>
         </Animated.View>
@@ -300,7 +513,7 @@ export default function WalkingRewardBoard({ navigation }) {
             <View>
               <Text style={styles.pointsLabel}>Your Available Points</Text>
               <Text style={styles.pointsValue}>
-                {userData?.points || 8951}{' '}
+                {totalPoints || 0}
                 <Text style={styles.pointsPts}>pts.</Text>
               </Text>
             </View>
@@ -312,19 +525,32 @@ export default function WalkingRewardBoard({ navigation }) {
 
           <View style={styles.progressLabelRow}>
             <Text style={styles.progressLabel}>The week points</Text>
-            <Text style={styles.progressCount}>
-              {userData?.weeklyPoints || 25} / 50
-            </Text>
+            <Text style={styles.progressCount}>{weeklyPoints} / 5000</Text>
           </View>
 
           <View style={styles.progressBg}>
-            <View style={styles.progressFill} />
-            <View style={styles.progressThumb} />
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${weeklyPercent}%`,
+                },
+              ]}
+            />
+            <View
+              style={{ ...styles.progressThumb, left: `${weeklyPercent}%` }}
+            />
           </View>
 
           <View style={styles.pointsTags}>
             <View style={styles.pointsTag}>
-              <Text style={styles.pointsTagText}>🏅 Top 20%</Text>
+              <Text style={styles.pointsTagText}>
+                {topPercent <= 10
+                  ? '👑 Elite Challenger'
+                  : topPercent <= 25
+                  ? `🏅 Top ${topPercent}%`
+                  : '🔥 Rising Challenger'}
+              </Text>
             </View>
           </View>
         </Animated.View>
@@ -337,9 +563,11 @@ export default function WalkingRewardBoard({ navigation }) {
           </View>
         </View>
 
-        {WEEK_WINNERS.map((item, index) => (
-          <WeekWinnerCard key={index} item={item} index={index} />
-        ))}
+        <View style={{ paddingBottom: height / 9 }}>
+          {weekWinners.map((item, index) => (
+            <WeekWinnerCard key={index} item={item} index={index} />
+          ))}
+        </View>
       </Wrapper>
     </View>
   );
@@ -408,6 +636,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
     marginBottom: 16,
     overflow: 'hidden',
+    flexWrap: 'wrap',
   },
   statPill: {
     flex: 1,
@@ -579,7 +808,7 @@ const styles = StyleSheet.create({
   },
   progressThumb: {
     position: 'absolute',
-    left: '50%',
+
     top: -3,
     width: 14,
     height: 14,
@@ -663,7 +892,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 2,
   },
-  winnerInfo: { flex: 1 },
+  winnerInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
   winnerName: {
     fontSize: 14,
     fontFamily: fontFamily.montserratSemiBold,
@@ -677,8 +909,6 @@ const styles = StyleSheet.create({
   },
   winnerRight: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
   },
   winnerSteps: {
     fontSize: 13,

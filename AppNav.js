@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
@@ -9,7 +9,8 @@ import database from '@react-native-firebase/database';
 import AuthStack from './src/navigation/AuthStack';
 import BottomNavigation from './src/navigation/BottomNavigation';
 
-import { setUserData } from './src/redux/slices/userSlice';
+import { setUserData, clearUser } from './src/redux/slices/userSlice';
+
 import {
   calculateUserStats,
   syncUserLeaderboardPoints,
@@ -23,39 +24,83 @@ export default function AppNav() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const userRef = useRef(null);
+  const lastHashRef = useRef(null);
+
   // =========================
   // AUTH LISTENER
   // =========================
   useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged(authUser => {
-      setUser(authUser || null);
+      setLoading(true);
+
+      if (authUser) {
+        setUser(authUser);
+      } else {
+        setUser(null);
+        dispatch(clearUser());
+      }
+
       setLoading(false);
     });
 
     return unsubscribe;
-  }, []);
+  }, [dispatch]);
 
   // =========================
-  // USER DATA + STATS
+  // FIREBASE SYNC (NO LOOP)
   // =========================
   useEffect(() => {
     if (!user?.uid) return;
 
     const uid = user.uid;
 
-    const userRef = database().ref(`users/${uid}`);
+    // cleanup old listener
+    if (userRef.current) {
+      userRef.current.off();
+    }
 
-    const listener = userRef.on('value', async snapshot => {
+    const ref = database().ref(`users/${uid}`);
+    userRef.current = ref;
+
+    const listener = ref.on('value', async snapshot => {
+      const userData = snapshot.val();
+
+      if (!userData) {
+        dispatch(clearUser());
+        return;
+      }
+
       try {
-        const userData = snapshot.val();
+        // =========================
+        // STOP LOOP (RAW DATA CHECK)
+        // =========================
+        const rawHash = JSON.stringify({
+          habits: userData?.habits || {},
+          goal: userData?.goal || {},
+          posts: userData?.posts || {},
+          snacks: userData?.snacks || {},
+          activities: userData?.activities || {},
+          challenges: userData?.challenges || {},
+        });
 
-        if (!userData) return;
+        if (lastHashRef.current === rawHash) {
+          return; // 🚫 prevent infinite loop
+        }
 
+        lastHashRef.current = rawHash;
+
+        // =========================
+        // CALCULATE STATS (ONCE)
+        // =========================
         const stats = calculateUserStats(userData);
 
+        // =========================
+        // WRITE STATS ONLY IF NEEDED
+        // =========================
         const existingStats = userData?.stats || {};
 
-        const comparableExistingStats = {
+        const safeExisting = {
           totalHabitsDone: existingStats.totalHabitsDone || 0,
           streak: existingStats.streak || 0,
           longestStreak: existingStats.longestStreak || 0,
@@ -63,12 +108,16 @@ export default function AppNav() {
           completionRate: existingStats.completionRate || 0,
         };
 
-        const hasStatsChanged =
-          JSON.stringify(stats) !== JSON.stringify(comparableExistingStats);
+        const statsChanged =
+          JSON.stringify(stats) !== JSON.stringify(safeExisting);
 
-        // ONLY UPDATE IF CHANGED
-        if (hasStatsChanged) {
-          await database().ref(`users/${uid}/stats`).set(stats);
+        if (statsChanged) {
+          await database()
+            .ref(`users/${uid}/stats`)
+            .update({
+              ...stats,
+              updatedAt: Date.now(),
+            });
 
           await syncUserLeaderboardPoints(uid, {
             ...userData,
@@ -76,28 +125,43 @@ export default function AppNav() {
           });
         }
 
+        // =========================
+        // REDUX SYNC
+        // =========================
         dispatch(
           setUserData({
-            ...userData,
-            stats,
+            uid,
+
+            profile: userData?.profile || {},
+            habits: userData?.habits || {},
+            goal: userData?.goal || {},
+            posts: userData?.posts || {},
+            snacks: userData?.snacks || {},
+            activities: userData?.activities || {},
+            challenges: userData?.challenges || {},
+
+            stats: {
+              ...(userData?.stats || {}),
+              ...stats,
+            },
+
+            hydratedAt: Date.now(),
           }),
         );
-      } catch (error) {
-        console.log('APP ERROR:', error);
+      } catch (err) {
+        console.log('APP SYNC ERROR:', err);
       }
     });
 
     return () => {
-      userRef.off('value', listener);
+      ref.off('value', listener);
     };
-  }, []);
+  }, [user?.uid, dispatch]);
 
   // =========================
-  // LOADING STATE
+  // LOADING
   // =========================
-  if (loading) {
-    return null;
-  }
+  if (loading) return null;
 
   // =========================
   // NAVIGATION

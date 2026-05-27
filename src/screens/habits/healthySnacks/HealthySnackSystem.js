@@ -139,9 +139,7 @@ export default function SnackSystemUI({ navigation }) {
       setSnackName('');
       setQty('');
       setImage(null);
-    } catch (e) {
-      console.log('Add error:', e);
-    }
+    } catch (e) {}
   };
 
   const updateStatus = async (item, status) => {

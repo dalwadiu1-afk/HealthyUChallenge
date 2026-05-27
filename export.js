@@ -20,7 +20,6 @@ async function importData() {
   const doctors = data.doctors;
   for (const docId in doctors) {
     await db.collection('doctors').doc(docId).set(doctors[docId]);
-    console.log(`Imported doctor ${docId}`);
   }
 }
 

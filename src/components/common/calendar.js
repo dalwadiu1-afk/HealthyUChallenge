@@ -9,12 +9,29 @@ import {
 } from 'react-native';
 import { SvgImg } from '../../components/common/SvgImg';
 import { leftIcon, rightIcon } from '../../assets/images';
-import { fontFamily, colors } from '../../constant';
+import { fontFamily, colors, BONUS_DAY } from '../../constant';
+import Svg, { Circle } from 'react-native-svg';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const { height } = Dimensions.get('window');
-const RING_SIZE = 38;
+const RING_SIZE = 44;
 const RING_BORDER = 4;
+// ===== PREMIUM DARK THEME COLORS =====
+
+// base ring track
+const TRACK_COLOR = 'rgba(255,255,255,0.07)';
+
+// ✅ completed / correct
+const SUCCESS_COLOR = colors.secondary; // vibrant emerald green
+
+// ⚠️ attempted but wrong
+const WARNING_COLOR = 'rgba(77, 102, 68, 0.3)'; // rich amber-orange
+
+// ❌ missed day
+const MISSED_COLOR = '#EF4444'; // vivid soft red
+
+// subtle missed background
+const MISSED_BG = 'rgba(239,68,68,0.16)';
 
 // Replace hardcoded stroke color inside SVG string so icon renders white
 const whiteIcon = svg => svg.replace(/stroke="[^"]+"/g, 'stroke="#FFFFFF"');
@@ -67,25 +84,25 @@ const get30DaysData = (startDate, cycle) => {
 
   return arr;
 };
+const today = new Date();
 
 export function StreakCalendar({
   startDate = '2026-04-01',
-  showInsight = false,
-  setShowInsight,
+  streakData,
   container,
 }) {
   const [cycle, setCycle] = useState(0);
 
-  const [completedDates, setCompletedDates] = useState([
-    '2026-04-14',
-    '2026-04-15',
-    '2026-04-16',
-    '2026-04-19',
-    '2026-04-20',
-  ]);
+  const completedDates = useMemo(() => {
+    if (!streakData) return [];
 
-  const today = new Date();
+    return Object.entries(streakData)
+      .filter(([_, value]) => value?.normalQuiz)
+      .map(([date]) => date);
+  }, [streakData]);
+
   const completedSet = useMemo(() => new Set(completedDates), [completedDates]);
+
   const data = useMemo(
     () => get30DaysData(startDate, cycle),
     [startDate, cycle],
@@ -109,10 +126,65 @@ export function StreakCalendar({
     }
   }, [completedDates, data]);
 
+  const latestQuizDate = useMemo(() => {
+    const dates = Object.keys(streakData || {});
+
+    if (!dates.length) return null;
+
+    return dates.sort().pop();
+  }, [streakData]);
+
+  const getQuizStats = date => {
+    const key = formatDate(date);
+
+    const dayData = streakData?.[key];
+
+    const quiz = dayData?.normalQuiz;
+    const bonusQuiz = dayData?.bonusQuizzes;
+
+    // latest existing quiz date
+    const latest = latestQuizDate ? parseLocalDate(latestQuizDate) : null;
+
+    const currentDate = parseLocalDate(key);
+
+    // ❌ only mark missed IF date is before/equal latest quiz date
+    const shouldMarkMissed = latest && currentDate <= latest;
+
+    if (!quiz) {
+      return {
+        total: 0,
+        correct: 0,
+        wrong: 0,
+
+        bonusTotal: 0,
+        bonusCorrect: 0,
+        bonusWrong: 0,
+
+        missed: shouldMarkMissed,
+      };
+    }
+
+    return {
+      total: quiz?.totalQuestions || 0,
+      correct: quiz?.correctAnswers || 0,
+      wrong: quiz?.wrongAnswers || 0,
+
+      bonusTotal: bonusQuiz?.totalQuestions || 0,
+      bonusCorrect: bonusQuiz?.correctAnswers || 0,
+      bonusWrong: bonusQuiz?.wrongAnswers || 0,
+
+      missed: false,
+    };
+  };
+
+  const isBonusDay = date => {
+    return date.getDay() === BONUS_DAY;
+  };
+
   const renderItem = ({ item }) => {
     const { date, current } = item;
     const todayMatch = isToday(date);
-    const completed = current && isCompleted(date);
+    const { missed } = getQuizStats(date);
 
     return (
       <View style={styles.dayBox}>
@@ -133,19 +205,214 @@ export function StreakCalendar({
         )}
 
         {/* Ring */}
-        <View
-          style={[
-            styles.ring,
-            current
-              ? completed
-                ? styles.ringOn
-                : styles.ringOff
-              : styles.ringHidden,
-          ]}
-        />
+        {current ? (
+          (() => {
+            const {
+              total,
+              correct,
+              wrong,
+
+              bonusTotal,
+              bonusCorrect,
+              bonusWrong,
+
+              missed,
+            } = getQuizStats(date);
+
+            // bigger ring now
+            const size = 44;
+
+            const outerStroke = 4;
+            const innerStroke = 3;
+
+            const outerRadius = (size - outerStroke) / 2;
+
+            // inner bonus ring
+            const innerRadius = outerRadius - 7;
+
+            const outerCircumference = outerRadius * 2 * Math.PI;
+            const innerCircumference = innerRadius * 2 * Math.PI;
+
+            // normal progress
+            const correctProgress =
+              total > 0 ? (correct / total) * outerCircumference : 0;
+
+            const wrongProgress =
+              total > 0 ? (wrong / total) * outerCircumference : 0;
+
+            // bonus progress
+            const bonusCorrectProgress =
+              bonusTotal > 0
+                ? (bonusCorrect / bonusTotal) * innerCircumference
+                : 0;
+
+            const bonusWrongProgress =
+              bonusTotal > 0
+                ? (bonusWrong / bonusTotal) * innerCircumference
+                : 0;
+
+            const hasBonusQuiz = bonusTotal > 0;
+
+            // if it's bonus weekday but no bonus quiz submitted
+            const latest = latestQuizDate
+              ? parseLocalDate(latestQuizDate)
+              : null;
+
+            const currentDate = parseLocalDate(formatDate(date));
+
+            const isPastOrTodayBonusDay =
+              latest && currentDate <= latest && isBonusDay(date);
+
+            // also mark today instantly if today is bonus day
+            const isTodayBonusMissing =
+              isToday(date) && isBonusDay(date) && !hasBonusQuiz;
+
+            const missedBonusDay =
+              (!hasBonusQuiz && isPastOrTodayBonusDay) || isTodayBonusMissing;
+
+            // ❌ missed entire day
+            const showOuterMissed = missed;
+
+            return (
+              <Svg
+                width={size}
+                height={size}
+                style={{
+                  transform: [{ rotate: '-90deg' }],
+                }}
+              >
+                {/* ========================= */}
+                {/* OUTER RING → NORMAL QUIZ */}
+                {/* ========================= */}
+
+                <Circle
+                  stroke={showOuterMissed ? MISSED_BG : TRACK_COLOR}
+                  fill="transparent"
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={outerRadius}
+                  strokeWidth={outerStroke}
+                />
+
+                {/* normal correct */}
+                {showOuterMissed ? (
+                  <Circle
+                    stroke={MISSED_COLOR}
+                    fill="transparent"
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={outerRadius}
+                    strokeWidth={outerStroke}
+                    strokeLinecap="round"
+                  />
+                ) : (
+                  <>
+                    {correct > 0 && (
+                      <Circle
+                        stroke={SUCCESS_COLOR}
+                        fill="transparent"
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={outerRadius}
+                        strokeWidth={outerStroke}
+                        strokeDasharray={`${correctProgress} ${outerCircumference}`}
+                        strokeLinecap="round"
+                      />
+                    )}
+
+                    {wrong > 0 && (
+                      <Circle
+                        stroke={WARNING_COLOR}
+                        fill="transparent"
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={outerRadius}
+                        strokeWidth={outerStroke}
+                        strokeDasharray={`${wrongProgress} ${outerCircumference}`}
+                        strokeDashoffset={-correctProgress}
+                        strokeLinecap="round"
+                      />
+                    )}
+                  </>
+                )}
+
+                {/* ======================== */}
+                {/* INNER RING → BONUS QUIZ */}
+                {/* ======================== */}
+
+                {(hasBonusQuiz || isBonusDay(date)) && (
+                  <>
+                    {/* bonus background */}
+                    <Circle
+                      stroke="rgba(255,255,255,0.05)"
+                      fill="transparent"
+                      cx={size / 2}
+                      cy={size / 2}
+                      r={innerRadius}
+                      strokeWidth={innerStroke}
+                    />
+
+                    {/* ❌ MISSED BONUS DAY */}
+                    {missedBonusDay ? (
+                      <Circle
+                        stroke={MISSED_COLOR}
+                        fill="transparent"
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={innerRadius}
+                        strokeWidth={innerStroke}
+                        strokeLinecap="round"
+                      />
+                    ) : (
+                      <>
+                        {/* bonus correct */}
+                        {bonusCorrect > 0 && (
+                          <Circle
+                            stroke={colors.secondary}
+                            fill="transparent"
+                            cx={size / 2}
+                            cy={size / 2}
+                            r={innerRadius}
+                            strokeWidth={innerStroke}
+                            strokeDasharray={`${bonusCorrectProgress} ${innerCircumference}`}
+                            strokeLinecap="round"
+                          />
+                        )}
+
+                        {/* bonus wrong */}
+                        {bonusWrong > 0 && (
+                          <Circle
+                            stroke="rgba(77, 102, 68, 0.3)"
+                            fill="transparent"
+                            cx={size / 2}
+                            cy={size / 2}
+                            r={innerRadius}
+                            strokeWidth={innerStroke}
+                            strokeDasharray={`${bonusWrongProgress} ${innerCircumference}`}
+                            strokeDashoffset={-bonusCorrectProgress}
+                            strokeLinecap="round"
+                          />
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </Svg>
+            );
+          })()
+        ) : (
+          <View style={[styles.ring, styles.ringHidden]} />
+        )}
 
         {/* Today dot */}
-        {todayMatch && <View style={styles.todayDot} />}
+        {todayMatch && (
+          <View
+            style={{
+              ...styles.todayDot,
+              backgroundColor: missed ? 'red' : colors.secondary,
+            }}
+          />
+        )}
       </View>
     );
   };
@@ -205,7 +472,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dark,
     borderRadius: 10,
     position: 'absolute',
-    zIndex: 1,
+    zIndex: 5,
     width: '100%',
     elevation: 100,
     borderWidth: 2,
@@ -260,7 +527,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingVertical: 4,
-    minHeight: RING_SIZE + 28,
+    minHeight: RING_SIZE + 34,
   },
 
   dateText: {
@@ -300,7 +567,7 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 3,
-    backgroundColor: colors.secondary,
+
     marginTop: 3,
   },
 

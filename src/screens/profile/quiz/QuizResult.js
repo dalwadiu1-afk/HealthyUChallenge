@@ -9,76 +9,97 @@ import {
 } from 'react-native';
 import { Wrapper, Header } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
+import { useSelector } from 'react-redux';
+import auth from '@react-native-firebase/auth';
+import { generateUserChallengeData } from '../../../utils/helper';
+import database from '@react-native-firebase/database';
+import moment from 'moment';
 
 const RING_SIZE = 110;
 const RING_STROKE = 9;
 
 function ScoreRing({ percent, score, total }) {
-  const anim = useRef(new Animated.Value(0)).current;
-  const [displayed, setDisplayed] = useState(0);
+  const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.timing(anim, {
+    Animated.timing(progress, {
       toValue: percent,
-      duration: 900,
+      duration: 1000,
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
+      useNativeDriver: true,
     }).start();
-
-    const id = anim.addListener(({ value }) => {
-      setDisplayed(Math.round(value * 100));
-    });
-    return () => anim.removeListener(id);
   }, [percent]);
 
-  const rotateRight = anim.interpolate({
-    inputRange: [0, 0.5, 0.5, 1],
-    outputRange: ['0deg', '180deg', '180deg', '180deg'],
+  const rightRotation = progress.interpolate({
+    inputRange: [0, 0.5],
+    outputRange: ['-135deg', '45deg'],
+    extrapolate: 'clamp',
   });
-  const rotateLeft = anim.interpolate({
-    inputRange: [0, 0.5, 0.5, 1],
-    outputRange: ['0deg', '0deg', '0deg', '180deg'],
+
+  const leftRotation = progress.interpolate({
+    inputRange: [0.5, 1],
+    outputRange: ['-135deg', '45deg'],
+    extrapolate: 'clamp',
   });
 
   return (
-    <View style={ringStyles.outer}>
+    <View style={ringStyles.container}>
+      {/* track */}
       <View style={ringStyles.track} />
-      <View style={ringStyles.halfBox}>
+
+      {/* RIGHT HALF */}
+      <View style={ringStyles.halfContainer}>
         <Animated.View
           style={[
-            ringStyles.halfFill,
-            ringStyles.halfRight,
-            { transform: [{ rotate: rotateRight }] },
+            ringStyles.halfCircle,
+            ringStyles.rightHalf,
+            {
+              transform: [{ rotate: rightRotation }],
+            },
           ]}
         />
       </View>
-      <View style={[ringStyles.halfBox, ringStyles.halfBoxLeft]}>
-        <Animated.View
+
+      {/* LEFT HALF */}
+      {percent > 0.5 && (
+        <View
           style={[
-            ringStyles.halfFill,
-            ringStyles.halfLeft,
-            { transform: [{ rotate: rotateLeft }] },
+            ringStyles.halfContainer,
+            { transform: [{ rotate: '180deg' }] },
           ]}
-        />
-      </View>
-      <View style={ringStyles.center}>
+        >
+          <Animated.View
+            style={[
+              ringStyles.halfCircle,
+              ringStyles.rightHalf,
+              {
+                transform: [{ rotate: leftRotation }],
+              },
+            ]}
+          />
+        </View>
+      )}
+
+      {/* CENTER */}
+      <View style={ringStyles.inner}>
         <Text style={ringStyles.scoreText}>
           {score}
-          <Text style={ringStyles.scoreTextSmall}>/{total}</Text>
+          <Text style={ringStyles.scoreSmall}>/{total}</Text>
         </Text>
-        <Text style={ringStyles.scoreLabel}>your score</Text>
+
+        <Text style={ringStyles.label}>your score</Text>
       </View>
     </View>
   );
 }
-
 const ringStyles = StyleSheet.create({
-  outer: {
+  container: {
     width: RING_SIZE,
     height: RING_SIZE,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
   },
+
   track: {
     position: 'absolute',
     width: RING_SIZE,
@@ -87,51 +108,49 @@ const ringStyles = StyleSheet.create({
     borderWidth: RING_STROKE,
     borderColor: 'rgba(255,255,255,0.08)',
   },
-  halfBox: {
+
+  halfContainer: {
     position: 'absolute',
-    width: RING_SIZE / 2,
+    width: RING_SIZE,
     height: RING_SIZE,
-    overflow: 'hidden',
-    right: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  halfBoxLeft: {
-    left: 0,
-    right: undefined,
-  },
-  halfFill: {
+
+  halfCircle: {
     width: RING_SIZE,
     height: RING_SIZE,
     borderRadius: RING_SIZE / 2,
+    position: 'absolute',
     borderWidth: RING_STROKE,
-    borderColor: 'transparent',
   },
-  halfRight: {
+
+  rightHalf: {
+    borderLeftColor: 'transparent',
+    borderBottomColor: 'transparent',
     borderTopColor: colors.secondary,
     borderRightColor: colors.secondary,
-    transform: [{ rotate: '0deg' }],
-    marginLeft: -RING_SIZE / 2,
   },
-  halfLeft: {
-    borderBottomColor: colors.secondary,
-    borderLeftColor: colors.secondary,
-    marginLeft: 0,
-  },
-  center: {
-    alignItems: 'center',
+
+  inner: {
+    position: 'absolute',
     justifyContent: 'center',
+    alignItems: 'center',
   },
+
   scoreText: {
     color: colors.white,
     fontSize: 26,
     fontFamily: fontFamily.montserratBold,
-    lineHeight: 30,
   },
-  scoreTextSmall: {
+
+  scoreSmall: {
     color: 'rgba(255,255,255,0.55)',
     fontSize: 14,
     fontFamily: fontFamily.montserratMedium,
   },
-  scoreLabel: {
+
+  label: {
     color: 'rgba(255,255,255,0.5)',
     fontSize: 10,
     fontFamily: fontFamily.montserratMedium,
@@ -140,7 +159,17 @@ const ringStyles = StyleSheet.create({
 });
 
 export default function QuizResult({ navigation, route }) {
-  const { questions = [], answers = [], elapsedSeconds = 0 } = route?.params || {};
+  const {
+    questions = [],
+    answers = [],
+    elapsedSeconds = 0,
+    quizResultData = {},
+    isBonus,
+  } = route?.params || {};
+  const userId = auth()?.currentUser?.uid;
+  const userData = useSelector(state => state.user);
+  const profile = userData?.profile;
+  const goal = userData?.goal;
 
   const correct = questions.reduce(
     (acc, q, i) => acc + (answers[i] === q.answer ? 1 : 0),
@@ -153,6 +182,59 @@ export default function QuizResult({ navigation, route }) {
 
   const totalSec = Math.max(0, Math.floor(elapsedSeconds));
   const avgSec = total ? Math.round(totalSec / total) : 0;
+
+  const saveQuizResultToDB = async () => {
+    if (!userId) return;
+
+    try {
+      const today = moment().format('YYYY-MM-DD');
+
+      const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
+
+      const resultData = {
+        quizTakenTime: totalSec,
+        correctAnswers: correct,
+        wrongAnswers: wrong,
+        totalQuestions: total,
+        percentage,
+        submittedAt: moment().toISOString(),
+        lastQuizAt: Date.now(),
+        isBonus: !!isBonus,
+        quizType: isBonus ? 'bonus' : 'normal',
+      };
+
+      const todayQuizData = isBonus
+        ? { bonusQuizzes: resultData }
+        : { normalQuiz: resultData };
+
+      await database()
+        .ref(`/users/${userId}/quizzes/days/${today}`)
+        .update(todayQuizData);
+
+      const snapshot = await database()
+        .ref(`/users/${userId}/quizzes/days`)
+        .once('value');
+
+      const updatedDays = snapshot.val() || {};
+
+      const leaderboardData = generateUserChallengeData({
+        userId,
+        profile,
+        goal,
+        days: updatedDays,
+      });
+
+      await database().ref(`/leaderboards/${userId}`).update(leaderboardData);
+
+      console.log('QUIZ SAVED');
+    } catch (error) {
+      console.log('SAVE QUIZ ERROR:', error);
+    }
+  };
+
+  useEffect(() => {
+    saveQuizResultToDB();
+  }, [route?.params]);
 
   const fmt = secs => {
     const m = Math.floor(secs / 60);
@@ -189,15 +271,19 @@ export default function QuizResult({ navigation, route }) {
             <Text style={styles.scoreMsg}>
               {passed ? (
                 <>
-                  You have{' '}
-                  <Text style={styles.passWord}>passed</Text> this test with{' '}
-                  <Text style={styles.passWord}>{Math.round(percent * 100)}%</Text>
+                  You have <Text style={styles.passWord}>passed</Text> this test
+                  with{' '}
+                  <Text style={styles.passWord}>
+                    {Math.round(percent * 100)}%
+                  </Text>
                   .
                 </>
               ) : (
                 <>
                   You scored{' '}
-                  <Text style={styles.passWord}>{Math.round(percent * 100)}%</Text>
+                  <Text style={styles.passWord}>
+                    {Math.round(percent * 100)}%
+                  </Text>
                   . Keep practicing!
                 </>
               )}
@@ -239,22 +325,7 @@ export default function QuizResult({ navigation, route }) {
           >
             <Text style={styles.actionBtnSecondaryText}>Check Answers</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionBtnPrimary}
-            activeOpacity={0.85}
-            onPress={() => navigation.replace('Quiz', { totalSeconds: 5 * 60 })}
-          >
-            <Text style={styles.actionBtnPrimaryText}>↻  Try Quiz Again</Text>
-          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={styles.backToHabits}
-          activeOpacity={0.85}
-          onPress={() => navigation.navigate('HabitsList')}
-        >
-          <Text style={styles.backToHabitsText}>Back to Habits</Text>
-        </TouchableOpacity>
       </Animated.View>
     </Wrapper>
   );

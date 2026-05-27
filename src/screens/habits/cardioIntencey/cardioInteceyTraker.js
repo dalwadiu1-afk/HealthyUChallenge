@@ -184,7 +184,6 @@ export default function CardioTrackerUI({ navigation }) {
   };
 
   const renderWeeks = () => {
-    console.log('weeksData :>> ', weeksData);
     return Object.entries(weeksData)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([weekKey, week]) => (

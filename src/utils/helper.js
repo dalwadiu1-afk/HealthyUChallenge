@@ -297,63 +297,336 @@ const syncUserLeaderboardPoints = async (uid, userData) => {
   const finalPoints = Math.round(rawPoints);
   // const finalPoints = Math.round(rawPoints * difficultyMultiplier);
 
-  await database()
-    .ref(`/leaderboards/${uid}`)
-    .update({
-      uid,
-      points: finalPoints,
-      updatedAt: Date.now(),
-      ...userData?.profile,
-    });
+  // await database()
+  //   .ref(`/leaderboards/${uid}`)
+  //   .update({
+  //     uid,
+  //     points: finalPoints,
+  //     updatedAt: Date.now(),
+  //     ...userData?.profile,
+  //   });
 
-  await database()
-    .ref(`/users/${uid}/stats`)
-    .update({
-      ...rawPoints,
-      finalPoints,
-      updatedAt: Date.now(),
-    });
+  // await database()
+  //   .ref(`/users/${uid}/stats`)
+  //   .update({
+  //     ...rawPoints,
+  //     finalPoints,
+  //     updatedAt: Date.now(),
+  //   });
 };
 
-// const syncUserLeaderboardPoints = async (uid, userData) => {
-//   if (!uid || !userData) return;
+const getLatestWeeklyPoints = weeklySummary => {
+  if (!weeklySummary) return 0;
 
-//   const stats = userData?.stats || {};
+  const weeks = Object.values(weeklySummary);
 
-//   const totalHabitsDone = Number(stats?.totalHabitsDone || 0);
-//   const streak = Number(stats?.streak || 0);
-//   const activeDays = Number(stats?.activeDays || 0);
-//   const completionRate = Number(stats?.completionRate || 0);
-//   const longestStreak = Number(stats?.longestStreak || 0);
+  if (!weeks.length) return 0;
 
-//   const postsCount = Object.keys(userData?.posts || {}).length;
+  // sort by start date (latest week wins)
+  const sorted = weeks.sort((a, b) => new Date(b.start) - new Date(a.start));
 
-//   const goalDifficulty = Number(userData?.goal?.difficulty || 1);
+  return sorted[0]?.points || 0;
+};
 
-//   const points =
-//     totalHabitsDone * 10 +
-//     streak * 8 +
-//     activeDays * 3 +
-//     longestStreak * 2 +
-//     completionRate +
-//     postsCount * 12;
+// =====================================
+// POINT CALCULATION
+// =====================================
 
-//   const finalPoints = Math.round(points * (1 + goalDifficulty * 0.2));
+const calculateDayPoints = ({
+  correctAnswers = 0,
+  totalQuestions = 0,
+  quizTakenTime = 0,
+  streak = 0,
+}) => {
+  const accuracy = totalQuestions > 0 ? correctAnswers / totalQuestions : 0;
 
-//   // await database().ref(`/leaderboards/global/${uid}`).update({
-//   await database().ref(`/leaderboards/${uid}`).update({
-//     uid,
-//     user: user,
-//     points: finalPoints,
-//     updatedAt: Date.now(),
-//   });
+  const accuracyPoints = accuracy * 500;
 
-//   await database().ref(`/user/${uid}/stats`).update({
-//     points,
-//     finalPoints,
-//     updatedAt: Date.now(),
-//   });
-// };
+  let speedBonus = 0;
+
+  if (quizTakenTime <= 60) {
+    speedBonus = 200;
+  } else if (quizTakenTime <= 120) {
+    speedBonus = 150;
+  } else if (quizTakenTime <= 180) {
+    speedBonus = 100;
+  } else if (quizTakenTime <= 300) {
+    speedBonus = 50;
+  }
+
+  let streakMultiplier = 1;
+
+  if (streak >= 30) {
+    streakMultiplier = 2.5;
+  } else if (streak >= 21) {
+    streakMultiplier = 2;
+  } else if (streak >= 14) {
+    streakMultiplier = 1.7;
+  } else if (streak >= 7) {
+    streakMultiplier = 1.4;
+  } else if (streak >= 3) {
+    streakMultiplier = 1.2;
+  }
+
+  return Math.round((accuracyPoints + speedBonus) * streakMultiplier);
+};
+const extractUserHabits = (habitsData = {}, selectedGoals = [], monthKey) => {
+  console.log('MONTH KEY 👉', monthKey);
+  console.log('SELECTED GOALS 👉', selectedGoals);
+  console.log('HABITS DATA KEYS 👉', Object.keys(habitsData || {}));
+
+  if (!habitsData || !selectedGoals?.length) return [];
+
+  return selectedGoals.map(goal => {
+    const habitKey = goal.key;
+
+    const habitNode = habitsData?.[habitKey]?.[monthKey];
+
+    console.log('LOOKING FOR 👉', habitKey, monthKey);
+    console.log('FOUND NODE 👉', habitNode);
+
+    if (!habitNode) {
+      return {
+        key: habitKey,
+        title: goal.title,
+        category: goal.category,
+        screenName: goal.screenName,
+        data: null,
+      };
+    }
+
+    return {
+      key: habitKey,
+      title: goal.title,
+      category: goal.category,
+      screenName: goal.screenName,
+      raw: habitNode,
+      days: habitNode.days || {},
+      weeks: habitNode.weeks || {},
+      logs: habitNode.logs || {},
+    };
+  });
+};
+
+const generateUserChallengeData = ({ userId, profile, goal, days = {} }) => {
+  const challengeStartDate = goal?.startDate
+    ? moment(goal.startDate)
+    : moment();
+
+  const challengeEndDate = challengeStartDate.clone().add(30, 'days');
+
+  // =====================================
+  // SORT DATES
+  // =====================================
+  const sortedDates = Object.keys(days)
+    .filter(date => moment(date, 'YYYY-MM-DD', true).isValid())
+    .sort();
+
+  let currentStreak = 0;
+
+  let longestStreak = 0;
+
+  let totalChallengePoints = 0;
+
+  const processedDays = {};
+
+  // =====================================
+  // PROCESS DAYS
+  // =====================================
+
+  sortedDates.forEach((date, index) => {
+    const dayData = days[date];
+
+    // -----------------------------
+    // STREAK
+    // -----------------------------
+
+    if (index === 0) {
+      currentStreak = 1;
+    } else {
+      const previousDate = sortedDates[index - 1];
+
+      const diff = moment(date).diff(moment(previousDate), 'days');
+
+      if (diff === 1) {
+        currentStreak += 1;
+      } else {
+        currentStreak = 1;
+      }
+    }
+
+    // longest streak tracking
+    longestStreak = Math.max(longestStreak, currentStreak);
+
+    // -----------------------------
+    // DYNAMIC POINTS
+    // -----------------------------
+
+    const normalQuiz = dayData?.normalQuiz || {};
+    const bonusQuiz = dayData?.bonusQuizzes || {};
+
+    // =====================================
+    // NORMAL QUIZ POINTS
+    // =====================================
+
+    const normalPoints = calculateDayPoints({
+      correctAnswers: normalQuiz.correctAnswers || 0,
+      totalQuestions: normalQuiz.totalQuestions || 0,
+      quizTakenTime: normalQuiz.quizTakenTime || 0,
+      streak: currentStreak || 1,
+    });
+
+    // =====================================
+    // BONUS QUIZ POINTS (DOUBLE)
+    // =====================================
+
+    const bonusPoints =
+      calculateDayPoints({
+        correctAnswers: bonusQuiz.correctAnswers || 0,
+        totalQuestions: bonusQuiz.totalQuestions || 0,
+        quizTakenTime: bonusQuiz.quizTakenTime || 0,
+        streak: currentStreak || 1,
+      }) * 2;
+
+    // =====================================
+    // FINAL POINTS
+    // =====================================
+
+    const points = normalPoints + bonusPoints;
+
+    totalChallengePoints += points;
+
+    processedDays[date] = {
+      ...dayData,
+
+      streak: currentStreak,
+
+      normalPoints,
+
+      bonusPoints,
+
+      points,
+    };
+  });
+
+  // =====================================
+  // WEEKLY SUMMARY
+  // =====================================
+
+  const weeklySummary = {};
+
+  Object.entries(processedDays).forEach(([date, data]) => {
+    const weekNumber =
+      Math.floor(moment(date).diff(challengeStartDate, 'days') / 7) + 1;
+
+    const weekKey = `week_${weekNumber}`;
+
+    if (!weeklySummary[weekKey]) {
+      const start = challengeStartDate
+        .clone()
+        .add((weekNumber - 1) * 7, 'days');
+
+      const end = start.clone().add(6, 'days');
+
+      weeklySummary[weekKey] = {
+        start: start.format('YYYY-MM-DD'),
+
+        end: end.format('YYYY-MM-DD'),
+
+        points: 0,
+
+        quizCompleted: 0,
+
+        activeDays: 0,
+      };
+    }
+
+    weeklySummary[weekKey].points += data.points;
+
+    weeklySummary[weekKey].quizCompleted += 1;
+
+    weeklySummary[weekKey].activeDays += 1;
+  });
+
+  // =====================================
+  // STATUS
+  // =====================================
+
+  const activeDays = sortedDates.length;
+
+  const totalDaysSinceStart = moment().diff(challengeStartDate, 'days') + 1;
+
+  const consistency = Math.min(
+    100,
+    Math.round((activeDays / totalDaysSinceStart) * 100),
+  );
+
+  // =====================================
+  // FINAL OBJECT
+  // =====================================
+
+  return {
+    uid: userId,
+
+    name: profile?.name || '',
+
+    username: profile?.username || '',
+
+    avatar: profile?.avatar || '',
+
+    gender: profile?.gender || 'male',
+
+    memberSince: profile?.memberSince || Date.now(),
+
+    points: totalChallengePoints,
+
+    previousRank: 0,
+
+    updatedAt: Date.now(),
+
+    challenge: {
+      startDate: challengeStartDate.toISOString(),
+
+      endDate: challengeEndDate.toISOString(),
+
+      durationDays: challengeEndDate.diff(challengeStartDate, 'days'),
+
+      // current/latest streak
+      streak: currentStreak,
+
+      // highest streak ever achieved
+      longestStreak,
+
+      totalChallengePoints,
+
+      days: processedDays,
+
+      weeklySummary,
+    },
+
+    status: {
+      activeDays,
+
+      consistency,
+
+      quizCompleted: activeDays,
+    },
+  };
+};
+
+const getDynamicWeekId = () => {
+  const now = moment();
+
+  const month = now.format('MM');
+  const year = now.format('YYYY');
+
+  const firstDayOfMonth = moment().startOf('month').day();
+  const currentDate = now.date();
+
+  const weekNumber = Math.ceil((currentDate + firstDayOfMonth) / 7);
+
+  return `${month}_${year}_Week${weekNumber}`;
+};
 
 export {
   scale,
@@ -362,4 +635,8 @@ export {
   getSmartTips,
   calculateStreak,
   syncUserLeaderboardPoints,
+  getLatestWeeklyPoints,
+  extractUserHabits,
+  generateUserChallengeData,
+  getDynamicWeekId,
 };

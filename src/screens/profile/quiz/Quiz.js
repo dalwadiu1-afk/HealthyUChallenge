@@ -6,12 +6,19 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
+  Dimensions,
+  Alert,
 } from 'react-native';
 import { Wrapper } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
 import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
+import database from '@react-native-firebase/database';
+import { getDynamicWeekId } from '../../../utils/helper';
+import moment from 'moment';
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
+const { height } = Dimensions.get('window');
 
 export default function Quiz({ navigation, route }) {
   const [quizData, setQuizData] = useState(null);
@@ -21,38 +28,143 @@ export default function Quiz({ navigation, route }) {
   const [secondsLeft, setSecondsLeft] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const startedAt = useRef(Date.now()).current;
-
+  const weakMapRef = useRef({});
+  const monthKey = moment().format('MM_YYYY');
+  const dynamicWeekId = getDynamicWeekId();
+  const { isBonus, isCombine } = route?.params || {};
   const progressAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    const fetchQuiz = async () => {
-      try {
+  const fetchQuiz = async () => {
+    try {
+      const userId = auth().currentUser.uid;
+
+      let allQuestions = [];
+      let mergedQuizData = {};
+
+      // =================================================
+      // COMBINED MODE
+      // =================================================
+
+      if (isCombine) {
+        const [normalDoc, bonusDoc] = await Promise.all([
+          firestore().collection('quizCategories').doc(monthKey).get(),
+
+          firestore().collection('BonusQuizes').doc(dynamicWeekId).get(),
+        ]);
+
+        const normalData = normalDoc.data() || {};
+        const bonusData = bonusDoc.data() || {};
+
+        const normalQuestions = normalData.questions || [];
+        const bonusQuestions = bonusData.questions || [];
+
+        allQuestions = [...normalQuestions, ...bonusQuestions];
+
+        mergedQuizData = {
+          ...normalData,
+          ...bonusData,
+        };
+      }
+
+      // =================================================
+      // SINGLE QUIZ MODE
+      // =================================================
+      else {
         const doc = await firestore()
-          .collection('quizCategories')
-          .doc(route.params.categoryId)
+          .collection(isBonus ? 'BonusQuizes' : 'quizCategories')
+          .doc(isBonus ? dynamicWeekId : monthKey)
           .get();
 
         const data = doc.data();
 
         if (!data) return;
 
-        const qs = data.questions || [];
-
-        setQuizData(data);
-        setQuestions(qs);
-        setAnswers(Array(qs.length).fill(null));
-
-        setSecondsLeft((data.totalMinutes || 5) * 60);
-        setLoaded(true);
-      } catch (e) {
-        console.log(e);
+        allQuestions = data.questions || [];
+        mergedQuizData = data;
       }
-    };
 
+      // =================================================
+      // WEAK QUESTIONS
+      // =================================================
+
+      const weakSnap = await database()
+        .ref(`/users/${userId}/quizzes/weakQuestions`)
+        .once('value');
+
+      const weakMap = weakSnap.val() || {};
+
+      weakMapRef.current = weakMap;
+
+      // only unsolved weak questions
+      const weakIds = Object.keys(weakMap).filter(
+        id => weakMap[id]?.isSolved !== true,
+      );
+
+      // =================================================
+      // SORT QUESTIONS
+      // =================================================
+
+      const sorted = [...allQuestions].sort((a, b) => {
+        const aNum = parseInt(a.id.replace(/\D/g, ''), 10);
+        const bNum = parseInt(b.id.replace(/\D/g, ''), 10);
+
+        return aNum - bNum;
+      });
+
+      // =================================================
+      // IF COMBINED => ONLY SHOW WEAK QUESTIONS
+      // =================================================
+
+      let finalQuestions = [];
+
+      if (isCombine) {
+        const weakQuestions = sorted.filter(q => weakIds.includes(q.id));
+
+        // 👇 fallback when no weak questions exist
+        if (weakQuestions.length > 0) {
+          finalQuestions = weakQuestions;
+        } else {
+          finalQuestions = sorted; // fallback to all Firestore questions
+        }
+      } else {
+        const weakQuestions = sorted.filter(
+          q => weakMap[q.id] && weakMap[q.id].isSolved !== true,
+        );
+
+        const baseQuestions = sorted.filter(q => !weakIds.includes(q.id));
+
+        finalQuestions = [...weakQuestions, ...baseQuestions];
+      }
+
+      // remove duplicates
+      finalQuestions = finalQuestions.filter(
+        (q, index, self) => index === self.findIndex(item => item.id === q.id),
+      );
+
+      const LIMIT = route?.params?.showQues;
+
+      if (LIMIT) {
+        finalQuestions = finalQuestions.slice(0, LIMIT);
+      }
+
+      setQuizData(mergedQuizData);
+      setQuestions(finalQuestions);
+      setAnswers(Array(finalQuestions.length).fill(null));
+
+      setSecondsLeft((mergedQuizData.totalMinutes || 5) * 60);
+
+      setLoaded(true);
+    } catch (e) {
+      console.log('quiz fetch error:', e);
+    }
+  };
+
+  useEffect(() => {
     fetchQuiz();
-  }, []);
+  }, [route.params]);
+
   // ---------------- TIMER ----------------
   useEffect(() => {
     if (!loaded || secondsLeft === null) return;
@@ -111,9 +223,52 @@ export default function Quiz({ navigation, route }) {
     });
   };
 
+  const saveAttendedQuestions = async (questions, answers) => {
+    try {
+      const userId = auth().currentUser.uid;
+      const todayKey = new Date().toISOString().split('T')[0];
+
+      const ref = database().ref(
+        `/users/${userId}/quizzes/days/${todayKey}/attendedQues`,
+      );
+
+      const updates = {};
+
+      questions.forEach((q, i) => {
+        if (q?.id) {
+          updates[q.id] = {
+            answered: true,
+            selected: answers[i],
+            correct: answers[i] === q?.answer,
+          };
+        }
+      });
+
+      console.log('updates :>> ', updates);
+
+      await ref.update(updates);
+    } catch (error) {
+      console.log('saveAttendedQuestions error:', error);
+    }
+  };
+
   const next = () => {
+    // =========================
+    // REQUIRE ANSWER
+    // =========================
+
+    if (answers[index] === null || answers[index] === undefined) {
+      Alert.alert(
+        'Answer Required',
+        'Please select an option before continuing.',
+      );
+
+      return;
+    }
+
     if (index < questions.length - 1) {
       setIndex(i => i + 1);
+
       animateSwap('next');
     }
   };
@@ -125,14 +280,108 @@ export default function Quiz({ navigation, route }) {
     }
   };
 
-  const finish = () => {
+  const saveWeakQuestions = async (questions, answers) => {
+    const userId = auth().currentUser.uid;
+    const ref = database().ref(`/users/${userId}/quizzes/weakQuestions`);
+
+    const weakMap = weakMapRef.current;
+    const updates = {};
+
+    questions.forEach((q, i) => {
+      const isCorrect = answers[i] === q?.answer;
+
+      const prev = weakMap?.[q.id];
+
+      // ❌ CASE 1: FIRST TIME CORRECT → DO NOTHING (not weak at all)
+      if (isCorrect && !prev) {
+        return;
+      }
+
+      // ❌ CASE 2: FIRST TIME WRONG → ADD TO WEAK
+      if (!isCorrect && !prev) {
+        updates[q.id] = {
+          wrongCount: 1,
+          correctStreak: 0,
+          isSolved: false,
+          lastAttemptAt: Date.now(),
+        };
+        return;
+      }
+
+      // ❌ CASE 3: ALREADY IN WEAK LIST
+      if (prev) {
+        if (isCorrect) {
+          const newStreak = prev.correctStreak + 1;
+
+          if (newStreak >= 2) {
+            // 🎯 SOLVED → REMOVE
+            updates[q.id] = null;
+          } else {
+            updates[q.id] = {
+              ...prev,
+              correctStreak: newStreak,
+              isSolved: false,
+              lastAttemptAt: Date.now(),
+            };
+          }
+        } else {
+          // wrong again
+          updates[q.id] = {
+            ...prev,
+            wrongCount: prev.wrongCount + 1,
+            correctStreak: 0,
+            isSolved: false,
+            lastAttemptAt: Date.now(),
+          };
+        }
+      }
+    });
+
+    await ref.update(updates);
+  };
+
+  const finish = async () => {
+    if (answers[index] === null || answers[index] === undefined) {
+      Alert.alert(
+        'Answer Required',
+        'Please select an option before submitting.',
+      );
+      return;
+    }
+
     const elapsed = Math.max(1, Math.floor((Date.now() - startedAt) / 1000));
+
+    let correctAnswers = 0;
+
+    questions.forEach((q, i) => {
+      if (answers[i] === q.correctAnswer) {
+        correctAnswers++;
+      }
+    });
+
+    const quizResultData = {
+      correctAnswers,
+      totalQuestions: questions.length,
+      quizTakenTime: elapsed,
+    };
+
+    try {
+      // 1. Save weak questions (your existing logic)
+      await saveWeakQuestions(questions, answers);
+
+      // 2. NEW → Save attended questions
+      await saveAttendedQuestions(questions, answers);
+    } catch (e) {
+      console.log('finish save error:', e);
+    }
 
     navigation.replace('QuizResult', {
       quizData,
       questions,
       answers,
       elapsedSeconds: elapsed,
+      quizResultData,
+      isBonus,
     });
   };
 
@@ -330,20 +579,19 @@ const styles = StyleSheet.create({
   timerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-evenly',
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 16,
-    gap: 4,
+    minWidth: 100,
+    borderRadius: 10,
   },
   timerBadgeWarn: {
     borderColor: 'rgba(192,108,91,0.5)',
     backgroundColor: 'rgba(192,108,91,0.12)',
   },
   timerBadgeIcon: {
-    fontSize: 11,
+    fontSize: 40,
   },
   timerBadgeText: {
     color: colors.white,
@@ -433,7 +681,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
+    paddingVertical: 16,
+    marginBottom: height / 13,
   },
   prevBtn: {
     paddingHorizontal: 22,

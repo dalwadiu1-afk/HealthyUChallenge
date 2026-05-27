@@ -220,8 +220,6 @@ const BodyFatGoalScreen = ({ navigation }) => {
         expiresAt: moment().add(10, 'minutes').valueOf(), // 10 min expiry
         used: false,
       });
-
-    console.log('New session code generated:', code);
   };
 
   // const uploadData = async () => {
@@ -721,7 +719,6 @@ const BodyFatGoalScreen = ({ navigation }) => {
             ))}
           </View>
         </View>
-        {console.log('validationMsg || locked >> ', validationMsg)}
         {/* Save button */}
         <TouchableOpacity
           style={[styles.saveBtn, !!validationMsg && styles.saveBtnDisabled]}

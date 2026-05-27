@@ -66,8 +66,8 @@ export default function Login({ navigation }) {
   }));
 
   const isValidEmail = email => {
-    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return regex.test(email);
+    const regex = /^[a-zA-Z0-9._%+-]+@montclair\.edu$/;
+    return regex.test(email.trim().toLowerCase());
   };
 
   const isValidPassword = password => {
@@ -93,7 +93,8 @@ export default function Login({ navigation }) {
     } else if (!isValidEmail(email)) {
       setError(prev => ({
         ...prev,
-        email: 'Enter a valid email (e.g. name@example.com).',
+        email:
+          'Only users with a montclair.edu email address can access this feature!',
       }));
       valid = false;
     }

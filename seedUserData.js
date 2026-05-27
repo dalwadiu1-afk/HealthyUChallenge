@@ -75,6 +75,4 @@ export const seedUserData = async () => {
 
   // 🔥 SINGLE WRITE (BEST PRACTICE)
   await database().ref().update(updates);
-
-  console.log('✅ Data seeded successfully');
 };

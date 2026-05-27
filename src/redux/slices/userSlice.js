@@ -3,6 +3,7 @@
 import { createSlice } from '@reduxjs/toolkit';
 
 const initialState = {
+  // COMPLETE FIREBASE USER DATA
   profile: {
     avatar: '',
     gender: '',
@@ -18,13 +19,23 @@ const initialState = {
     totalHabitsDone: 0,
   },
 
+  goal: {},
+
   habits: {},
 
-  goal: {},
+  posts: {},
+
+  snacks: {},
+
+  activities: {},
 
   challenges: {},
 
   fruits: {},
+
+  loading: false,
+
+  loaded: false,
 };
 
 const userSlice = createSlice({
@@ -32,13 +43,29 @@ const userSlice = createSlice({
   initialState,
 
   reducers: {
+    // SAVE ENTIRE FIREBASE USER OBJECT
     setUserData: (state, action) => {
-      return {
-        ...state,
-        ...action.payload,
-      };
+      const data = action.payload || {};
+
+      state.profile = data.profile || {};
+      state.stats = data.stats || {};
+      state.goal = data.goal || {};
+      state.habits = data.habits || {};
+      state.posts = data.posts || {};
+      state.snacks = data.snacks || {};
+      state.activities = data.activities || {};
+      state.challenges = data.challenges || {};
+      state.fruits = data.fruits || {};
+
+      state.loaded = true;
+      state.loading = false;
     },
 
+    setLoading: (state, action) => {
+      state.loading = action.payload;
+    },
+
+    // PROFILE
     setProfile: (state, action) => {
       state.profile = action.payload;
     },
@@ -50,6 +77,7 @@ const userSlice = createSlice({
       };
     },
 
+    // STATS
     setStats: (state, action) => {
       state.stats = action.payload;
     },
@@ -61,17 +89,7 @@ const userSlice = createSlice({
       };
     },
 
-    setHabits: (state, action) => {
-      state.habits = action.payload;
-    },
-
-    updateHabits: (state, action) => {
-      state.habits = {
-        ...state.habits,
-        ...action.payload,
-      };
-    },
-
+    // GOAL
     setGoal: (state, action) => {
       state.goal = action.payload;
     },
@@ -83,6 +101,55 @@ const userSlice = createSlice({
       };
     },
 
+    // HABITS
+    setHabits: (state, action) => {
+      state.habits = action.payload;
+    },
+
+    updateHabits: (state, action) => {
+      state.habits = {
+        ...state.habits,
+        ...action.payload,
+      };
+    },
+
+    // POSTS
+    setPosts: (state, action) => {
+      state.posts = action.payload;
+    },
+
+    updatePosts: (state, action) => {
+      state.posts = {
+        ...state.posts,
+        ...action.payload,
+      };
+    },
+
+    // SNACKS
+    setSnacks: (state, action) => {
+      state.snacks = action.payload;
+    },
+
+    updateSnacks: (state, action) => {
+      state.snacks = {
+        ...state.snacks,
+        ...action.payload,
+      };
+    },
+
+    // ACTIVITIES
+    setActivities: (state, action) => {
+      state.activities = action.payload;
+    },
+
+    updateActivities: (state, action) => {
+      state.activities = {
+        ...state.activities,
+        ...action.payload,
+      };
+    },
+
+    // CHALLENGES
     setChallenges: (state, action) => {
       state.challenges = action.payload;
     },
@@ -94,6 +161,7 @@ const userSlice = createSlice({
       };
     },
 
+    // FRUITS
     setFruits: (state, action) => {
       state.fruits = action.payload;
     },
@@ -111,18 +179,35 @@ const userSlice = createSlice({
 
 export const {
   setUserData,
+  setLoading,
+
   setProfile,
   updateProfile,
+
   setStats,
   updateStats,
-  setHabits,
-  updateHabits,
+
   setGoal,
   updateGoal,
+
+  setHabits,
+  updateHabits,
+
+  setPosts,
+  updatePosts,
+
+  setSnacks,
+  updateSnacks,
+
+  setActivities,
+  updateActivities,
+
   setChallenges,
   updateChallenges,
+
   setFruits,
   updateFruits,
+
   clearUser,
 } = userSlice.actions;
 
