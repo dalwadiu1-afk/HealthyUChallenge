@@ -34,7 +34,7 @@ const buildFiberTemplate = startDate => {
     };
   });
 };
-// Fix this screen that data is not shoing even it saved in the db and also 
+// Fix this screen that data is not shoing even it saved in the db and also
 function StatRow({ emoji, label, value, last }) {
   return (
     <>
@@ -57,7 +57,7 @@ export const getDateKey = (date = new Date()) => {
 export default function FiberChartDays({ navigation }) {
   const [tips, setTips] = useState([]);
   const [input, setInput] = useState('');
-  const [selected, setSelected] = useState(10);
+  const [selected, setSelected] = useState(0);
   const [fiberData, setFiberData] = useState([]);
   const [goalRange, setGoalRange] = useState({
     min: 25,
@@ -81,7 +81,10 @@ export default function FiberChartDays({ navigation }) {
         const data = snapshot.val() || {};
 
         const startDate = data?.goal?.startDate || '2026-04-15';
-        const habits = data?.habits || {};
+
+        // FIXED
+        const fiberHabits = data?.habits?.fiber || {};
+
         const gender = data?.profile?.gender;
 
         const goal =
@@ -91,7 +94,7 @@ export default function FiberChartDays({ navigation }) {
 
         const baseData = buildFiberTemplate(startDate);
 
-        const keys = Object.keys(habits);
+        const keys = Object.keys(fiberHabits || {});
 
         if (!keys.length) {
           setFiberData(baseData);
@@ -99,13 +102,17 @@ export default function FiberChartDays({ navigation }) {
           return;
         }
 
+        // latest month key
         const latestKey = keys.sort((a, b) => {
-          const [, mA, yA] = a.split('_');
-          const [, mB, yB] = b.split('_');
-          return new Date(`${mB} 1, ${yB}`) - new Date(`${mA} 1, ${yA}`);
-        })[0];
+          const [, yA] = a.split('_').reverse();
+          const [, yB] = b.split('_').reverse();
 
-        const days = habits?.[latestKey]?.days || {};
+          return (
+            new Date(a.replace('_', ' 1, ')) - new Date(b.replace('_', ' 1, '))
+          );
+        })[keys.length - 1];
+
+        const days = fiberHabits?.[latestKey]?.days || {};
 
         const formatted = baseData.map(item => ({
           ...item,
@@ -114,6 +121,9 @@ export default function FiberChartDays({ navigation }) {
 
         setFiberData(formatted);
         setTips(getSmartTips(formatted));
+
+        // optional debug
+        console.log('FIBER DAYS => ', days);
       });
     });
 
@@ -184,7 +194,7 @@ export default function FiberChartDays({ navigation }) {
 
   const pastData = fiberData.slice(0, selected + 1);
   const total = pastData.reduce((s, d) => s + d.fiber, 0);
-  const avg = total / (selected + 1);
+  const avg = selected >= 0 ? total / (selected + 1) : 0;
 
   const remainingDays = 30 - (selected + 1);
   const requiredAvg =
@@ -332,7 +342,7 @@ export default function FiberChartDays({ navigation }) {
         </View>
 
         {/* Add */}
-        {selected ? (
+        {selected !== null ? (
           <View style={styles.addCard}>
             <Text style={styles.addLabel}>🍽 Add Fiber (g)</Text>
             <TextInput

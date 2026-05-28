@@ -15,12 +15,13 @@ import { Header, Wrapper } from '../../../components';
 
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
+import moment from 'moment';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const USER_ID = auth().currentUser?.uid;
 
-const MONTH_KEY = 'May_2026';
+const MONTH_KEY = moment().format('MMM_YYYY');
 
 const LABELS = [
   { key: 'week1', label: 'Start Weight' },
@@ -41,6 +42,7 @@ const safeToFixed = num => {
 
 export default function WeightChallengeUI() {
   const [step, setStep] = useState(0);
+  const [goal, setGoal] = useState(2);
   const [startDate, setStartDate] = useState(null);
 
   const [weights, setWeights] = useState({
@@ -77,6 +79,14 @@ export default function WeightChallengeUI() {
       const data = snapshot.val();
 
       if (!data) return;
+
+      let g = parseInt(data?.goal || 2, 10); // IMPORTANT KEY FIX
+
+      // ✅ CLAMP BETWEEN 1 - 3
+      if (isNaN(g)) g = 1;
+      g = Math.max(1, Math.min(3, g));
+
+      setGoal(g);
 
       const mappedWeights = {
         week1: data?.weeks?.week1?.weight || '',
@@ -186,7 +196,7 @@ export default function WeightChallengeUI() {
         ...existingData,
 
         title: 'Weight Challenge',
-        target: 'Lose ≤ 2 lbs/week',
+        target: `Lose ≤ ${goal} lbs/week`,
         weeks: {
           ...(existingData.weeks || {}),
 
@@ -223,17 +233,17 @@ export default function WeightChallengeUI() {
       };
     }
 
-    if (avgLoss > 2) {
+    if (avgLoss > goal) {
       return {
-        text: 'Losing weight too fast',
+        text: `Losing weight too fast (above ${goal} lbs/week)`,
         icon: '⚠️',
         color: '#FFC15A',
       };
     }
 
-    if (avgLoss < 1) {
+    if (avgLoss < goal - 1) {
       return {
-        text: 'Progress slower than expected',
+        text: 'Progress slower than target',
         icon: '🐢',
         color: '#FFC15A',
       };
@@ -264,7 +274,9 @@ export default function WeightChallengeUI() {
       />
 
       <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
-        <Text style={styles.heroSub}>Lose no more than 2 lbs per week</Text>
+        <Text
+          style={styles.heroSub}
+        >{`Lose no more than ${goal} lbs per week`}</Text>
 
         {/* STEP DOTS */}
 
@@ -340,7 +352,7 @@ export default function WeightChallengeUI() {
 
           <View style={styles.statDivider} />
 
-          <StatRow emoji="🎯" label="Goal" value="≤ 2 lbs/week" />
+          <StatRow emoji="🎯" label="Goal" value={`≤ ${goal} lbs/week`} />
 
           <View style={styles.statDivider} />
 

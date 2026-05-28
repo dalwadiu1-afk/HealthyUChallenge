@@ -41,6 +41,15 @@ const getMonthKey = () => {
   return `${month}_${year}`;
 };
 
+const normalizeGoal = value => {
+  const num = Number(value) || 4;
+
+  if (num < 4) return 4;
+  if (num > 6) return 6;
+
+  return num;
+};
+
 function GradientBg({ id, c1, c2, r = 20 }) {
   return (
     <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none">
@@ -63,9 +72,9 @@ const CAPTIONS = (friend, timestamp) => [
 
 export default function FriendWorkoutChallenge({ navigation }) {
   const TOTAL_WEEKS = 4;
-  const WORKOUTS_PER_WEEK = 4;
   const [startDate, setStartDate] = useState(null);
   const [weekError, setWeekError] = useState({});
+  const [workoutsPerWeek, setWorkoutsPerWeek] = useState(4);
   const [weeks, setWeeks] = useState(
     Array.from({ length: TOTAL_WEEKS }, (_, i) => ({
       week: i + 1,
@@ -96,6 +105,7 @@ export default function FriendWorkoutChallenge({ navigation }) {
       // WEEKS DATA
       // ------------------------
       const weeksData = data?.habits?.exWithFriend?.[monthKey]?.weeks || {};
+      const goalFromDb = data?.habits?.exWithFriend?.[monthKey]?.goal || 4;
 
       const formattedWeeks = Array.from({ length: TOTAL_WEEKS }, (_, i) => {
         const weekData = weeksData[`week${i + 1}`] || {};
@@ -106,6 +116,7 @@ export default function FriendWorkoutChallenge({ navigation }) {
           workoutPhotos: weekData.workoutPhotos || [],
         };
       });
+      setWorkoutsPerWeek(normalizeGoal(goalFromDb));
 
       setWeeks(formattedWeeks);
     });
@@ -129,7 +140,7 @@ export default function FriendWorkoutChallenge({ navigation }) {
       return;
     }
 
-    if (week.workoutPhotos.length >= WORKOUTS_PER_WEEK) {
+    if (week.workoutPhotos.length >= workoutsPerWeek) {
       setWeekError(prev => ({
         ...prev,
         [week.week]: '✅ Week already completed',
@@ -170,7 +181,7 @@ export default function FriendWorkoutChallenge({ navigation }) {
         const updatedWeek = {
           ...week,
           workoutPhotos: updatedPhotos,
-          completed: updatedPhotos.length === WORKOUTS_PER_WEEK,
+          completed: updatedPhotos.length === workoutsPerWeek,
         };
 
         const updatedWeeks = weeks.map(w =>
@@ -192,6 +203,26 @@ export default function FriendWorkoutChallenge({ navigation }) {
     const diffWeeks = now.diff(startDate, 'weeks');
 
     return Math.min(diffWeeks, TOTAL_WEEKS - 1);
+  };
+
+  const updateFriendLocal = (weekNumber, photoIndex, text) => {
+    const updatedWeeks = weeks.map(week => {
+      if (week.week !== weekNumber) return week;
+
+      return {
+        ...week,
+        workoutPhotos: week.workoutPhotos.map((photo, index) => {
+          if (index !== photoIndex) return photo;
+
+          return {
+            ...photo,
+            friend: text,
+          };
+        }),
+      };
+    });
+
+    setWeeks(updatedWeeks);
   };
 
   const updateFriendName = async (weekNumber, photoIndex, name) => {
@@ -245,7 +276,7 @@ export default function FriendWorkoutChallenge({ navigation }) {
       return {
         ...w,
         workoutPhotos: updatedPhotos,
-        completed: updatedPhotos.length === WORKOUTS_PER_WEEK,
+        completed: updatedPhotos.length === workoutsPerWeek,
       };
     });
 
@@ -310,9 +341,11 @@ export default function FriendWorkoutChallenge({ navigation }) {
       console.log(e);
     }
   };
-  const completedWeeks = weeks.filter(w => w.completed).length;
+  const completedWeeks = weeks.filter(
+    w => w.workoutPhotos.length >= workoutsPerWeek,
+  ).length;
   const activeWeekIndex = weeks.findIndex(
-    w => w.workoutPhotos.length < WORKOUTS_PER_WEEK,
+    w => w.workoutPhotos.length < workoutsPerWeek,
   );
 
   const activeWeek = activeWeekIndex === -1 ? null : weeks[activeWeekIndex];
@@ -327,7 +360,7 @@ export default function FriendWorkoutChallenge({ navigation }) {
 
     return (
       now.isAfter(weekEnd) &&
-      weeks[weekIndex]?.workoutPhotos?.length < WORKOUTS_PER_WEEK
+      weeks[weekIndex]?.workoutPhotos?.length < workoutsPerWeek
     );
   };
 
@@ -388,7 +421,7 @@ export default function FriendWorkoutChallenge({ navigation }) {
                 <Text style={styles.cardTitle}>Week {weekItem.week}</Text>
 
                 <Text style={styles.progressLabel}>
-                  {weekItem.workoutPhotos.length}/4 workouts
+                  {weekItem.workoutPhotos.length}/{workoutsPerWeek} workouts
                 </Text>
               </View>
 
@@ -436,7 +469,14 @@ export default function FriendWorkoutChallenge({ navigation }) {
                         !isEditableWeek && { opacity: 0.5 },
                       ]}
                       onChangeText={text =>
-                        updateFriendName(weekItem.week, photoIndex, text)
+                        updateFriendLocal(weekItem.week, photoIndex, text)
+                      }
+                      onEndEditing={() =>
+                        updateFriendName(
+                          weekItem.week,
+                          photoIndex,
+                          photoItem.friend,
+                        )
                       }
                     />
                   </View>
@@ -500,7 +540,7 @@ export default function FriendWorkoutChallenge({ navigation }) {
                 </View>
               ))}
 
-              {!isLocked && weekItem.workoutPhotos.length < 4 && (
+              {!isLocked && weekItem.workoutPhotos.length < workoutsPerWeek && (
                 <TouchableOpacity
                   style={styles.shareBtn}
                   onPress={() => handleCamera(weekItem.week)}
@@ -534,7 +574,7 @@ export default function FriendWorkoutChallenge({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.dark },
+  root: { flex: 1, backgroundColor: colors.dark, paddingBottom: 120 },
 
   heroBg: { paddingBottom: 20, overflow: 'hidden' },
   header: {

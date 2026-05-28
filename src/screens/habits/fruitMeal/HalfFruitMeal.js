@@ -61,7 +61,7 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
       } else {
         setHabitData({
           title: 'Half Plate Fruits & Veggies',
-          target: '1 Photo',
+          target: '1',
           days: {},
         });
       }

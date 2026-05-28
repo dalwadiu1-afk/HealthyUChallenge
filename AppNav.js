@@ -73,59 +73,6 @@ export default function AppNav() {
 
       try {
         // =========================
-        // STOP LOOP (RAW DATA CHECK)
-        // =========================
-        const rawHash = JSON.stringify({
-          habits: userData?.habits || {},
-          goal: userData?.goal || {},
-          posts: userData?.posts || {},
-          snacks: userData?.snacks || {},
-          activities: userData?.activities || {},
-          challenges: userData?.challenges || {},
-        });
-
-        if (lastHashRef.current === rawHash) {
-          return; // 🚫 prevent infinite loop
-        }
-
-        lastHashRef.current = rawHash;
-
-        // =========================
-        // CALCULATE STATS (ONCE)
-        // =========================
-        const stats = calculateUserStats(userData);
-
-        // =========================
-        // WRITE STATS ONLY IF NEEDED
-        // =========================
-        const existingStats = userData?.stats || {};
-
-        const safeExisting = {
-          totalHabitsDone: existingStats.totalHabitsDone || 0,
-          streak: existingStats.streak || 0,
-          longestStreak: existingStats.longestStreak || 0,
-          activeDays: existingStats.activeDays || 0,
-          completionRate: existingStats.completionRate || 0,
-        };
-
-        const statsChanged =
-          JSON.stringify(stats) !== JSON.stringify(safeExisting);
-
-        if (statsChanged) {
-          await database()
-            .ref(`users/${uid}/stats`)
-            .update({
-              ...stats,
-              updatedAt: Date.now(),
-            });
-
-          await syncUserLeaderboardPoints(uid, {
-            ...userData,
-            stats,
-          });
-        }
-
-        // =========================
         // REDUX SYNC
         // =========================
         dispatch(
@@ -144,8 +91,6 @@ export default function AppNav() {
               ...(userData?.stats || {}),
               ...stats,
             },
-
-            hydratedAt: Date.now(),
           }),
         );
       } catch (err) {

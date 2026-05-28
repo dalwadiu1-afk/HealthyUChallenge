@@ -21,12 +21,10 @@ import { launchCamera } from 'react-native-image-picker';
 import { requestCameraPermission } from '../../../utils/helper';
 import moment from 'moment';
 
-const TOTAL = 8; // 4 weeks × 2 photos
-const WEEKLY_TARGET = 2;
+const DEFAULT_WEEKLY_TARGET = 2;
 
 const USER_ID = auth().currentUser?.uid;
 const monthKey = moment().format('MMMM_YYYY');
-const TOTAL_WEEKS = TOTAL / WEEKLY_TARGET;
 
 function CameraIcon() {
   return (
@@ -71,6 +69,12 @@ export default function WeightTrainingUI() {
     })),
   );
 
+  const [weeklyTarget, setWeeklyTarget] = useState(DEFAULT_WEEKLY_TARGET);
+
+  const TOTAL = weeklyTarget * 4;
+
+  const TOTAL_WEEKS = 4;
+
   const [startDate, setStartDate] = useState(null);
 
   const tempPhotos = useRef({});
@@ -89,6 +93,33 @@ export default function WeightTrainingUI() {
       if (value) {
         setStartDate(value);
       }
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
+
+  /* =========================================
+    FETCH GOAL TARGET FROM FIREBASE
+  ========================================= */
+  useEffect(() => {
+    const ref = database().ref(
+      `users/${USER_ID}/habits/weightTraining/${monthKey}`,
+    );
+
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val() || {};
+
+      // goal can come from goal / target / total
+      const firebaseGoal =
+        Number(data?.goal) ||
+        Number(data?.target) ||
+        Number(data?.total) ||
+        DEFAULT_WEEKLY_TARGET;
+
+      // minimum 2 sessions per week
+      const finalGoal = Math.max(firebaseGoal, 2);
+
+      setWeeklyTarget(finalGoal);
     });
 
     return () => ref.off('value', listener);
@@ -138,12 +169,15 @@ export default function WeightTrainingUI() {
       for (let week = 1; week <= TOTAL_WEEKS; week++) {
         const weekData = data?.weeks?.[`week${week}`];
 
-        const photos = weekData?.workoutPhotos || [];
+        const photosObj = weekData?.workoutPhotos || {};
+        const photosArray = Array.isArray(photosObj)
+          ? photosObj
+          : Object.values(photosObj);
 
-        for (let i = 0; i < WEEKLY_TARGET; i++) {
+        for (let i = 0; i < weeklyTarget; i++) {
           restored.push({
-            photo: photos?.[i]?.uri || null,
-            timestamp: photos?.[i]?.timestamp || null,
+            photo: photosArray?.[i]?.uri || null,
+            timestamp: photosArray?.[i]?.timestamp || null,
           });
         }
       }
@@ -177,7 +211,7 @@ export default function WeightTrainingUI() {
   ========================================= */
   const done = sessions.filter(s => s?.photo).length;
 
-  const weeksCompleted = Math.floor(done / WEEKLY_TARGET);
+  const weeksCompleted = Math.floor(done / weeklyTarget);
 
   /* =========================================
       UPLOAD PHOTO
@@ -222,9 +256,9 @@ export default function WeightTrainingUI() {
 
       if (!photoData) return;
 
-      const weekNumber = Math.floor(index / WEEKLY_TARGET) + 1;
+      const weekNumber = Math.floor(index / weeklyTarget) + 1;
 
-      const positionInsideWeek = index % WEEKLY_TARGET;
+      const positionInsideWeek = index % weeklyTarget;
 
       const ref = database().ref(
         `users/${USER_ID}/habits/weightTraining/${monthKey}/weeks/week${weekNumber}`,
@@ -234,7 +268,9 @@ export default function WeightTrainingUI() {
 
       const data = snapshot.val() || {};
 
-      let workoutPhotos = data?.workoutPhotos || [];
+      let workoutPhotos = Array.isArray(data?.workoutPhotos)
+        ? data.workoutPhotos
+        : Object.values(data?.workoutPhotos || {});
 
       if (!Array.isArray(workoutPhotos)) {
         workoutPhotos = Object.values(workoutPhotos || {});
@@ -248,7 +284,7 @@ export default function WeightTrainingUI() {
       const totalCompleted = workoutPhotos.filter(Boolean).length;
 
       await ref.update({
-        completed: totalCompleted >= WEEKLY_TARGET,
+        completed: totalCompleted >= weeklyTarget,
         totalCompleted,
         updatedAt: database.ServerValue.TIMESTAMP,
         workoutPhotos,
@@ -277,9 +313,9 @@ export default function WeightTrainingUI() {
 
     const done = !!photo;
 
-    const weekNum = Math.floor(index / WEEKLY_TARGET) + 1;
+    const weekNum = Math.floor(index / weeklyTarget) + 1;
 
-    const sessionNum = (index % WEEKLY_TARGET) + 1;
+    const sessionNum = (index % weeklyTarget) + 1;
 
     const isLocked = weekNum - 1 !== currentUnlockedWeek;
 
@@ -375,7 +411,7 @@ export default function WeightTrainingUI() {
           <Text style={styles.heroTitle}>🏋️ Weight Training Sessions</Text>
 
           <Text style={styles.heroSub}>
-            Complete at least {WEEKLY_TARGET} workouts per week and upload your
+            Complete at least {weeklyTarget} workouts per week and upload your
             proof
           </Text>
 
@@ -391,7 +427,7 @@ export default function WeightTrainingUI() {
               },
               {
                 label: 'Target / Week',
-                value: `${WEEKLY_TARGET}`,
+                value: `${weeklyTarget}`,
               },
             ].map((s, i) => (
               <View

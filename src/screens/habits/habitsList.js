@@ -294,30 +294,52 @@ function FlipCard({
                   alignItems: 'center',
                 }}
                 onPress={async () => {
-                  const updatedGoals = selectedGoals.map(goal => {
-                    if (goal.id === item.id) {
-                      return {
-                        ...goal,
-                        goalText,
-                      };
-                    }
+                  try {
+                    const updatedGoals = selectedGoals.map(goal => {
+                      if (goal.id === item.id) {
+                        return {
+                          ...goal,
+                          goalText,
+                        };
+                      }
 
-                    return goal;
-                  });
+                      return goal;
+                    });
 
-                  await database().ref(`/users/${uid}/goal`).update({
-                    selectedGoals: updatedGoals,
-                  });
+                    // save selected goals
+                    await database().ref(`/users/${uid}/goal`).update({
+                      selectedGoals: updatedGoals,
+                    });
 
-                  setSelectedGoals(updatedGoals);
+                    // month/year key
+                    const monthName = moment().format('MMMM');
+                    const year = moment().format('YYYY');
 
-                  Animated.spring(animVal, {
-                    toValue: 0,
-                    friction: 8,
-                    useNativeDriver: true,
-                  }).start();
+                    const habitKey = `${monthName}_${year}`;
 
-                  setFlipped(false);
+                    // safe habit name
+                    const habitName = item?.key;
+
+                    // save inside habits
+                    await database()
+                      .ref(`/users/${uid}/habits/${habitName}/${habitKey}`)
+                      .update({
+                        goal: goalText,
+                        title: item?.title,
+                      });
+
+                    setSelectedGoals(updatedGoals);
+
+                    Animated.spring(animVal, {
+                      toValue: 0,
+                      friction: 8,
+                      useNativeDriver: true,
+                    }).start();
+
+                    setFlipped(false);
+                  } catch (e) {
+                    console.log('SAVE GOAL ERROR => ', e);
+                  }
                 }}
               >
                 <Text

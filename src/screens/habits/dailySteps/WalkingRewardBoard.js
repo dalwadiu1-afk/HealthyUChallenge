@@ -202,23 +202,21 @@ export default function WalkingRewardBoard({ navigation }) {
         uid,
         ...item,
       }));
-
       const getWeeklyPoints = challenge => {
         const weekly = challenge?.weeklySummary || {};
         const values = Object.values(weekly);
 
         if (!values.length) return 0;
 
-        // take latest week by end date
         const latestWeek = values.reduce((latest, current) => {
-          return new Date(current.end) > new Date(latest.end)
-            ? current
-            : latest;
+          const latestEnd = moment(latest?.end);
+          const currentEnd = moment(current?.end);
+
+          return currentEnd.isAfter(latestEnd) ? current : latest;
         });
 
         return latestWeek?.points || 0;
       };
-
       const sorted = list.sort((a, b) => {
         const pointsA = getWeeklyPoints(a.challenge);
         const pointsB = getWeeklyPoints(b.challenge);
@@ -295,37 +293,28 @@ export default function WalkingRewardBoard({ navigation }) {
 
   /* 🔥 derived values */
 
-  const getTodayDate = () => {
-    return new Date().toISOString().split('T')[0];
-  };
-
   const isCurrentWeek = dateString => {
-    const date = new Date(dateString);
-    const today = new Date();
+    const date = moment(dateString);
+    const today = moment();
 
-    const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay());
-    startOfWeek.setHours(0, 0, 0, 0);
+    const startOfWeek = moment().startOf('week');
+    const endOfWeek = moment().endOf('week');
 
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
-
-    return date >= startOfWeek && date <= endOfWeek;
+    return date.isBetween(startOfWeek, endOfWeek, undefined, '[]');
   };
 
   const getCurrentWeekKey = challenge => {
     if (!challenge?.weeklySummary) return null;
 
-    const today = new Date();
+    const today = moment();
 
     return Object.keys(challenge.weeklySummary).find(key => {
       const week = challenge.weeklySummary[key];
 
-      const start = new Date(week.start);
-      const end = new Date(week.end);
+      const start = moment(week.start);
+      const end = moment(week.end);
 
-      return today >= start && today <= end;
+      return today.isBetween(start, end, undefined, '[]');
     });
   };
 

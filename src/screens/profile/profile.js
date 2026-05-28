@@ -28,11 +28,11 @@ const MENU_ITEMS = [
     badge: 'Active',
   },
   {
-    emoji: '🪪',
-    title: 'Quiz Board ',
-    subtitle: 'Your personalized health overview',
+    emoji: '🧠',
+    title: 'Quiz Hub',
+    subtitle: 'Track quizzes, streaks & performance',
     screenName: 'QuizBoard',
-    badge: 'Active',
+    badge: 'Live',
   },
   // {
   //   emoji: '🎯',

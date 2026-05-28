@@ -146,9 +146,7 @@ export default function ResourcesList({ navigation }) {
       ? resources
       : resources.filter(r => r.category === activeCategory);
 
-  const onCardPress = () => {
-    navigation.navigate('QuizStart');
-  };
+  const onCardPress = () => {};
 
   function ResourceCard({ item, index }) {
     const anim = useRef(new Animated.Value(0)).current;

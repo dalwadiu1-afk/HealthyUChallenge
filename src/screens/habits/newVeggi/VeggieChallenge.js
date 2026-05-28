@@ -279,98 +279,100 @@ const VeggieChallenge = ({ navigation }) => {
             {completedWeeks}/{safeWeeks.length} weeks
           </Text>
         </View>
-        {Object.entries(weeks)
-          .filter(([weekKey, week], index) => {
-            // always show first 2 cards
-            if (index < 2) return true;
+        <View style={{ marginBottom: 120 }}>
+          {Object.entries(weeks)
+            .filter(([weekKey, week], index) => {
+              // always show first 2 cards
+              if (index < 2) return true;
 
-            // show card only after unlock
-            return !week?.locked;
-          })
-          .sort(([a], [b]) => {
-            return (
-              Number(a.replace('week', '')) - Number(b.replace('week', ''))
-            );
-          })
-          .map(([weekKey, week], wi) => {
-            const hasImage = !!week?.uri;
-            const isCurrent = weekKey === `week${activeWeekIndex + 1}`;
-            const unlocked = !week?.locked;
-            const weekDone = hasImage;
+              // show card only after unlock
+              return !week?.locked;
+            })
+            .sort(([a], [b]) => {
+              return (
+                Number(a.replace('week', '')) - Number(b.replace('week', ''))
+              );
+            })
+            .map(([weekKey, week], wi) => {
+              const hasImage = !!week?.uri;
+              const isCurrent = weekKey === `week${activeWeekIndex + 1}`;
+              const unlocked = !week?.locked;
+              const weekDone = hasImage;
 
-            return (
-              <View key={`week-${wi}`} style={styles.weekCard}>
-                {/* HEADER */}
-                <View style={styles.weekHeader}>
-                  <Text style={styles.weekTitleText}>
-                    Week {weekKey.replace('week', '')}
-                  </Text>
+              return (
+                <View key={`week-${wi}`} style={styles.weekCard}>
+                  {/* HEADER */}
+                  <View style={styles.weekHeader}>
+                    <Text style={styles.weekTitleText}>
+                      Week {weekKey.replace('week', '')}
+                    </Text>
 
-                  {weekDone && (
-                    <View style={styles.completedPill}>
-                      <Text style={styles.completedPillText}>Completed</Text>
-                    </View>
-                  )}
+                    {weekDone && (
+                      <View style={styles.completedPill}>
+                        <Text style={styles.completedPillText}>Completed</Text>
+                      </View>
+                    )}
 
-                  {isCurrent && !weekDone && (
-                    <View style={styles.currentPill}>
-                      <Text style={styles.currentPillText}>Active</Text>
-                    </View>
+                    {isCurrent && !weekDone && (
+                      <View style={styles.currentPill}>
+                        <Text style={styles.currentPillText}>Active</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* BODY */}
+                  {hasImage ? (
+                    <>
+                      <View style={styles.entryCard}>
+                        <Image
+                          source={{
+                            uri: week?.uri,
+                          }}
+                          style={styles.entryImg}
+                        />
+                        <TextInput
+                          value={labels[weekKey] ?? week?.label}
+                          onChangeText={t =>
+                            setLabels(prev => ({ ...prev, [weekKey]: t }))
+                          }
+                          onEndEditing={() =>
+                            updateLabel(weekKey, labels[weekKey])
+                          }
+                          style={styles.uploadText}
+                        />
+                      </View>
+
+                      <View style={styles.entryActions}>
+                        <TouchableOpacity
+                          style={styles.retakeBtn}
+                          onPress={() => pickImage(weekKey)}
+                        >
+                          <Text style={styles.retakeText}>Retake</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.deleteBtn}
+                          onPress={() => deleteEntry(weekKey)}
+                        >
+                          <Text style={styles.deleteText}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.uploadBtn}
+                      onPress={() => pickImage(weekKey)}
+                    >
+                      <CameraIcon />
+                      <Text style={styles.uploadText}>
+                        Upload Veggie Meal Photo
+                      </Text>
+                    </TouchableOpacity>
                   )}
                 </View>
-
-                {/* BODY */}
-                {hasImage ? (
-                  <>
-                    <View style={styles.entryCard}>
-                      <Image
-                        source={{
-                          uri: week?.uri,
-                        }}
-                        style={styles.entryImg}
-                      />
-                      <TextInput
-                        value={labels[weekKey] ?? week?.label}
-                        onChangeText={t =>
-                          setLabels(prev => ({ ...prev, [weekKey]: t }))
-                        }
-                        onEndEditing={() =>
-                          updateLabel(weekKey, labels[weekKey])
-                        }
-                        style={styles.uploadText}
-                      />
-                    </View>
-
-                    <View style={styles.entryActions}>
-                      <TouchableOpacity
-                        style={styles.retakeBtn}
-                        onPress={() => pickImage(weekKey)}
-                      >
-                        <Text style={styles.retakeText}>Retake</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.deleteBtn}
-                        onPress={() => deleteEntry(weekKey)}
-                      >
-                        <Text style={styles.deleteText}>Delete</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.uploadBtn}
-                    onPress={() => pickImage(weekKey)}
-                  >
-                    <CameraIcon />
-                    <Text style={styles.uploadText}>
-                      Upload Veggie Meal Photo
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          })}
+              );
+            })}
+        </View>
       </Wrapper>
     </View>
   );

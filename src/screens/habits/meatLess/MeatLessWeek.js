@@ -23,23 +23,28 @@ import { launchCamera } from 'react-native-image-picker';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
-
-import storage from '@react-native-firebase/storage';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import moment from 'moment';
-
-const { width: SW } = Dimensions.get('window');
 
 const user = auth().currentUser;
 const USER_ID = user?.uid || 'USER_UID';
 
 const TOTAL_WEEKS = 4;
-const MAX_MEALS = 4;
+const DEFAULT_MAX_MEALS = 4;
 
 const today = moment();
 
 const CURRENT_MONTH_KEY = today.format('MMMM_YYYY');
+
+const getClosestMealGoal = value => {
+  const num = Number(value) || 4;
+
+  if (num <= 3) return 3;
+  if (num >= 5) return 5;
+
+  return Math.round(num);
+};
 
 function GradientBg({ id, c1, c2, r = 20 }) {
   return (
@@ -119,9 +124,16 @@ export default function MeatlessChallenge({ navigation }) {
 
       // HABIT DATA
       const challenge = data?.habits?.meatLess?.[CURRENT_MONTH_KEY];
+      const rawGoal = challenge?.goal || 4;
 
-      if (challenge) {
-        setHabitData(challenge);
+      const weeklyGoal = getClosestMealGoal(rawGoal);
+      console.log('challenge :>> ', challenge?.weeks);
+      if (challenge?.weeks != undefined) {
+        setHabitData({
+          ...challenge,
+          goal: weeklyGoal,
+          target: `${weeklyGoal} Meals Per Week`,
+        });
 
         const tempLabels = {};
 
@@ -135,7 +147,8 @@ export default function MeatlessChallenge({ navigation }) {
       } else {
         setHabitData({
           title: 'Meatless Challenge',
-          target: '4 Meals Per Week',
+          target: `${weeklyGoal} Meals Per Week`,
+          goal: weeklyGoal,
           weeks: {},
         });
       }
@@ -144,17 +157,23 @@ export default function MeatlessChallenge({ navigation }) {
     return () => ref.off('value', listener);
   }, []);
 
-  const saveMeal = async (weekKey, mealKey, mealData) => {
+  const saveMeal = async (weekKey, mealData) => {
+    const normalizedGoal = getClosestMealGoal(habitData?.goal || 4);
+
+    const currentMeals = Object.values(weeks?.[weekKey] || {});
+
+    const updatedMeals = [...currentMeals, mealData];
+
     await database()
       .ref(`users/${USER_ID}/habits/meatLess/${CURRENT_MONTH_KEY}`)
       .update({
         title: 'Meatless Challenge',
-        target: '4 Meals Per Week',
+        target: `${normalizedGoal} Meals Per Week`,
+        goal: normalizedGoal,
 
-        [`weeks/${weekKey}/${mealKey}`]: mealData,
+        [`weeks/${weekKey}`]: updatedMeals,
       });
   };
-
   const addMeal = async weekKey => {
     const weekNumber = Number(weekKey.replace('week', ''));
 
@@ -176,19 +195,7 @@ export default function MeatlessChallenge({ navigation }) {
 
       if (!uri) return;
 
-      const existingNumbers = Object.keys(meals).map(key =>
-        Number(key.replace('meal', '')),
-      );
-
-      let nextNumber = 1;
-
-      while (existingNumbers.includes(nextNumber)) {
-        nextNumber++;
-      }
-
-      const mealKey = `meal${nextNumber}`;
-
-      await saveMeal(weekKey, mealKey, {
+      await saveMeal(weekKey, {
         uri,
         label: '',
         timestamp: moment().toISOString(),
@@ -196,24 +203,35 @@ export default function MeatlessChallenge({ navigation }) {
     });
   };
 
-  const updateLabel = async (weekKey, mealKey, text) => {
+  const updateLabel = async (weekKey, mealIndex, text) => {
+    const currentMeals = Array.isArray(weeks?.[weekKey])
+      ? [...weeks[weekKey]]
+      : [];
+
+    currentMeals[mealIndex] = {
+      ...currentMeals[mealIndex],
+      label: text,
+    };
+
     await database()
       .ref(
-        `users/${USER_ID}/habits/meatLess/${CURRENT_MONTH_KEY}/weeks/${weekKey}/${mealKey}`,
+        `users/${USER_ID}/habits/meatLess/${CURRENT_MONTH_KEY}/weeks/${weekKey}`,
       )
-      .update({
-        label: text,
-      });
+      .set(currentMeals);
   };
 
-  const deleteMeal = async (weekKey, mealKey) => {
+  const deleteMeal = async (weekKey, mealIndex) => {
+    const currentMeals = Array.isArray(weeks?.[weekKey]) ? weeks[weekKey] : [];
+
+    const updatedMeals = currentMeals.filter((_, index) => index !== mealIndex);
+
     await database()
       .ref(
-        `users/${USER_ID}/habits/meatLess/${CURRENT_MONTH_KEY}/weeks/${weekKey}/${mealKey}`,
+        `users/${USER_ID}/habits/meatLess/${CURRENT_MONTH_KEY}/weeks/${weekKey}`,
       )
-      .remove();
+      .set(updatedMeals);
   };
-
+  const MAX_MEALS = habitData?.goal || DEFAULT_MAX_MEALS;
   return (
     <View style={styles.root}>
       <Header
@@ -255,7 +273,9 @@ export default function MeatlessChallenge({ navigation }) {
 
           const mealsObject = weeks?.[weekKey] || {};
 
-          const mealsArray = Object.entries(mealsObject);
+          const mealsArray = Array.isArray(mealsObject)
+            ? mealsObject.map((item, index) => [index, item])
+            : [];
 
           const weekDone = mealsArray.length >= MAX_MEALS;
 

@@ -11,6 +11,7 @@ import { SvgImg } from '../../components/common/SvgImg';
 import { leftIcon, rightIcon } from '../../assets/images';
 import { fontFamily, colors, BONUS_DAY } from '../../constant';
 import Svg, { Circle } from 'react-native-svg';
+import moment from 'moment';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const { height } = Dimensions.get('window');
@@ -40,51 +41,52 @@ const rightIconWhite = whiteIcon(rightIcon);
 
 // ===== HELPERS =====
 
-const formatDate = d =>
-  new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-    .toISOString()
-    .split('T')[0];
+const formatDate = d => moment(d).format('YYYY-MM-DD');
 
-const parseLocalDate = dateStr => {
-  const [y, m, d] = dateStr.split('-');
-  return new Date(y, m - 1, d);
-};
+const parseLocalDate = dateStr => moment(dateStr, 'YYYY-MM-DD');
 
-const addDays = (date, days) => {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
-};
+const addDays = (date, days) => moment(date).add(days, 'days');
+
+const today = moment();
 
 const getMonthLabel = (startDate, cycle) => {
-  const base = parseLocalDate(startDate);
-  const date = addDays(base, cycle * 30);
-  return date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+  return moment(startDate)
+    .add(cycle * 30, 'days')
+    .format('MMM YYYY');
 };
 
 const get30DaysData = (startDate, cycle) => {
-  const base = parseLocalDate(startDate);
-  const offset = cycle * 30;
-  const start = addDays(base, offset);
+  const start = moment(startDate).add(cycle * 30, 'days');
+
   const arr = [];
-  const firstDay = start.getDay();
+
+  const firstDay = start.day();
 
   for (let i = firstDay - 1; i >= 0; i--) {
-    const d = addDays(start, -i - 1);
-    arr.push({ date: d, current: false });
+    arr.push({
+      date: moment(start).subtract(i + 1, 'days'),
+      current: false,
+    });
   }
+
   for (let i = 0; i < 30; i++) {
-    const d = addDays(start, i);
-    arr.push({ date: d, current: true });
+    arr.push({
+      date: moment(start).add(i, 'days'),
+      current: true,
+    });
   }
+
   while (arr.length % 7 !== 0) {
     const last = arr[arr.length - 1].date;
-    arr.push({ date: addDays(last, 1), current: false });
+
+    arr.push({
+      date: moment(last).add(1, 'days'),
+      current: false,
+    });
   }
 
   return arr;
 };
-const today = new Date();
 
 export function StreakCalendar({
   startDate = '2026-04-01',
@@ -93,6 +95,7 @@ export function StreakCalendar({
 }) {
   const [cycle, setCycle] = useState(0);
 
+  console.log('streakData :>> ', streakData);
   const completedDates = useMemo(() => {
     if (!streakData) return [];
 
@@ -107,14 +110,7 @@ export function StreakCalendar({
     () => get30DaysData(startDate, cycle),
     [startDate, cycle],
   );
-
-  const isToday = date =>
-    date &&
-    date.getDate() === today.getDate() &&
-    date.getMonth() === today.getMonth() &&
-    date.getFullYear() === today.getFullYear();
-
-  const isCompleted = date => date && completedSet.has(formatDate(date));
+  const isToday = date => moment(date).isSame(today, 'day');
 
   useEffect(() => {
     const realDays = data.filter(d => d.current);
@@ -145,11 +141,11 @@ export function StreakCalendar({
     // latest existing quiz date
     const latest = latestQuizDate ? parseLocalDate(latestQuizDate) : null;
 
-    const currentDate = parseLocalDate(key);
+    const currentDate = moment(key, 'YYYY-MM-DD');
 
     // ❌ only mark missed IF date is before/equal latest quiz date
-    const shouldMarkMissed = latest && currentDate <= latest;
-
+    const shouldMarkMissed =
+      latest && currentDate.isSameOrBefore(latest, 'day');
     if (!quiz) {
       return {
         total: 0,
@@ -178,7 +174,7 @@ export function StreakCalendar({
   };
 
   const isBonusDay = date => {
-    return date.getDay() === BONUS_DAY;
+    return moment(date).day() === BONUS_DAY;
   };
 
   const renderItem = ({ item }) => {
@@ -191,7 +187,7 @@ export function StreakCalendar({
         {/* Date number */}
         {todayMatch ? (
           <View style={styles.todayCircle}>
-            <Text style={styles.todayText}>{date.getDate()}</Text>
+            <Text style={styles.todayText}>{moment(date).date()}</Text>
           </View>
         ) : (
           <Text
@@ -200,7 +196,7 @@ export function StreakCalendar({
               current ? styles.currentText : styles.outsideText,
             ]}
           >
-            {date.getDate()}
+            {moment(date).date()}
           </Text>
         )}
 
@@ -261,8 +257,9 @@ export function StreakCalendar({
             const currentDate = parseLocalDate(formatDate(date));
 
             const isPastOrTodayBonusDay =
-              latest && currentDate <= latest && isBonusDay(date);
-
+              latest &&
+              currentDate.isSameOrBefore(latest, 'day') &&
+              isBonusDay(date);
             // also mark today instantly if today is bonus day
             const isTodayBonusMissing =
               isToday(date) && isBonusDay(date) && !hasBonusQuiz;

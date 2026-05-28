@@ -86,7 +86,7 @@ export default function QuizStart({ navigation, route }) {
   };
 
   const startQuiz = () => {
-    navigation.navigate('Quiz', {
+    navigation.replace('Quiz', {
       isBonus: isBonus,
       showQues: quizData?.totalQuestions,
       isCombine: isCombine,

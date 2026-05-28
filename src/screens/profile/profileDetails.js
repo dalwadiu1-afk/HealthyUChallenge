@@ -32,11 +32,11 @@ import ChatCard from '../../components/social/chatCard';
 import Svg, { Path } from 'react-native-svg';
 import auth from '@react-native-firebase/auth';
 import { useSelector } from 'react-redux';
-import { Header } from '../../components';
+import { Header, Wrapper } from '../../components';
 import moment from 'moment';
 
 const userId = auth().currentUser?.uid;
-
+const currentMonthKey = moment().format('MMM_YYYY');
 const { height, width } = Dimensions.get('window');
 const SHEET_MIN = height * 0.62;
 const SHEET_MAX = height * 0.86;
@@ -106,90 +106,280 @@ function StatsTab({ statsData = [] }) {
   );
 }
 
+const buildHabitChartData = (habitKey, habits, monthKey = currentMonthKey) => {
+  const data = habits?.[habitKey]?.[monthKey] || {};
+  const parseValue = val => {
+    if (!val) return 0;
+    if (typeof val === 'number') return val;
+    const match = String(val).match(/[\d.]+/);
+    return match ? Number(match[0]) : 0;
+  };
+
+  const daysObj = data?.days || {};
+  const weeksObj = data?.weeks || {};
+
+  console.log('data :>> ', daysObj);
+  // =========================
+  // DAILY (UNCHANGED LOGIC)
+  // =========================
+  const dailyMap = new Map(
+    Object.entries(daysObj).map(([date, item]) => [
+      date,
+      item?.uri ? 1 : parseValue(item?.progress || item?.sleep || item?.count),
+    ]),
+  );
+
+  const daily = Array.from({ length: 7 }).map((_, i) => {
+    const d = moment().subtract(6 - i, 'days');
+    const key = d.format('YYYY-MM-DD');
+
+    return {
+      date: key,
+      label: `${d.format('MM/DD')}\n${d.format('ddd')}`,
+      value: dailyMap.get(key) || 0,
+    };
+  });
+
+  // =========================
+  // WEEKLY (FIXED)
+  // =========================
+
+  const weekValueMap = new Map();
+
+  Object.entries(weeksObj).forEach(([weekKey, week]) => {
+    let value = 0;
+
+    // 🥇 CARDIO PRIORITY (IMPORTANT FIX)
+    // cardio should ALWAYS use totalMinutes
+    if (week?.totalMinutes !== undefined) {
+      value = Number(week.totalMinutes);
+    }
+
+    // ARRAY TYPE
+    else if (Array.isArray(week)) {
+      value = week.length;
+    }
+
+    // SESSIONS TYPE (non-cardio trackers)
+    else if (week?.sessions !== undefined) {
+      value = Number(week.sessions);
+    }
+
+    // PHOTO ARRAY TYPE
+    else if (week?.workoutPhotos?.length) {
+      value = week.workoutPhotos.length;
+    }
+
+    // DAYS OBJECT TYPE
+    else if (week?.days) {
+      value = Object.keys(week.days || {}).length;
+    }
+
+    // WEIGHT TYPE (optional tracker)
+    else if (week?.weight !== undefined) {
+      value = Number(data?.goal || 0);
+    }
+
+    // GENERIC FALLBACK
+    else {
+      value = Object.keys(week || {}).length;
+    }
+
+    weekValueMap.set(weekKey, value);
+  });
+
+  const weekKeys = Object.keys(weeksObj);
+
+  if (weekKeys.length === 0) {
+    return {
+      type: 'daily',
+      daily,
+      weekly: [],
+    };
+  }
+
+  // Sort weeks properly (W1, W2, W3...)
+  const sortedWeeks = Object.entries(weeksObj).sort((a, b) => {
+    const aNum = Number(a[0].replace(/\D/g, '')) || 0;
+    const bNum = Number(b[0].replace(/\D/g, '')) || 0;
+    return aNum - bNum;
+  });
+
+  const values = sortedWeeks.map(([_, week]) => {
+    // 🥇 CARDIO FIRST
+    if (week?.totalMinutes !== undefined) {
+      return Number(week.totalMinutes);
+    }
+
+    // ARRAY TYPE
+    if (Array.isArray(week)) {
+      return week.length;
+    }
+
+    // SESSIONS TYPE
+    if (week?.sessions !== undefined) {
+      return Number(week.sessions);
+    }
+
+    // PHOTO TYPE
+    if (week?.workoutPhotos?.length) {
+      return week.workoutPhotos.length;
+    }
+
+    // DAYS TYPE
+    if (week?.days) {
+      return Object.keys(week.days || {}).length;
+    }
+
+    // WEIGHT TYPE
+    if (week?.weight !== undefined) {
+      return Number(data?.goal || 0);
+    }
+
+    // FALLBACK
+    return Object.keys(week || {}).length || 0;
+  });
+
+  // minimum 4 bars so UI never collapses
+  const weekly = Array.from({
+    length: Math.max(values.length, 4),
+  }).map((_, i) => ({
+    label: `W${i + 1}`,
+    value: values[i] || 0,
+  }));
+
+  return {
+    type:
+      weekKeys.length && Object.keys(daysObj).length
+        ? 'mixed'
+        : weekKeys.length
+        ? 'weekly'
+        : 'daily',
+    daily,
+    weekly,
+  };
+};
+
 function ProgressTab({
-  weeklyData = [],
+  badges,
   availableHabits = [],
   selectedHabit,
   setSelectedHabit,
+  habitTargets = {},
+  habits,
+  currentMonthKey,
+  chartMode,
+  setChartMode,
 }) {
-  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
   const HABIT_META = {
-    fiber: {
-      emoji: '🥦',
-      label: 'Fiber',
-    },
-    sleep: {
-      emoji: '😴',
-      label: 'Sleep',
-    },
-    fitness: {
-      emoji: '💪',
-      label: 'Fitness',
-    },
-    beverage: {
-      emoji: '🥤',
-      label: 'Beverage',
-    },
-    dailyFruits: {
-      emoji: '🍎',
-      label: 'Fruits',
-    },
-    snacks: {
-      emoji: '🍪',
-      label: 'Snacks',
-    },
-    cardio: {
-      emoji: '🏃',
-      label: 'Cardio',
-    },
-    sugarIntake: {
-      emoji: '🍬',
-      label: 'Sugar',
-    },
-    weightChallenge: {
-      emoji: '⚖️',
-      label: 'Weight',
-    },
+    fiber: { emoji: '🥦', label: 'Fiber' },
+    sleep: { emoji: '😴', label: 'Sleep' },
+    fitness: { emoji: '💪', label: 'Fitness' },
+    beverage: { emoji: '🥤', label: 'Beverage' },
+    dailyFruits: { emoji: '🍎', label: 'Fruits' },
+    snacks: { emoji: '🍪', label: 'Snacks' },
+    cardio: { emoji: '🏃', label: 'Cardio' },
+    sugarIntake: { emoji: '🍬', label: 'Sugar' },
+    weightChallenge: { emoji: '⚖️', label: 'Weight' },
   };
 
-  const cleanData = weeklyData.map(v => Number(v) || 0);
-  const maxValue = Math.max(...cleanData, 1);
+  // ✅ SAFE BUILD (critical fix)
+  const chartPack =
+    typeof buildHabitChartData === 'function'
+      ? buildHabitChartData(selectedHabit, habits, currentMonthKey)
+      : { type: 'daily', daily: [], weekly: [] };
+
+  const isMixed = chartPack?.type === 'mixed';
+
+  // ✅ SAFE MODE
+  const effectiveMode =
+    chartPack?.type === 'weekly'
+      ? 'weekly'
+      : chartPack?.type === 'daily'
+      ? 'daily'
+      : chartMode === 'weekly'
+      ? 'weekly'
+      : 'daily';
+
+  // ✅ SAFE DATA (THIS IS WHAT FIXES BLANK CHART)
+  const chartData =
+    effectiveMode === 'weekly'
+      ? chartPack?.weekly || []
+      : chartPack?.daily || [];
+
+  // 🔥 fallback if empty (prevents blank UI)
+  const safeChartData =
+    Array.isArray(chartData) && chartData.length > 0
+      ? chartData
+      : Array.from({ length: 7 }).map((_, i) => ({
+          label: `D${i + 1}`,
+          value: 0,
+        }));
+
+  const values = safeChartData.map(v => Number(v?.value) || 0);
+  const maxValue = values.length ? Math.max(...values) : 1;
+
+  const rawTarget = habitTargets?.[selectedHabit];
+
+  const targetValue = (() => {
+    const num =
+      typeof rawTarget === 'number'
+        ? rawTarget
+        : parseFloat(String(rawTarget).match(/[\d.]+/)?.[0]);
+
+    return Number.isFinite(num) ? num : 8; // 👈 FINAL fallback = 8
+  })();
+
+  const MAX_BAR_HEIGHT = 120;
+
   return (
     <View style={styles.progressContainer}>
-      {/* ================================================= */}
-      {/* HEADER */}
-      {/* ================================================= */}
+      {/* ================= TOGGLE ================= */}
+      {isMixed && (
+        <View style={styles.modeToggle}>
+          <TouchableOpacity
+            onPress={() => setChartMode('daily')}
+            style={[styles.modeBtn, chartMode === 'daily' && styles.modeActive]}
+          >
+            <Text style={styles.modeText}>Daily</Text>
+          </TouchableOpacity>
 
-      <View style={styles.progressHeader}>
+          <TouchableOpacity
+            onPress={() => setChartMode('weekly')}
+            style={[
+              styles.modeBtn,
+              chartMode === 'weekly' && styles.modeActive,
+            ]}
+          >
+            <Text style={styles.modeText}>Weekly</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ================= HEADER ================= */}
+      <View style={styles.chartHeader}>
         <View>
-          <Text style={styles.progressTitle}>Weekly Progress</Text>
-
-          <Text style={styles.progressSubtitle}>
-            Track your habit consistency
+          <Text style={styles.chartTitle}>
+            {effectiveMode === 'weekly' ? 'Weekly Progress' : 'Daily Progress'}
           </Text>
+          <Text style={styles.chartSubtitle}>Track your habit consistency</Text>
         </View>
 
         <View style={styles.progressBadge}>
           <Text style={styles.progressBadgeText}>
-            {weeklyData.reduce((a, b) => a + b, 0)}
+            {values.reduce((a, b) => a + b, 0)}
           </Text>
         </View>
       </View>
 
-      {/* ================================================= */}
-      {/* HABIT SELECTOR */}
-      {/* ================================================= */}
-
+      {/* ================= HABIT SELECTOR ================= */}
       <FlatList
         horizontal
         data={availableHabits}
         keyExtractor={item => item}
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.habitSelectorList}
         renderItem={({ item }) => {
           const active = item === selectedHabit;
-
           const meta = HABIT_META[item] || {
             emoji: '✨',
             label: item,
@@ -197,14 +387,11 @@ function ProgressTab({
 
           return (
             <TouchableOpacity
-              activeOpacity={0.85}
               onPress={() => setSelectedHabit(item)}
               style={[styles.habitChip, active && styles.habitChipActive]}
             >
               <Text style={styles.habitEmoji}>{meta.emoji}</Text>
-
               <Text
-                numberOfLines={1}
                 style={[styles.habitLabel, active && styles.habitLabelActive]}
               >
                 {meta.label}
@@ -214,48 +401,85 @@ function ProgressTab({
         }}
       />
 
-      {/* ================================================= */}
-      {/* BAR CHART CARD */}
-      {/* ================================================= */}
-
+      {/* ================= CHART ================= */}
       <View style={styles.chartCard}>
-        <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>
-            {HABIT_META[selectedHabit]?.emoji}{' '}
-            {HABIT_META[selectedHabit]?.label}
-          </Text>
-
-          <Text style={styles.chartValue}>{Math.max(...weeklyData)}</Text>
-        </View>
+        <Text style={styles.chartTitle}>
+          {HABIT_META[selectedHabit]?.emoji}{' '}
+          {effectiveMode === 'weekly' ? 'Weekly Progress' : 'Daily Progress'}
+        </Text>
 
         <View style={styles.barChartModern}>
-          {DAYS.map((day, i) => {
-            const value = cleanData[i] || 0;
+          {safeChartData.map((item, i) => {
+            const value = Number(item?.value || 0);
+            const target = Number(targetValue || 1);
+            const height = Math.min(
+              Math.max((value / target) * MAX_BAR_HEIGHT, 4),
+              MAX_BAR_HEIGHT,
+            );
 
-            const BAR_HEIGHT = 120;
-
-            const normalizedHeight =
-              maxValue > 0 ? (value / maxValue) * BAR_HEIGHT : 0;
-
+            const isExact = value === target;
+            const isToday =
+              `${moment().format('MM/DD')}\n${moment().format('ddd')}` ===
+              item?.label;
             return (
               <View key={i} style={styles.barColumn}>
-                <Text style={styles.barTopValue}>{value}</Text>
+                {/* ================= TOP TARGET LABEL ================= */}
+                {value ? (
+                  <Text style={styles.targetText}>
+                    {value >= target ? value : target}
+                  </Text>
+                ) : (
+                  <View />
+                )}
 
-                <View style={styles.barTrackModern}>
+                {/* ================= BAR ================= */}
+                <View
+                  style={{
+                    ...styles.barTrackModern,
+                    borderWidth: isToday ? 2 : 0,
+                    borderColor: colors.card,
+                  }}
+                >
                   <View
                     style={[
                       styles.barFillModern,
                       {
-                        height: Math.max(normalizedHeight, 4), // minimum visible bar
+                        height,
+                        backgroundColor:
+                          value > target ? '#EF4444' : colors.secondary,
                       },
                     ]}
-                  />
+                  >
+                    {/* ================= VALUE ON TOP OF FILLED BAR ================= */}
+                    {!isExact && value <= target && (
+                      <Text style={{ ...styles.barValueText }}>
+                        {value || 0}
+                      </Text>
+                    )}
+                  </View>
                 </View>
 
-                <Text style={styles.barDay}>{day}</Text>
+                {/* ================= LABEL ================= */}
+                <Text style={{ ...styles.barDay }}>
+                  {item?.label || `D${i + 1}`}
+                </Text>
               </View>
             );
           })}
+        </View>
+      </View>
+
+      <View style={styles.badgesContainer}>
+        <Text style={styles.sectionTitle}>Progress Badges</Text>
+
+        <View style={styles.badgesWrap}>
+          {badges?.map((item, index) => (
+            <View key={index} style={styles.badgeCard}>
+              <Text style={styles.badgeEmoji}>{item.emoji}</Text>
+
+              <Text style={styles.badgeLabel}>{item.label}</Text>
+            </View>
+          ))}
         </View>
       </View>
     </View>
@@ -264,9 +488,10 @@ function ProgressTab({
 
 export default function ProfileDetails({ navigation }) {
   const [currentTabIndex, setCurrentTabIndex] = useState(0);
-
+  const [progressMode, setProgressMode] = useState('weekly');
   const [posts, setPosts] = useState([]);
   const [userData, setUserData] = useState({});
+  const [chartMode, setChartMode] = useState('auto');
   const [leaderboardData, setLeaderboardData] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedHabit, setSelectedHabit] = useState('fiber');
@@ -491,9 +716,24 @@ export default function ProfileDetails({ navigation }) {
   const habits = userData?.habits || {};
   const stats = leaderboardData?.challenge || {};
 
-  const currentMonthKey = moment().format('MMM_YYYY');
+  const excludeKeys = [
+    'booking',
+    'newVeggie',
+    'personalized goal 1',
+    'personalized goal 2',
+    'personalized goal 3',
+    'bodyFatGoal',
+    'fruits',
+    'Snacks',
+    'Beverage',
+  ];
 
-  const ALL_HABITS = Object.entries(habits || {});
+  const ALL_HABITS = Object.entries(habits || {}).filter(
+    ([key]) =>
+      !excludeKeys.some(excluded =>
+        key?.toLowerCase().includes(excluded.toLowerCase()),
+      ),
+  );
 
   const AVAILABLE_HABITS = ALL_HABITS.filter(
     ([_, value]) => value?.[currentMonthKey],
@@ -1081,39 +1321,14 @@ export default function ProfileDetails({ navigation }) {
   // STREAK
   // =====================================================
 
-  let currentStreak = 0;
-  let longestStreak = 0;
-
-  if (uniqueDates.length > 0) {
-    let streak = 1;
-    longestStreak = 1;
-
-    for (let i = 1; i < uniqueDates.length; i++) {
-      const prev = moment(uniqueDates[i - 1]);
-      const curr = moment(uniqueDates[i]);
-
-      const diff = curr.diff(prev, 'days');
-
-      if (diff === 1) {
-        streak += 1;
-      } else {
-        streak = 1;
-      }
-
-      if (streak > longestStreak) {
-        longestStreak = streak;
-      }
-    }
-
-    currentStreak = streak;
-  }
+  let currentStreak = leaderboardData?.challenge?.streak;
+  let longestStreak = leaderboardData?.challenge?.longestStreak;
 
   // =====================================================
   // COMPLETION RATE
   // =====================================================
 
-  const completionRate =
-    totalTracked > 0 ? Math.round((totalCompleted / totalTracked) * 100) : 0;
+  const completionRate = leaderboardData?.status?.quizCompleted;
 
   // =====================================================
   // PROFILE STATS
@@ -1131,8 +1346,8 @@ export default function ProfileDetails({ navigation }) {
     },
 
     {
-      label: 'Completion',
-      value: `${completionRate}% ✅`,
+      label: 'Quiz Streak',
+      value: completionRate,
     },
   ];
 
@@ -1372,269 +1587,359 @@ export default function ProfileDetails({ navigation }) {
     return m.isValid() ? m.format('YYYY-MM-DD') : null;
   };
 
-  const getLast7Days = () => {
+  const getCurrentWeekDays = () => {
+    const startOfWeek = moment().startOf('isoWeek');
+
     return Array.from({ length: 7 }).map((_, i) => {
-      const date = moment().subtract(6 - i, 'days');
+      const date = moment(startOfWeek).add(i, 'days');
 
       return {
         key: date.format('YYYY-MM-DD'),
-        label: date.format('ddd'), // Mon, Tue, etc
+        label: date.format('ddd'),
+        isToday: date.isSame(moment(), 'day'),
       };
     });
   };
 
-  const getHabitWeeklyData = habitKey => {
-    const days = getLast7Days();
-
-    const result = {};
-    days.forEach(d => {
-      result[d.key] = 0;
-    });
-
-    const monthData = habits?.[habitKey]?.[currentMonthKey];
-
-    if (!monthData) {
-      return days.map(() => 0);
-    }
-
-    const add = (date, value = 1) => {
-      if (!date || result[date] === undefined || isNaN(value)) return;
-      result[date] += value;
-    };
-
-    // ---------------- FIBER ----------------
-    if (habitKey === 'fiber') {
-      Object.entries(monthData?.days || {}).forEach(([date, item]) => {
-        const d = normalizeDate(date);
-        if (!d) return;
-        add(d, Number(item?.progress || 0));
-      });
-    }
-
-    // ---------------- SLEEP ----------------
-    if (habitKey === 'sleep') {
-      Object.entries(monthData?.days || {}).forEach(([date, item]) => {
-        const d = normalizeDate(date);
-        if (!d) return;
-        add(d, Number(item?.sleep || 0));
-      });
-    }
-
-    // ---------------- FITNESS ----------------
-    if (habitKey === 'fitness') {
-      Object.values(monthData?.weeks || {}).forEach(week => {
-        (week?.workoutPhotos || []).forEach(photo => {
-          const d = normalizeDate(photo?.createdAt);
-          if (!d) return;
-          add(d, 1);
-        });
-      });
-    }
-
-    // ---------------- BEVERAGE ----------------
-    if (habitKey === 'beverage') {
-      Object.entries(monthData?.days || {}).forEach(([date, item]) => {
-        const d = normalizeDate(date);
-        if (!d) return;
-        if (item?.photo || item?.name) add(d, 1);
-      });
-    }
-
-    // IMPORTANT: return ARRAY ONLY (NOT object)
-    return days.map(d => result[d.key] || 0);
+  const HABIT_STRUCTURE = {
+    fiber: 'days',
+    sleep: 'days',
+    snacks: 'days_array',
+    fitness: 'weeks',
+    cardio: 'weeks_days',
+    fruits: 'weeks_days',
   };
 
-  return (
-    <GestureHandlerRootView style={styles.root}>
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        barStyle="light-content"
-      />
+  const normalizeHabitData = (habitKey, monthData) => {
+    if (!monthData) return [];
 
-      <View style={styles.heroContent}>
+    // 1. DAYS OBJECT (fiber, sleep)
+    if (HABIT_STRUCTURE[habitKey] === 'days') {
+      return Object.entries(monthData?.days || {}).map(([date, item]) => ({
+        date,
+        value: Number(item?.progress || item?.sleep || 0),
+      }));
+    }
+
+    // 2. DAYS ARRAY (snacks)
+    if (HABIT_STRUCTURE[habitKey] === 'days_array') {
+      return (monthData?.days || []).map(item => ({
+        // date: item?.date,
+        // value: item?.snacks?.length || 0,
+      }));
+    }
+
+    // 3. WEEKS ONLY TOTAL (fitness)
+    if (HABIT_STRUCTURE[habitKey] === 'weeks') {
+      return Object.values(monthData?.weeks || {}).map((week, i) => ({
+        date: `W${i + 1}`,
+        value: week?.workoutPhotos?.length || 0,
+      }));
+    }
+
+    // 4. WEEKS + DAYS (cardio, fruits)
+    if (HABIT_STRUCTURE[habitKey] === 'weeks_days') {
+      const result = [];
+
+      Object.values(monthData?.weeks || {}).forEach((week, wi) => {
+        const days = week?.days || {};
+
+        let total = 0;
+
+        Object.entries(days).forEach(([date, item]) => {
+          total += item?.count || 1;
+        });
+
+        result.push({
+          date: `W${wi + 1}`,
+          value: total,
+        });
+      });
+
+      return result;
+    }
+
+    return [];
+  };
+
+  const getHabitWeeklyData = habitKey => {
+    const monthData = habits?.[habitKey]?.[currentMonthKey];
+
+    const raw = normalizeHabitData(habitKey, monthData);
+
+    const weekDays = getCurrentWeekDays();
+
+    // create map
+    const map = {};
+
+    weekDays.forEach(d => {
+      map[d.key] = 0;
+    });
+
+    raw.forEach(item => {
+      const key = normalizeDate(item.date);
+
+      if (map[key] !== undefined) {
+        map[key] += Number(item.value || 0);
+      }
+    });
+
+    return weekDays.map(d => ({
+      value: map[d.key] || 0,
+      label: d.label,
+      isToday: d.isToday,
+      date: d.key,
+    }));
+  };
+
+  // =====================================================
+  // HABIT TARGETS
+  // =====================================================
+
+  const habitTargets = {};
+
+  ALL_HABITS.forEach(([habitKey, habitValue]) => {
+    const monthData = habitValue?.[currentMonthKey];
+
+    if (!monthData) return;
+    console.log('monthData?.target :>> ', monthData);
+    // direct target
+
+    // nested config target
+    if (monthData?.config?.target) {
+      habitTargets[habitKey] = monthData.config.target;
+    }
+
+    // sleep
+    else if (habitKey === 'sleep') {
+      habitTargets[habitKey] = monthData.goal || monthData.target || '8';
+    }
+
+    // fiber
+    else if (habitKey === 'weightTraining') {
+      habitTargets[habitKey] = monthData.goal || monthData.target || '25';
+    } else if (habitKey === 'fitness') {
+      habitTargets[habitKey] = monthData.goal || monthData.target || '25';
+    }
+
+    // fiber
+    else if (habitKey === 'fiber') {
+      habitTargets[habitKey] = monthData.goal || monthData.target || '25';
+    }
+
+    // cardio
+    else if (habitKey === 'cardio') {
+      habitTargets[habitKey] =
+        monthData?.weeklyGoal || monthData.goal || monthData.target || '5';
+    }
+
+    // beverage
+    else if (habitKey === 'beverage') {
+      habitTargets[habitKey] =
+        monthData?.dailyGoal || monthData.goal || monthData.target || '8';
+    } else if (monthData?.target) {
+      habitTargets[habitKey] = monthData.goal || monthData.target;
+    }
+  });
+
+  return (
+    <Wrapper
+      safeAreaPops={{ edges: ['top'] }}
+      scrollEnable={false}
+      disableLayout
+      containerStyle={{ flex: 1 }}
+    >
+      <GestureHandlerRootView style={styles.root}>
         <Header
           header={'Profile Details'}
           headerContainer={{
-            marginTop: StatusBar.currentHeight,
+            paddingHorizontal: 23,
           }}
           textStyle={[styles.navTitle, navTitleStyle]}
           showRightBtn
         />
+        <View style={styles.heroContent}>
+          {/* ================================================= */}
+          {/* AVATAR */}
+          {/* ================================================= */}
+          <Animated.View style={[styles.avatarWrap, avatarStyle]}>
+            <Image
+              source={{
+                uri:
+                  profile?.avatar ||
+                  profile?.image ||
+                  'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
+              }}
+              style={{
+                width: '100%',
+                height: '100%',
+                borderRadius: 999,
+              }}
+              resizeMode="cover"
+            />
 
-        {/* ================================================= */}
-        {/* AVATAR */}
-        {/* ================================================= */}
-
-        <Animated.View style={[styles.avatarWrap, avatarStyle]}>
-          <Image
-            source={{
-              uri:
-                profile?.avatar ||
-                profile?.image ||
-                'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-            }}
-            style={{
-              width: '100%',
-              height: '100%',
-              borderRadius: 999,
-            }}
-            resizeMode="cover"
-          />
-
-          <TouchableOpacity
-            style={styles.editAvatarBtn}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('EditProfile')}
-          >
-            <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"
-                stroke="#8FAF78"
-                strokeWidth={2.2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <Path
-                d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
-                stroke="#8FAF78"
-                strokeWidth={2.2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
-          </TouchableOpacity>
-        </Animated.View>
-
-        {/* ================================================= */}
-        {/* NAME */}
-        {/* ================================================= */}
-
-        <Animated.Text style={[styles.heroName, nameStyle]}>
-          {profile?.name || profile?.fullName || profile?.displayName || 'User'}
-        </Animated.Text>
-
-        {/* ================================================= */}
-        {/* PROFILE INFO */}
-        {/* ================================================= */}
-
-        <Animated.View style={[styles.heroInfo, heroInfoStyle]}>
-          <Text style={styles.heroHandle}>
-            @{profile?.username || profile?.userName || 'healthyu'}
-            {'  '}·{'  '}
-            Member since {memberSince}
-          </Text>
+            <TouchableOpacity
+              style={styles.editAvatarBtn}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('EditProfile')}
+            >
+              <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"
+                  stroke="#8FAF78"
+                  strokeWidth={2.2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <Path
+                  d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
+                  stroke="#8FAF78"
+                  strokeWidth={2.2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </TouchableOpacity>
+          </Animated.View>
 
           {/* ================================================= */}
-          {/* PROFILE STATS */}
+          {/* NAME */}
           {/* ================================================= */}
 
-          <View style={styles.statRow}>
-            {PROFILE_STATS.map((item, index) => (
-              <React.Fragment key={index}>
-                <StatPill label={item?.label} value={item?.value} />
+          <Animated.Text style={[styles.heroName, nameStyle]}>
+            {profile?.name ||
+              profile?.fullName ||
+              profile?.displayName ||
+              'User'}
+          </Animated.Text>
 
-                {index < PROFILE_STATS.length - 1 && (
-                  <View style={styles.statDivider} />
-                )}
-              </React.Fragment>
-            ))}
-          </View>
-        </Animated.View>
-      </View>
+          {/* ================================================= */}
+          {/* PROFILE INFO */}
+          {/* ================================================= */}
 
-      {/* ================================================= */}
-      {/* BOTTOM SHEET */}
-      {/* ================================================= */}
+          <Animated.View style={[styles.heroInfo, heroInfoStyle]}>
+            <Text style={styles.heroHandle}>
+              {profile?.username || profile?.userName || 'healthyu'}
+              {'  '}·{'  '}
+              Member since {memberSince}
+            </Text>
 
-      <Animated.View style={[styles.sheet, sheetStyle]}>
+            {/* ================================================= */}
+            {/* PROFILE STATS */}
+            {/* ================================================= */}
+
+            <View style={styles.statRow}>
+              {PROFILE_STATS.map((item, index) => (
+                <React.Fragment key={index}>
+                  <StatPill label={item?.label} value={item?.value} />
+
+                  {index < PROFILE_STATS.length - 1 && (
+                    <View style={styles.statDivider} />
+                  )}
+                </React.Fragment>
+              ))}
+            </View>
+          </Animated.View>
+        </View>
+
         {/* ================================================= */}
-        {/* HANDLE */}
+        {/* BOTTOM SHEET */}
         {/* ================================================= */}
 
-        <GestureDetector gesture={panGesture}>
-          <View style={styles.handleWrap}>
-            <View style={styles.handle} />
-          </View>
-        </GestureDetector>
+        <Animated.View style={[styles.sheet, sheetStyle]}>
+          {/* ================================================= */}
+          {/* HANDLE */}
+          {/* ================================================= */}
 
-        {/* ================================================= */}
-        {/* TABS */}
-        {/* ================================================= */}
+          <GestureDetector gesture={panGesture}>
+            <View style={styles.handleWrap}>
+              <View style={styles.handle} />
+            </View>
+          </GestureDetector>
 
-        <TabBar currentIndex={currentTabIndex} onPress={setCurrentTabIndex} />
+          {/* ================================================= */}
+          {/* TABS */}
+          {/* ================================================= */}
 
-        {/* ================================================= */}
-        {/* FEEDS */}
-        {/* ================================================= */}
+          <TabBar currentIndex={currentTabIndex} onPress={setCurrentTabIndex} />
 
-        {currentTabIndex === 0 && (
-          <FlatList
-            data={posts || []}
-            renderItem={renderFeed}
-            keyExtractor={(item, index) =>
-              item?.id?.toString() || index.toString()
-            }
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.feedList}
-            ListEmptyComponent={() => (
-              <View
-                style={{
-                  alignItems: 'center',
-                  marginTop: 40,
-                }}
-              >
-                <Text
+          {/* ================================================= */}
+          {/* FEEDS */}
+          {/* ================================================= */}
+
+          {currentTabIndex === 0 && (
+            <FlatList
+              data={posts || []}
+              renderItem={renderFeed}
+              keyExtractor={(item, index) =>
+                item?.id?.toString() || index.toString()
+              }
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.feedList}
+              ListEmptyComponent={() => (
+                <View
                   style={{
-                    color: 'rgba(255,255,255,0.4)',
-                    fontFamily: fontFamily.montserratMedium,
+                    alignItems: 'center',
+                    marginTop: 40,
                   }}
                 >
-                  No posts yet
-                </Text>
-              </View>
-            )}
-          />
-        )}
+                  <Text
+                    style={{
+                      color: 'rgba(255,255,255,0.4)',
+                      fontFamily: fontFamily.montserratMedium,
+                    }}
+                  >
+                    No posts yet
+                  </Text>
+                </View>
+              )}
+            />
+          )}
 
-        {/* ================================================= */}
-        {/* STATS */}
-        {/* ================================================= */}
+          {/* ================================================= */}
+          {/* STATS */}
+          {/* ================================================= */}
 
-        {currentTabIndex === 1 && (
-          <FlatList
-            data={[{ key: 'stats' }]}
-            renderItem={() => (
-              <StatsTab statsData={ACTIVITY_STATS_DYNAMIC || []} />
-            )}
-            keyExtractor={(item, index) => item?.key || index.toString()}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.feedList}
-          />
-        )}
+          {currentTabIndex === 1 && (
+            <FlatList
+              data={[{ key: 'stats' }]}
+              renderItem={() => (
+                <StatsTab statsData={ACTIVITY_STATS_DYNAMIC || []} />
+              )}
+              keyExtractor={(item, index) => item?.key || index.toString()}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.feedList}
+            />
+          )}
 
-        {/* ================================================= */}
-        {/* PROGRESS */}
-        {/* ================================================= */}
+          {/* ================================================= */}
+          {/* PROGRESS */}
+          {/* ================================================= */}
 
-        {currentTabIndex === 2 && (
-          <FlatList
-            data={[{ key: 'progress' }]}
-            renderItem={() => (
-              <ProgressTab
-                selectedHabit={selectedHabit}
-                setSelectedHabit={setSelectedHabit}
-                availableHabits={AVAILABLE_HABITS}
-                weeklyData={getHabitWeeklyData(selectedHabit)}
-              />
-            )}
-            keyExtractor={(item, index) => item?.key || index.toString()}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.feedList}
-          />
-        )}
-      </Animated.View>
-    </GestureHandlerRootView>
+          {currentTabIndex === 2 && (
+            <FlatList
+              data={[{ key: 'progress' }]}
+              renderItem={() => (
+                <ProgressTab
+                  mode={progressMode}
+                  setMode={setProgressMode}
+                  selectedHabit={selectedHabit}
+                  setSelectedHabit={setSelectedHabit}
+                  availableHabits={AVAILABLE_HABITS}
+                  weeklyData={getHabitWeeklyData(selectedHabit)}
+                  habitTargets={habitTargets}
+                  habits={habits}
+                  badges={PROGRESS_BADGES}
+                />
+              )}
+              keyExtractor={(item, index) => item?.key || index.toString()}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.feedList}
+            />
+          )}
+        </Animated.View>
+      </GestureHandlerRootView>
+    </Wrapper>
   );
 }
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -1642,7 +1947,7 @@ export default function ProfileDetails({ navigation }) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.dark,
+    // backgroundColor: colors.dark,
   },
 
   // Hero
@@ -1654,12 +1959,49 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: colors.dark,
   },
+  badgesContainer: {
+    marginBottom: 24,
+  },
+
+  sectionTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontFamily: fontFamily.montserratBold,
+    marginBottom: 14,
+  },
+
+  badgesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+
+  badgeCard: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  badgeEmoji: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+
+  badgeLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
   topNav: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 52,
     paddingBottom: 8,
   },
   editAvatarBtn: {
@@ -1699,7 +2041,6 @@ const styles = StyleSheet.create({
 
   heroContent: {
     alignItems: 'center',
-    paddingTop: 8,
     paddingBottom: 12,
     paddingHorizontal: 20,
   },
@@ -1812,6 +2153,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 82,
+    marginRight: 10,
   },
 
   habitChipActive: {
@@ -1888,18 +2230,59 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     overflow: 'hidden',
   },
-
-  barFillModern: {
-    width: '100%',
-    backgroundColor: colors.secondary,
-    borderRadius: 20,
+  modeToggle: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 12,
   },
 
+  modeBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+
+  modeActive: {
+    backgroundColor: '#8FAF78',
+  },
+
+  modeText: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 12,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  modeTextActive: {
+    color: '#000',
+  },
+  barFillModern: {
+    width: '100%',
+
+    borderRadius: 20,
+  },
+  targetText: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    marginBottom: 6,
+    fontFamily: fontFamily?.montserratMedium,
+  },
+
+  barValueText: {
+    fontSize: 10,
+    color: '#fff',
+    textAlign: 'center',
+    fontFamily: fontFamily?.montserratSemiBold,
+  },
   barDay: {
     color: 'rgba(255,255,255,0.35)',
     fontSize: 10,
     marginTop: 10,
     fontFamily: fontFamily.montserratMedium,
+    textAlign: 'center',
   },
   // CTA buttons
   ctaRow: {
@@ -1940,7 +2323,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#1A2219',
+    backgroundColor: 'rgba(14, 39, 5, 0.4)',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderTopWidth: 1,
@@ -2082,5 +2465,91 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     fontSize: 12,
     fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  barChartModern: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    height: 180,
+    marginTop: 10,
+  },
+
+  barColumn: {
+    alignItems: 'center',
+    flex: 1,
+  },
+
+  barTrackModern: {
+    width: 26,
+    height: 120,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 20,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+
+  barFillModern: {
+    width: '100%',
+    borderRadius: 20,
+  },
+
+  barDay: {
+    fontSize: 10,
+    marginTop: 8,
+    color: 'rgba(255,255,255,0.35)',
+    fontFamily: fontFamily.montserratMedium,
+  },
+
+  emptyBarText: {
+    alignSelf: 'center',
+    marginTop: 8,
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.25)',
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  innerBarText: {
+    color: colors.dark,
+    fontSize: 9,
+    textAlign: 'center',
+    fontFamily: fontFamily.montserratBold,
+    marginTop: 5,
+  },
+
+  chartCard: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 20,
+    padding: 16,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+
+  chartTitle: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  chartSubtitle: {
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 11,
+    marginTop: 4,
+    fontFamily: fontFamily.montserratMedium,
+  },
+
+  progressBadge: {
+    backgroundColor: 'rgba(143,175,120,0.14)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.2)',
+  },
+
+  progressBadgeText: {
+    color: colors.secondary,
+    fontFamily: fontFamily.montserratBold,
   },
 });

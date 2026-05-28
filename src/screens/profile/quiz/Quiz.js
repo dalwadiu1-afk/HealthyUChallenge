@@ -8,8 +8,10 @@ import {
   Easing,
   Dimensions,
   Alert,
+  BackHandler,
+  AppState,
 } from 'react-native';
-import { Wrapper } from '../../../components';
+import { Header, Wrapper } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
@@ -35,7 +37,8 @@ export default function Quiz({ navigation, route }) {
   const progressAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
-
+  const appState = useRef(AppState.currentState);
+  const hasSubmittedRef = useRef(false);
   const fetchQuiz = async () => {
     try {
       const userId = auth().currentUser.uid;
@@ -170,7 +173,7 @@ export default function Quiz({ navigation, route }) {
     if (!loaded || secondsLeft === null) return;
 
     if (secondsLeft <= 0) {
-      finish();
+      finish(true);
       return;
     }
 
@@ -192,6 +195,70 @@ export default function Quiz({ navigation, route }) {
       useNativeDriver: false,
     }).start();
   }, [index, questions.length]);
+
+  // ================================
+  // AUTO SUBMIT ON BACK / APP CLOSE
+  // ================================
+  useEffect(() => {
+    const submitQuizSafely = async () => {
+      try {
+        if (hasSubmittedRef.current) return;
+
+        await finish(true);
+      } catch (e) {
+        console.log('submitQuizSafely error:', e);
+      }
+    };
+
+    // ANDROID HARDWARE BACK
+    const onBackPress = () => {
+      Alert.alert(
+        'Submit Quiz?',
+        'If you leave this screen, your quiz will be submitted automatically.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Submit & Exit',
+            onPress: async () => {
+              await submitQuizSafely();
+            },
+          },
+        ],
+      );
+
+      return true;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      onBackPress,
+    );
+
+    // APP CLOSED / MINIMIZED / SWITCHED
+    const appStateSubscription = AppState.addEventListener(
+      'change',
+      async nextState => {
+        const currentState = appState.current;
+
+        if (
+          currentState === 'active' &&
+          (nextState === 'background' || nextState === 'inactive')
+        ) {
+          await submitQuizSafely();
+        }
+
+        appState.current = nextState;
+      },
+    );
+
+    return () => {
+      backHandler.remove();
+      appStateSubscription.remove();
+    };
+  }, []);
 
   const animateSwap = direction => {
     fadeAnim.setValue(0);
@@ -226,7 +293,7 @@ export default function Quiz({ navigation, route }) {
   const saveAttendedQuestions = async (questions, answers) => {
     try {
       const userId = auth().currentUser.uid;
-      const todayKey = new Date().toISOString().split('T')[0];
+      const todayKey = moment().format('YYYY-MM-DD');
 
       const ref = database().ref(
         `/users/${userId}/quizzes/days/${todayKey}/attendedQues`,
@@ -340,14 +407,23 @@ export default function Quiz({ navigation, route }) {
     await ref.update(updates);
   };
 
-  const finish = async () => {
-    if (answers[index] === null || answers[index] === undefined) {
+  const finish = async (forceSubmit = false) => {
+    if (hasSubmittedRef.current) return;
+
+    // ONLY MANUAL SUBMIT VALIDATION
+    if (
+      !forceSubmit &&
+      (answers[index] === null || answers[index] === undefined)
+    ) {
       Alert.alert(
         'Answer Required',
         'Please select an option before submitting.',
       );
+
       return;
     }
+
+    hasSubmittedRef.current = true;
 
     const elapsed = Math.max(1, Math.floor((Date.now() - startedAt) / 1000));
 
@@ -366,10 +442,8 @@ export default function Quiz({ navigation, route }) {
     };
 
     try {
-      // 1. Save weak questions (your existing logic)
       await saveWeakQuestions(questions, answers);
 
-      // 2. NEW → Save attended questions
       await saveAttendedQuestions(questions, answers);
     } catch (e) {
       console.log('finish save error:', e);
@@ -398,23 +472,25 @@ export default function Quiz({ navigation, route }) {
 
   return (
     <Wrapper scrollEnable={false} orbsRight>
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.backArrow}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.topTitle}>Quiz</Text>
-        <TouchableOpacity
-          onPress={finish}
-          style={styles.submitChip}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.submitChipText}>Submit</Text>
-        </TouchableOpacity>
-      </View>
+      <Header
+        header="Quiz"
+        onLeftPress={() => {
+          Alert.alert(
+            'Submit Quiz?',
+            'If you leave this screen, your quiz will be submitted automatically.',
+            [
+              {
+                text: 'Cancel',
+                style: 'cancel',
+              },
+              {
+                text: 'Submit & Exit',
+                onPress: () => finish(true),
+              },
+            ],
+          );
+        }}
+      />
 
       <Text style={styles.quizTitle}>Healthy Habits Challenge</Text>
       <View style={styles.metaRow}>

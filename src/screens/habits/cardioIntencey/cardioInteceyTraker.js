@@ -25,7 +25,6 @@ const getDateKey = () => moment().format('YYYY-MM-DD');
 
 const getMonthKey = () => moment().format('MMMM_YYYY'); // May_2026
 
-const { width: SW } = Dimensions.get('window');
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   return (
     <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none">
@@ -113,7 +112,6 @@ export default function CardioTrackerUI({ navigation }) {
       const data = snap.val() || {};
 
       // goal
-      setGoal(data?.goal || null);
 
       // startDate
       if (data?.goal?.startDate) {
@@ -125,6 +123,8 @@ export default function CardioTrackerUI({ navigation }) {
       // cardio weeks
       const monthKey = moment().format('MMMM_YYYY');
       const weeks = data?.habits?.cardio?.[monthKey]?.weeks || {};
+      const goals = data?.habits?.cardio?.[monthKey] || {};
+      setGoal({ goal: goals, title: goals?.title } || null);
 
       setWeeksData(weeks);
     });
@@ -136,6 +136,26 @@ export default function CardioTrackerUI({ navigation }) {
     setStartTime(moment()); // ✅ FIXED
     setSessionStarted(true);
     await openCamera('start');
+  };
+
+  const appendDaySession = async (weekRef, dateKey, entry) => {
+    const snap = await weekRef.once('value');
+    const prev = snap.val() || {};
+
+    const prevDay = prev?.days?.[dateKey] || {};
+    const prevSessions = prevDay.sessions || [];
+
+    const updatedDay = {
+      ...prevDay,
+      sessions: [...prevSessions, entry],
+    };
+
+    await weekRef.update({
+      days: {
+        ...prev.days,
+        [dateKey]: updatedDay,
+      },
+    });
   };
 
   const saveManual = async () => {
@@ -168,13 +188,12 @@ export default function CardioTrackerUI({ navigation }) {
       await weekRef.update({
         title: goal?.title || 'Cardio',
         target: goal?.target || '150 min/week',
-
         totalMinutes: (prev.totalMinutes || 0) + minutes,
         sessions: (prev.sessions || 0) + 1,
         avgIntensity: entry.intensity,
-
-        [`days/${dateKey}`]: entry, // ✅ important fix
       });
+
+      await appendDaySession(weekRef, dateKey, entry);
 
       setManualSaved(true);
       setTimeout(() => setManualSaved(false), 2000);
@@ -192,7 +211,7 @@ export default function CardioTrackerUI({ navigation }) {
             {weekKey.toUpperCase()} • {week.title}
           </Text>
 
-          <Text style={styles.weekSub}>Target: {week.target}</Text>
+          {/* <Text style={styles.weekSub}>Target: {week.target}</Text> */}
 
           <Text style={styles.weekSub}>
             Total: {week.totalMinutes || 0} min • Sessions: {week.sessions || 0}
@@ -263,9 +282,9 @@ export default function CardioTrackerUI({ navigation }) {
         totalMinutes: (prev.totalMinutes || 0) + duration,
         sessions: (prev.sessions || 0) + 1,
         avgIntensity: intensity,
-        [`days/${dateKey}`]: entry,
       });
 
+      await appendDaySession(weekRef, dateKey, entry);
       setEndPhoto(uri); // optional UI update
     } catch (e) {
       console.log('❌ handleStop error:', e);

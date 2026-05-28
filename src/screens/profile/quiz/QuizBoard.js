@@ -16,13 +16,15 @@ import {
 } from 'react-native';
 import { Wrapper, Header } from '../../../components';
 import { BONUS_DAY, colors, fontFamily } from '../../../constant';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
 import firestore from '@react-native-firebase/firestore';
 import moment from 'moment';
 import BonusCountdown from './../../../components/profile/BonusCountdown';
 import { getDynamicWeekId } from '../../../utils/helper';
+import { setUserData } from '../../../redux/slices/userSlice';
+import { useIsFocused, useFocusEffect } from '@react-navigation/native';
 
 const { height } = Dimensions.get('window');
 
@@ -35,7 +37,10 @@ const getQuizMode = ({ weakQuestions, todayQuiz }) => {
 
 export default function QuizBoard({ navigation, route }) {
   const userData = useSelector(state => state.user);
-  const userId = userData?.uid || auth()?.currentUser?.uid;
+  const dispatch = useDispatch();
+  const isFocused = useIsFocused();
+  const userId = auth()?.currentUser?.uid;
+  const userRef = useRef(null);
   const [quizDays, setQuizDays] = useState({});
   const [weakQuestions, setWeakQuestions] = useState({});
   const [leaderboardData, setLeaderboardData] = useState(null);
@@ -48,6 +53,23 @@ export default function QuizBoard({ navigation, route }) {
   const bonusQuiz = todayQuiz?.bonusQuizzes || null;
   const monthKey = moment().format('MM_YYYY');
   const dynamicWeekId = getDynamicWeekId();
+
+  const refreshQuizState = async () => {
+    try {
+      const snap = await database()
+        .ref(`/users/${userId}/quizzes/days/${todayKey}`)
+        .once('value');
+
+      const latestTodayQuiz = snap.val() || {};
+
+      setQuizDays(prev => ({
+        ...prev,
+        [todayKey]: latestTodayQuiz,
+      }));
+    } catch (e) {
+      console.log('REFRESH ERROR:', e);
+    }
+  };
 
   // =========================
   // NORMAL QUIZ
@@ -172,11 +194,14 @@ export default function QuizBoard({ navigation, route }) {
     }
   };
 
-  useEffect(() => {
-    if (userId) {
-      fetchQuizBoardData();
-    }
-  }, [userId]);
+  useFocusEffect(
+    useCallback(() => {
+      if (userId) {
+        fetchQuizBoardData();
+        refreshQuizState();
+      }
+    }, [userId]),
+  );
 
   const fade = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -186,6 +211,67 @@ export default function QuizBoard({ navigation, route }) {
       useNativeDriver: true,
     }).start();
   }, []);
+
+  useEffect(() => {
+    if (userRef.current) {
+      userRef.current.off();
+    }
+
+    const ref = database().ref(`users/${userId}`);
+    userRef.current = ref;
+
+    const listener = ref.on('value', async snapshot => {
+      const userData = snapshot.val();
+
+      if (!userData) {
+        dispatch(clearUser());
+        return;
+      }
+
+      try {
+        const stats = {
+          totalQuizzes,
+          totalCorrectAnswers,
+          totalQuestionsAnswered,
+          overallAccuracy,
+          totalQuizTime,
+          avgQuizTime,
+          weakQuestionsCount,
+          lifeTimeWrongAns,
+          currentStreak,
+          longestStreak,
+          totalPoints,
+          firstTimeClearanceRatio,
+        };
+        // =========================
+        // REDUX SYNC
+        // =========================
+        dispatch(
+          setUserData({
+            uid: userId,
+            profile: userData?.profile || {},
+            habits: userData?.habits || {},
+            goal: userData?.goal || {},
+            posts: userData?.posts || {},
+            snacks: userData?.snacks || {},
+            activities: userData?.activities || {},
+            challenges: userData?.challenges || {},
+
+            stats: {
+              ...(userData?.stats || {}),
+              ...stats,
+            },
+          }),
+        );
+      } catch (err) {
+        console.log('APP SYNC ERROR:', err);
+      }
+    });
+
+    return () => {
+      ref.off('value', listener);
+    };
+  }, [dispatch, isFocused]);
 
   const fmt = secs => {
     const m = Math.floor(secs / 60);
@@ -317,7 +403,7 @@ export default function QuizBoard({ navigation, route }) {
 
   return (
     <Wrapper orbsRight>
-      <Header header="Quiz Board" />
+      <Header header="Quiz Hub" />
       {loading ? (
         <View
           style={{

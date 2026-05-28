@@ -36,6 +36,7 @@ export function Wrapper({
   onlyTop = false,
   scrollProps = {},
   safeAreaPops,
+  disableLayout,
 }) {
   function FloatingOrb({ size, color, style, delay = 0 }) {
     const translateY = useSharedValue(0);
@@ -195,7 +196,15 @@ export function Wrapper({
                 barStyle={barStyle}
               />
               <View
-                style={{ paddingHorizontal: 23, flex: 1, ...containerStyle }}
+                style={
+                  disableLayout
+                    ? containerStyle
+                    : {
+                        paddingHorizontal: 23,
+                        flex: 1,
+                        ...containerStyle,
+                      }
+                }
               >
                 {children}
               </View>
@@ -213,11 +222,15 @@ export function Wrapper({
               barStyle={barStyle}
             />
             <View
-              style={{
-                paddingHorizontal: 23,
-                flex: 1,
-                ...containerStyle,
-              }}
+              style={
+                disableLayout
+                  ? containerStyle
+                  : {
+                      paddingHorizontal: 23,
+                      flex: 1,
+                      ...containerStyle,
+                    }
+              }
             >
               {children}
             </View>

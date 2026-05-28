@@ -5,9 +5,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
-  StatusBar,
   Animated,
   Alert,
+  Dimensions,
 } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
@@ -18,16 +18,16 @@ import { launchCamera } from 'react-native-image-picker';
 import moment from 'moment';
 import { requestCameraPermission } from '../../../utils/helper';
 
-const TOTAL = 4;
 const USER_ID = auth().currentUser?.uid;
 
 const MONTH_KEY = moment().format('MMMM_YYYY');
 const CURRENT_WEEK = 'week1';
 
 const WEEK_PATH = `users/${USER_ID}/habits/fitness/${MONTH_KEY}/weeks/${CURRENT_WEEK}`;
+const PATH = `users/${USER_ID}/habits/fitness/${MONTH_KEY}`;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
+const { height } = Dimensions.get('window');
 /* ICONS */
 function CameraIcon() {
   return (
@@ -62,6 +62,8 @@ function CheckIcon() {
 }
 
 export default function FitnessClassUI() {
+  const [TOTAL, setTOTAL] = useState(4);
+
   const [weekData, setWeekData] = useState({});
   const [photos, setPhotos] = useState(Array(TOTAL).fill(null));
 
@@ -80,37 +82,58 @@ export default function FitnessClassUI() {
   /* LIVE LISTENER */
   /* LIVE LISTENER */
   useEffect(() => {
-    const ref = database().ref(WEEK_PATH);
+    const rootRef = database().ref(PATH);
+    const weekRef = database().ref(WEEK_PATH);
 
-    const listener = ref.on('value', snapshot => {
-      const data = snapshot.val() || {};
+    const listener = rootRef.on('value', async snapshot => {
+      const rootData = snapshot.val() || {};
 
-      setWeekData(data);
+      // GET GOAL FROM ROOT
+      const firebaseGoal =
+        Number(rootData?.goal) ||
+        Number(rootData?.total) ||
+        parseInt(rootData?.target) ||
+        0;
 
-      // FIX ARRAY STRUCTURE
-      const firebasePhotos = data?.workoutPhotos || {};
+      // MINIMUM 4
+      const totalTarget = Math.max(firebaseGoal, 4);
+
+      setTOTAL(totalTarget);
+
+      // NOW GET WEEK DATA
+      const weekSnapshot = await weekRef.once('value');
+
+      const weekData = weekSnapshot.val() || {};
+
+      setWeekData(weekData);
+
+      const firebasePhotos = weekData?.workoutPhotos || {};
 
       const formattedPhotos = Array.from(
-        { length: TOTAL },
+        { length: totalTarget },
         (_, i) => firebasePhotos[i] || null,
       );
 
       setPhotos(formattedPhotos);
 
-      /* AUTO LOCK IF EXPIRED */
+      // AUTO LOCK
       if (
-        data?.expiresAt &&
-        moment().valueOf() > data.expiresAt &&
-        !data?.locked
+        weekData?.expiresAt &&
+        moment().valueOf() > weekData.expiresAt &&
+        !weekData?.locked
       ) {
-        ref.update({
+        weekRef.update({
           locked: true,
         });
       }
     });
 
-    return () => ref.off('value', listener);
+    return () => {
+      rootRef.off('value', listener);
+    };
   }, []);
+
+  console.log('TOTAL :>> ', TOTAL);
 
   const isExpired =
     weekData?.expiresAt && moment().valueOf() > weekData?.expiresAt;
@@ -212,8 +235,7 @@ export default function FitnessClassUI() {
       const completed = totalCompleted === TOTAL;
 
       await ref.update({
-        title: 'weekly_fitness_class',
-        target: '4 workout photos weekly',
+        target: `${TOTAL} workout photos weekly`,
 
         startedAt,
         expiresAt,
@@ -351,7 +373,7 @@ export default function FitnessClassUI() {
           <Text style={styles.heroTitle}>🏋️ Weekly Fitness Class</Text>
 
           <Text style={styles.heroSub}>
-            Upload 4 workout proofs within 24 hours
+            Upload {TOTAL} workout proofs within 24 hours
           </Text>
 
           <View style={styles.progressCard}>
@@ -406,6 +428,7 @@ export default function FitnessClassUI() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    marginBottom: height / 12,
   },
 
   heroTitle: {
