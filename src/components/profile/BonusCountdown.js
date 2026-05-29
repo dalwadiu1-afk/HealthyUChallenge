@@ -1,13 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Text, TouchableOpacity } from 'react-native';
+import { Text, View } from 'react-native';
 import moment from 'moment';
 
-export default function BonusCountdown({
-  targetDate,
-  onPress,
-  isActive,
-  textStyle,
-}) {
+export default function BonusCountdown({ targetDate, textStyle }) {
   const [diff, setDiff] = useState(targetDate.diff(moment()));
 
   useEffect(() => {
@@ -29,21 +24,21 @@ export default function BonusCountdown({
     minutes,
   ).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
+  const isFinished = diff <= 0;
+
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
+    <View>
       <Text style={textStyle}>
-        {seconds != 0 ? (
-          days > 0 ? (
-            <Text style={{ color: '#fff' }}>
-              {days} day{days !== 1 ? 's' : ''} left
-            </Text>
-          ) : (
-            <Text style={{ color: '#fff' }}>{formatHHMMSS}</Text>
-          )
-        ) : (
+        {isFinished ? (
           <Text style={{ color: '#FFD700' }}>🔥 Tap to Start Bonus Quiz</Text>
+        ) : days > 0 ? (
+          <Text style={{ color: '#fff' }}>
+            {days} day{days !== 1 ? 's' : ''} left
+          </Text>
+        ) : (
+          <Text style={{ color: '#fff' }}>{formatHHMMSS}</Text>
         )}
       </Text>
-    </TouchableOpacity>
+    </View>
   );
 }

@@ -236,12 +236,33 @@ export default function WalkingRewardBoard({ navigation }) {
       });
 
       const top3 = sorted.slice(0, 3).map((u, index) => {
-        const days = u.challenge?.days || {};
+        const challenge = u?.challenge || {};
+        const days = challenge?.days || {};
 
-        const quizTotal = Object.values(days).reduce((acc, d) => {
-          return acc + (d?.normalQuiz ? 1 : 0) + (d?.bonusQuizzes ? 1 : 0);
+        // ✅ TOTAL QUIZZES
+        const quizCompleted = Object.values(days).reduce((acc, d) => {
+          const normalQuizCount = d?.normalQuiz
+            ? Object.keys(d.normalQuiz).length
+            : 0;
+
+          const bonusQuizCount = d?.bonusQuizzes
+            ? Object.keys(d.bonusQuizzes).length
+            : 0;
+
+          return acc + normalQuizCount + bonusQuizCount;
         }, 0);
 
+        // ✅ COMPLETED DAYS
+        const completedDays = Object.values(days).filter(
+          day => (day?.points || 0) > 0,
+        ).length;
+
+        // ✅ CONSISTENCY
+        const durationDays = challenge?.durationDays || 1;
+
+        const consistency = Math.round((completedDays / durationDays) * 100);
+
+        // ✅ TOTAL STEPS
         const stepsTotal = Object.values(days).reduce(
           (acc, d) => acc + (d?.steps || 0),
           0,
@@ -249,19 +270,22 @@ export default function WalkingRewardBoard({ navigation }) {
 
         return {
           rank: index + 1,
-          profile: u.avatar || 'https://i.pravatar.cc/300',
-          name: u.name || 'User',
+
+          profile: u?.avatar || u?.profile || 'https://i.pravatar.cc/300',
+
+          name: u?.name || 'User',
+
+          // ✅ ACTUAL DATA
+          streak: challenge?.streak || 0,
+
+          consistency,
+
+          quizCompleted,
 
           steps: `${stepsTotal} steps`,
-          streak: u.challenge?.streak || 0,
-          consistency:
-            u.status?.consistency ||
-            u.stats?.completionRate ||
-            u.stats?.consistency ||
-            0,
 
-          quizCompleted: quizTotal,
-          points: getWeeklyPoints(u.challenge), // ✅ weekly ranking value
+          // ✅ WEEKLY POINTS
+          points: getWeeklyPoints(challenge),
         };
       });
 
@@ -546,7 +570,7 @@ export default function WalkingRewardBoard({ navigation }) {
 
         {/* WINNERS (UNCHANGED) */}
         <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Week Winner</Text>
+          <Text style={styles.sectionTitle}>Week Quiz Winner</Text>
           <View style={styles.sectionBadge}>
             <Text style={styles.sectionBadgeText}>Top 3</Text>
           </View>

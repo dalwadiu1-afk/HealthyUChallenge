@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  Image,
 } from 'react-native';
 import { colors, fontFamily } from '../../constant';
 import Svg, { Path } from 'react-native-svg';
@@ -35,19 +36,6 @@ export default function ProfileHeader({
     ]).start();
   }, []);
 
-  function ChatBubbleIcon() {
-    return (
-      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-        <Path
-          d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"
-          stroke="#8FAF78"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </Svg>
-    );
-  }
   const hour = new Date().getHours();
 
   const greeting =
@@ -83,10 +71,11 @@ export default function ProfileHeader({
       ]}
     >
       <View style={styles.headerAvatar}>
-        {userData?.avatar || profileData?.avatar ? (
+        {console.log('userData?.avatar :>> ', userData?.avatar)}
+        {userData?.avatar || profileData?.profile?.avatar ? (
           <Image
             source={{
-              uri: userData?.avatar || profileData?.avatar,
+              uri: userData?.avatar || profileData?.profile?.avatar,
             }}
             style={styles.headerAvatarImage}
           />

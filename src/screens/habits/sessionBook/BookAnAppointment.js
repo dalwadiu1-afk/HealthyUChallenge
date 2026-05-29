@@ -124,7 +124,7 @@ export default function BookAnAppointment({ navigation, route }) {
   };
 
   const openEmail = () => {
-    const professorEmail = 'professor@example.com';
+    const professorEmail = 'Carr@gourmetdiningllc.com';
     const subject = 'Request for Appointment';
 
     const selectedDaysText =

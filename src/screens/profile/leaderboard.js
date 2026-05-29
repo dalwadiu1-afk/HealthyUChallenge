@@ -63,53 +63,28 @@ export default function Leaderboard({ navigation }) {
         return;
       }
 
-      const getCurrentWeek = weeklySummary => {
-        if (!weeklySummary) return null;
-
-        const today = new Date();
-
-        return Object.values(weeklySummary).find(week => {
-          const start = new Date(week.start);
-          const end = new Date(week.end);
-
-          return today >= start && today <= end;
-        });
-      };
-
       const formatted = Object.entries(data).map(([uid, item]) => {
         const challenge = item?.challenge || {};
         const days = challenge?.days || {};
-        const weeklySummary = challenge?.weeklySummary || {};
 
-        // total steps
-        const totalSteps = Object.values(days).reduce(
-          (acc, day) => acc + (day?.steps || 0),
-          0,
-        );
-
-        // today
         const todayKey = new Date().toISOString().split('T')[0];
-
         const todayData = days?.[todayKey] || {};
 
-        // current week
-        const currentWeek = getCurrentWeek(weeklySummary);
+        // total quizzes completed
+
+        const quizCompleted = item?.status?.quizCompleted || 0;
 
         // completed active days
-        const completedDays = Object.values(days).filter(
-          day => (day?.points || 0) > 0,
-        ).length;
+        const completedDays = item?.status?.completedDays || 0;
 
-        // consistency %
+        // consistency
+        const consistency = item?.status?.consistency || 0;
         const durationDays = challenge?.durationDays || 1;
 
-        const consistency = Math.round((completedDays / durationDays) * 100);
-
-        // total quizzes (example logic)
-        const quizCompleted = Object.values(days).reduce(
-          (acc, day) => acc + (day?.quizCompleted || 0),
-          0,
-        );
+        // weekly points
+        const weeklyPoints = Object.values(days).reduce((acc, day) => {
+          return acc + (day?.points || 0);
+        }, 0);
 
         return {
           uid,
@@ -118,26 +93,32 @@ export default function Leaderboard({ navigation }) {
 
           avatar: item?.avatar || item?.profile || 'https://i.pravatar.cc/300',
 
-          // main score
+          // MAIN TOTAL
           totalPoints: challenge?.totalChallengePoints || 0,
 
-          // stats
+          // STREAKS
           streak: challenge?.streak || 0,
+          longestStreak: challenge?.longestStreak || 0,
 
-          totalSteps,
-
-          todaySteps: todayData?.steps || 0,
-
+          // TODAY
           todayPoints: todayData?.points || 0,
+          todayNormalPoints: todayData?.normalPoints || 0,
+          todayBonusPoints: todayData?.bonusPoints || 0,
 
-          weeklyPoints: currentWeek?.points || 0,
-
-          // NEW
+          // QUIZZES
           quizCompleted,
 
+          // CONSISTENCY
           consistency,
-
           completedDays,
+
+          // WEEK
+          weeklyPoints,
+
+          // CHALLENGE
+          durationDays: challenge?.durationDays || 0,
+          startDate: challenge?.startDate || '',
+          endDate: challenge?.endDate || '',
 
           previousRank:
             typeof item?.previousRank === 'number' ? item.previousRank : null,
@@ -210,7 +191,7 @@ export default function Leaderboard({ navigation }) {
             source={{
               uri: item?.avatar || 'https://i.pravatar.cc/300',
             }}
-            style={{ width: '100%', height: '100%' }}
+            style={{ width: '100%', height: '100%', borderRadius: 100 }}
             resizeMode="cover"
           />
 
@@ -341,7 +322,7 @@ export default function Leaderboard({ navigation }) {
         scrollEnable={false}
       >
         <Header
-          header="Leaderboard"
+          header="Quiz Leaderboard"
           headerContainer={{ paddingHorizontal: 23 }}
         />
 
@@ -422,19 +403,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   topAvatarWrap: {
-    overflow: 'hidden',
     borderWidth: 2,
     marginBottom: 6,
   },
   medalTag: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
+    zIndex: 1,
     alignItems: 'center',
+    position: 'absolute',
+    height: 18,
+    width: 18,
+    borderRadius: 100,
+    alignContent: 'center',
+    top: height * 0.012,
   },
   medalNum: {
     fontSize: 10,

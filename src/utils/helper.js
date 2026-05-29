@@ -418,6 +418,7 @@ const generateUserChallengeData = ({ userId, profile, goal, days = {} }) => {
   // =====================================
   // SORT DATES
   // =====================================
+
   const sortedDates = Object.keys(days)
     .filter(date => moment(date, 'YYYY-MM-DD', true).isValid())
     .sort();
@@ -437,9 +438,9 @@ const generateUserChallengeData = ({ userId, profile, goal, days = {} }) => {
   sortedDates.forEach((date, index) => {
     const dayData = days[date];
 
-    // -----------------------------
-    // STREAK
-    // -----------------------------
+    // =====================================
+    // CURRENT STREAK
+    // =====================================
 
     if (index === 0) {
       currentStreak = 1;
@@ -455,51 +456,139 @@ const generateUserChallengeData = ({ userId, profile, goal, days = {} }) => {
       }
     }
 
-    // longest streak tracking
+    // =====================================
+    // LONGEST STREAK
+    // =====================================
+
     longestStreak = Math.max(longestStreak, currentStreak);
 
-    // -----------------------------
-    // DYNAMIC POINTS
-    // -----------------------------
+    // =====================================
+    // QUIZ DATA
+    // =====================================
 
     const normalQuiz = dayData?.normalQuiz || {};
+
     const bonusQuiz = dayData?.bonusQuizzes || {};
 
     // =====================================
-    // NORMAL QUIZ POINTS
+    // NORMAL QUIZ BASE POINTS
     // =====================================
 
-    const normalPoints = calculateDayPoints({
+    const baseNormalPoints = calculateDayPoints({
       correctAnswers: normalQuiz.correctAnswers || 0,
+
       totalQuestions: normalQuiz.totalQuestions || 0,
+
       quizTakenTime: normalQuiz.quizTakenTime || 0,
+
       streak: currentStreak || 1,
     });
 
     // =====================================
-    // BONUS QUIZ POINTS (DOUBLE)
+    // CURRENT STREAK MULTIPLIER
     // =====================================
 
-    const bonusPoints =
-      calculateDayPoints({
-        correctAnswers: bonusQuiz.correctAnswers || 0,
-        totalQuestions: bonusQuiz.totalQuestions || 0,
-        quizTakenTime: bonusQuiz.quizTakenTime || 0,
-        streak: currentStreak || 1,
-      }) * 2;
+    let currentStreakMultiplier = 1;
+
+    if (currentStreak >= 28) {
+      currentStreakMultiplier = 1.8;
+    } else if (currentStreak >= 21) {
+      currentStreakMultiplier = 1.6;
+    } else if (currentStreak >= 14) {
+      currentStreakMultiplier = 1.4;
+    } else if (currentStreak >= 7) {
+      currentStreakMultiplier = 1.2;
+    }
 
     // =====================================
-    // FINAL POINTS
+    // LONGEST STREAK MULTIPLIER
+    // =====================================
+
+    let longestStreakMultiplier = 1;
+
+    if (longestStreak >= 23) {
+      longestStreakMultiplier = 1.6;
+    } else if (longestStreak >= 15) {
+      longestStreakMultiplier = 1.3;
+    }
+
+    // =====================================
+    // USE ONLY GREATER MULTIPLIER
+    // =====================================
+
+    const normalMultiplier = Math.max(
+      currentStreakMultiplier,
+      longestStreakMultiplier,
+    );
+
+    // =====================================
+    // FINAL NORMAL POINTS
+    // =====================================
+
+    const normalPoints = Math.round(baseNormalPoints * normalMultiplier);
+
+    // =====================================
+    // BONUS QUIZ BASE POINTS
+    // =====================================
+
+    const baseBonusPoints = calculateDayPoints({
+      correctAnswers: bonusQuiz.correctAnswers || 0,
+
+      totalQuestions: bonusQuiz.totalQuestions || 0,
+
+      quizTakenTime: bonusQuiz.quizTakenTime || 0,
+
+      streak: currentStreak || 1,
+    });
+
+    // =====================================
+    // BONUS MULTIPLIER
+    // =====================================
+
+    let bonusMultiplier = 1;
+
+    // bonus quiz default
+    if (bonusQuiz?.totalQuestions > 0) {
+      bonusMultiplier = 2;
+    }
+
+    // bonus streak milestone
+    if (bonusQuiz?.totalQuestions > 0 && currentStreak >= 14) {
+      bonusMultiplier = 2.2;
+    }
+
+    // =====================================
+    // FINAL BONUS POINTS
+    // =====================================
+
+    const bonusPoints = Math.round(baseBonusPoints * bonusMultiplier);
+
+    // =====================================
+    // TOTAL DAILY POINTS
     // =====================================
 
     const points = normalPoints + bonusPoints;
 
     totalChallengePoints += points;
 
+    // =====================================
+    // SAVE DAY
+    // =====================================
+
     processedDays[date] = {
       ...dayData,
 
       streak: currentStreak,
+
+      longestStreak,
+
+      currentStreakMultiplier,
+
+      longestStreakMultiplier,
+
+      normalMultiplier,
+
+      bonusMultiplier,
 
       normalPoints,
 
@@ -591,10 +680,8 @@ const generateUserChallengeData = ({ userId, profile, goal, days = {} }) => {
 
       durationDays: challengeEndDate.diff(challengeStartDate, 'days'),
 
-      // current/latest streak
       streak: currentStreak,
 
-      // highest streak ever achieved
       longestStreak,
 
       totalChallengePoints,

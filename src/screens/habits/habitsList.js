@@ -169,37 +169,37 @@ function FlipCard({
     // AFTER CONFIRM
     // ======================
 
+    // ======================
+    // AFTER CONFIRM
+    // ======================
+
     const allowed = selectedGoals.some(g => g.id === item.id);
 
     if (!allowed) return;
 
-    // goal already saved
-    if (goalSaved) {
+    // ======================
+    // NO INPUT REQUIRED
+    // DIRECT NAVIGATION
+    // ======================
+
+    if (!item?.showInput) {
       flipCard();
 
       setTimeout(() => {
-        Animated.spring(animVal, {
-          toValue: 0,
-          friction: 8,
-          useNativeDriver: true,
-        }).start();
-
-        setFlipped(false);
-      }, 700);
-
-      if (item.screenName !== 'HabitsList') {
-        setTimeout(() => {
-          navigation?.navigate(item.screenName, {
-            goalTitle: item.title,
-            goalId: item.id,
-          });
-        }, 300);
-      }
+        navigation?.navigate(item.screenName, {
+          goalTitle: item.title,
+          goalId: item.id,
+        });
+      }, 300);
 
       return;
     }
 
-    // first goal entry
+    // ======================
+    // INPUT REQUIRED
+    // SHOW FLIP INPUT
+    // ======================p
+
     flipCard();
   };
 
@@ -261,7 +261,7 @@ function FlipCard({
             },
           ]}
         >
-          {!goalSaved && selectedGoals?.length === 3 ? (
+          {selectedGoals?.length === 3 && item?.showInput ? (
             <>
               <Text style={styles.cardEmoji}>{cs.emoji}</Text>
 
@@ -283,6 +283,7 @@ function FlipCard({
                   color: '#fff',
                   height: 50,
                 }}
+                keyboardType="number-pad"
               />
 
               <TouchableOpacity
@@ -389,6 +390,7 @@ export default function HabitsList({ navigation }) {
       category: 'Nutrition',
       key: 'booking',
     },
+
     {
       id: 2,
       title: 'Daily Steps',
@@ -396,7 +398,9 @@ export default function HabitsList({ navigation }) {
       screenName: 'WalkingRewardBoard',
       category: 'Fitness',
       key: 'steps',
+      showInput: 'Enter daily steps target (max 30000)',
     },
+
     {
       id: 3,
       title: 'Fiber Goal',
@@ -404,7 +408,9 @@ export default function HabitsList({ navigation }) {
       screenName: 'DailyFiberCounts',
       category: 'Nutrition',
       key: 'fiber',
+      showInput: 'Enter daily fiber goal in grams (max 50g)',
     },
+
     {
       id: 4,
       title: 'Sleep Well',
@@ -412,7 +418,9 @@ export default function HabitsList({ navigation }) {
       screenName: 'SleepMeasure',
       category: 'Sleep',
       key: 'sleep',
+      showInput: 'Enter sleep goal in hours (max 15)',
     },
+
     {
       id: 5,
       title: 'Fitness Class',
@@ -420,7 +428,9 @@ export default function HabitsList({ navigation }) {
       screenName: 'WeeklyFitnessClass',
       category: 'Fitness',
       key: 'fitness',
+      showInput: 'Enter classes per week (max 9)',
     },
+
     {
       id: 6,
       title: 'Strength Training',
@@ -428,7 +438,9 @@ export default function HabitsList({ navigation }) {
       screenName: 'WeightResistanceTraining',
       category: 'Fitness',
       key: 'weightTraining',
+      showInput: 'Enter workout days per week (2 - 6)',
     },
+
     {
       id: 7,
       title: 'Safe Weight Loss',
@@ -436,7 +448,9 @@ export default function HabitsList({ navigation }) {
       screenName: 'WeightChallengeUI',
       category: 'Wellness',
       key: 'weightChallenge',
+      showInput: 'Enter target weight loss (Max 1-3)',
     },
+
     {
       id: 8,
       title: 'Half Plate Veggies',
@@ -445,6 +459,7 @@ export default function HabitsList({ navigation }) {
       category: 'Nutrition',
       key: 'halfPlateChallenge',
     },
+
     {
       id: 9,
       title: 'Meatless Day',
@@ -452,7 +467,9 @@ export default function HabitsList({ navigation }) {
       screenName: 'MeatlessChallenge',
       category: 'Nutrition',
       key: 'meatLess',
+      showInput: 'Enter meatless meals per week (4 - 6)',
     },
+
     {
       id: 10,
       title: 'Fermented Foods',
@@ -461,6 +478,7 @@ export default function HabitsList({ navigation }) {
       category: 'Nutrition',
       key: 'fermentedFood',
     },
+
     {
       id: 11,
       title: 'Body Fat Progress',
@@ -469,6 +487,7 @@ export default function HabitsList({ navigation }) {
       category: 'Wellness',
       key: 'bodyFatGoal',
     },
+
     {
       id: 12,
       title: 'Try New Veggies',
@@ -477,6 +496,7 @@ export default function HabitsList({ navigation }) {
       category: 'Nutrition',
       key: 'newVeggie',
     },
+
     {
       id: 13,
       title: 'Limit Sugar',
@@ -484,7 +504,9 @@ export default function HabitsList({ navigation }) {
       screenName: 'SugarChartDays',
       category: 'Nutrition',
       key: 'sugarIntake',
+      showInput: 'Enter daily sugar limit in grams (max 50g)',
     },
+
     {
       id: 14,
       title: 'Workout Buddy',
@@ -492,7 +514,9 @@ export default function HabitsList({ navigation }) {
       screenName: 'FriendWorkoutChallenge',
       category: 'Fitness',
       key: 'exWithFriend',
+      showInput: 'Enter workout days with friend (4 - 6) times',
     },
+
     {
       id: 15,
       title: 'Cardio Progress',
@@ -500,7 +524,9 @@ export default function HabitsList({ navigation }) {
       screenName: 'CardioTrackerUI',
       category: 'Fitness',
       key: 'cardio',
+      showInput: 'Enter cardio minutes per day (max 120 min)',
     },
+
     {
       id: 16,
       title: 'Healthy Drinks',
@@ -509,6 +535,7 @@ export default function HabitsList({ navigation }) {
       category: 'Nutrition',
       key: 'beverage',
     },
+
     {
       id: 17,
       title: 'Snack Planning',
@@ -517,6 +544,7 @@ export default function HabitsList({ navigation }) {
       category: 'Nutrition',
       key: 'snacks',
     },
+
     {
       id: 18,
       title: 'Daily Fruits',
@@ -525,6 +553,7 @@ export default function HabitsList({ navigation }) {
       category: 'Nutrition',
       key: 'dailyFruits',
     },
+
     {
       id: 19,
       title: 'Personalized Goal 1',
@@ -533,6 +562,7 @@ export default function HabitsList({ navigation }) {
       category: 'Wellness',
       key: 'Personalized Goal 1',
     },
+
     {
       id: 20,
       title: 'Personalized Goal 2',
@@ -541,6 +571,7 @@ export default function HabitsList({ navigation }) {
       category: 'Wellness',
       key: 'Personalized Goal 2',
     },
+
     {
       id: 21,
       title: 'Personalized Goal 3',
@@ -665,16 +696,21 @@ export default function HabitsList({ navigation }) {
                   </Text>
                   <Text style={styles.headerTitle}>Your Habits</Text>
                 </View>
-                {/* <View style={styles.statsRow}>
+                <View style={styles.statsRow}>
                   <View style={styles.statBadge}>
-                    <Text style={styles.statNum}>{ALL_HABITS.length}</Text>
+                    <Text style={styles.statNum}>
+                      {selectedGoals.length > 0
+                        ? selectedGoals?.length
+                        : ALL_HABITS?.length}
+                    </Text>
                     <Text style={styles.statLabel}>Total</Text>
                   </View>
-                  <View style={[styles.statBadge, { marginLeft: 8 }]}>
-                    <Text style={styles.s  tatNum}>3</Text>
+                  {/* <View style={[styles.statBadge, { marginLeft: 8 }]}>
+                    <Text style={styles.statNum}>3</Text>
                     <Text style={styles.statLabel}>Done</Text>
                   </View>
                 </View> */}
+                </View>
               </View>
 
               {/* Category filter */}

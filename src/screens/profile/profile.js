@@ -50,7 +50,7 @@ const MENU_ITEMS = [
   // },
   {
     emoji: '🏆',
-    title: 'Leaderboard',
+    title: 'Quiz Leaderboard',
     subtitle: 'See how you rank with others',
     screenName: 'Leaderboard',
     badge: null,

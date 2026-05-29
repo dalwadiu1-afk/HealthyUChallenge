@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
+  Modal,
 } from 'react-native';
 import { Wrapper, Header } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
@@ -166,6 +167,7 @@ export default function QuizResult({ navigation, route }) {
     quizResultData = {},
     isBonus,
   } = route?.params || {};
+  const [showRewardModal, setShowRewardModal] = useState(true);
   const userId = auth()?.currentUser?.uid;
   const userData = useSelector(state => state.user);
   const profile = userData?.profile;
@@ -252,6 +254,68 @@ export default function QuizResult({ navigation, route }) {
     }).start();
   }, []);
 
+  const streak = quizResultData?.streak || 1;
+
+  // =====================================
+  // CORRECT ANSWER POINTS
+  // =====================================
+
+  const answerPoints = correct * 100;
+
+  // =====================================
+  // STREAK BONUS
+  // =====================================
+
+  const streakPoints = streak * 10;
+
+  // =====================================
+  // SPEED BONUS
+  // =====================================
+
+  let speedPoints = 0;
+
+  if (totalSec <= 30) {
+    speedPoints = 100;
+  } else if (totalSec <= 60) {
+    speedPoints = 50;
+  } else if (totalSec <= 120) {
+    speedPoints = 20;
+  }
+
+  // =====================================
+  // MULTIPLIER
+  // =====================================
+
+  let multiplier = 1;
+
+  if (!isBonus) {
+    let currentMultiplier = 1;
+
+    if (streak >= 28) {
+      currentMultiplier = 1.8;
+    } else if (streak >= 21) {
+      currentMultiplier = 1.6;
+    } else if (streak >= 14) {
+      currentMultiplier = 1.4;
+    } else if (streak >= 7) {
+      currentMultiplier = 1.2;
+    }
+
+    multiplier = currentMultiplier;
+  }
+
+  if (isBonus) {
+    multiplier = streak >= 14 ? 2.2 : 2;
+  }
+
+  // =====================================
+  // TOTAL
+  // =====================================
+
+  const basePoints = answerPoints + streakPoints + speedPoints;
+
+  const earnedPoints = Math.round(basePoints * multiplier);
+
   return (
     <Wrapper scrollEnable={false} orbsRight>
       <Header header="Quiz Result" />
@@ -327,6 +391,64 @@ export default function QuizResult({ navigation, route }) {
           </TouchableOpacity>
         </View>
       </Animated.View>
+
+      <Modal visible={showRewardModal} transparent animationType="fade">
+        <View style={styles.rewardOverlay}>
+          <Animated.View
+            style={[
+              styles.rewardModal,
+              {
+                transform: [
+                  {
+                    scale: fade.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.92, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Text style={styles.rewardEmoji}>{isBonus ? '⚡' : '🔥'}</Text>
+
+            <Text style={styles.rewardTitle}>
+              +{earnedPoints} Points Earned
+            </Text>
+
+            <Text style={styles.rewardSub}>
+              Great work completing today’s quiz
+            </Text>
+
+            <View style={styles.rewardList}>
+              <Text style={styles.rewardItem}>
+                ✅ +{answerPoints} for {correct} correct answers
+              </Text>
+
+              <Text style={styles.rewardItem}>
+                🔥 +{streakPoints} for {streak} day streak
+              </Text>
+
+              <Text style={styles.rewardItem}>
+                ⏱ +{speedPoints} speed bonus
+              </Text>
+
+              {multiplier > 1 && (
+                <Text style={styles.rewardBoost}>
+                  {isBonus ? '⚡' : '🚀'} {multiplier}x multiplier active
+                </Text>
+              )}
+            </View>
+
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={styles.rewardButton}
+              onPress={() => setShowRewardModal(false)}
+            >
+              <Text style={styles.rewardButtonText}>Awesome</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
     </Wrapper>
   );
 }
@@ -471,5 +593,76 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontFamily: fontFamily.montserratSemiBold,
     textDecorationLine: 'underline',
+  },
+
+  rewardOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 22,
+  },
+
+  rewardModal: {
+    width: '100%',
+    backgroundColor: '#111',
+    borderRadius: 28,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  rewardEmoji: {
+    fontSize: 46,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+
+  rewardTitle: {
+    color: colors.white,
+    fontSize: 28,
+    textAlign: 'center',
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  rewardSub: {
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    fontSize: 13,
+    marginTop: 6,
+    marginBottom: 24,
+    fontFamily: fontFamily.montserratMedium,
+  },
+
+  rewardList: {
+    gap: 14,
+  },
+
+  rewardItem: {
+    color: colors.white,
+    fontSize: 14,
+    lineHeight: 22,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  rewardBoost: {
+    color: '#FFD700',
+    fontSize: 14,
+    lineHeight: 22,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  rewardButton: {
+    marginTop: 26,
+    backgroundColor: colors.secondary,
+    borderRadius: 18,
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+
+  rewardButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratBold,
   },
 });

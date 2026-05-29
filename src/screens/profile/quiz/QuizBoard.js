@@ -28,13 +28,6 @@ import { useIsFocused, useFocusEffect } from '@react-navigation/native';
 
 const { height } = Dimensions.get('window');
 
-const getQuizMode = ({ weakQuestions, todayQuiz }) => {
-  const weak = Object.values(weakQuestions || {}).some(w => !w?.isSolved);
-  const bonus = !!todayQuiz?.bonusQuizzes;
-
-  return weak && bonus ? 'combine' : 'normal';
-};
-
 export default function QuizBoard({ navigation, route }) {
   const userData = useSelector(state => state.user);
   const dispatch = useDispatch();
@@ -45,6 +38,7 @@ export default function QuizBoard({ navigation, route }) {
   const [weakQuestions, setWeakQuestions] = useState({});
   const [leaderboardData, setLeaderboardData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showAnalytics, setShowAnalytics] = useState(false);
   const [showTodayQuiz, setShowTodayQuiz] = useState(false);
   const [showBonusQuiz, setShowBonusQuiz] = useState(false);
   const todayKey = moment().format('YYYY-MM-DD');
@@ -53,6 +47,7 @@ export default function QuizBoard({ navigation, route }) {
   const bonusQuiz = todayQuiz?.bonusQuizzes || null;
   const monthKey = moment().format('MM_YYYY');
   const dynamicWeekId = getDynamicWeekId();
+  const anim = useRef(new Animated.Value(0)).current;
 
   const refreshQuizState = async () => {
     try {
@@ -69,6 +64,19 @@ export default function QuizBoard({ navigation, route }) {
     } catch (e) {
       console.log('REFRESH ERROR:', e);
     }
+  };
+
+  const toggleAnalytics = () => {
+    const toValue = showAnalytics ? 0 : 1;
+
+    Animated.timing(anim, {
+      toValue,
+      duration: 250,
+      useNativeDriver: false,
+      easing: Easing.out(Easing.ease),
+    }).start();
+
+    setShowAnalytics(!showAnalytics);
   };
 
   // =========================
@@ -179,14 +187,16 @@ export default function QuizBoard({ navigation, route }) {
       const weakData = weakSnap.val() || {};
 
       const leaderboardSnap = await database()
-        .ref(`/leaderboards/${userId}`)
+        .ref(`/leaderboards`)
         .once('value');
 
-      const leaderboard = leaderboardSnap.val() || null;
+      const usersPoints = leaderboardSnap.val() || null;
+      const leaderboard = leaderboardSnap.val()?.[userId] || null;
 
       setQuizDays(quizDaysData);
       setWeakQuestions(weakData);
       setLeaderboardData(leaderboard);
+      getUserRank(usersPoints, userId);
     } catch (e) {
       console.log('QUIZ BOARD ERROR:', e);
     } finally {
@@ -257,10 +267,10 @@ export default function QuizBoard({ navigation, route }) {
             activities: userData?.activities || {},
             challenges: userData?.challenges || {},
 
-            stats: {
-              ...(userData?.stats || {}),
-              ...stats,
-            },
+            // stats: {
+            //   ...(userData?.stats || {}),
+            //   ...stats,
+            // },
           }),
         );
       } catch (err) {
@@ -272,6 +282,28 @@ export default function QuizBoard({ navigation, route }) {
       ref.off('value', listener);
     };
   }, [dispatch, isFocused]);
+
+  const getUserRank = (leaderboards, userId) => {
+    if (!leaderboards || !userId) return null;
+
+    const users = Object.entries(leaderboards).map(([uid, data]) => ({
+      uid,
+      points: data?.challenge?.totalChallengePoints || 0,
+    }));
+
+    users.sort((a, b) => b.points - a.points);
+
+    const rankIndex = users.findIndex(u => u.uid === userId);
+
+    if (rankIndex === -1) return null;
+
+    const rank = rankIndex + 1;
+
+    setLeaderboardData(prev => ({
+      ...(prev || {}),
+      rank,
+    }));
+  };
 
   const fmt = secs => {
     const m = Math.floor(secs / 60);
@@ -401,6 +433,109 @@ export default function QuizBoard({ navigation, route }) {
         )
       : 0;
 
+  // ===============================
+  // UPDATED QUIZ TIME LOGIC
+  // Includes BOTH:
+  // 1. Normal Quiz
+  // 2. Bonus Quiz
+  // ===============================
+
+  // -------------------------------
+  // GET AVERAGE QUIZ TIME TAKEN
+  // -------------------------------
+
+  const calculateAverageQuizTime = challengeDays => {
+    if (!challengeDays) return 0;
+
+    let totalTime = 0;
+    let totalQuizzes = 0;
+
+    Object.values(challengeDays).forEach(dayData => {
+      // =========================
+      // NORMAL QUIZ TIME
+      // =========================
+      if (dayData?.normalQuiz?.quizTakenTime) {
+        totalTime += Number(dayData.normalQuiz.quizTakenTime);
+        totalQuizzes += 1;
+      }
+
+      // =========================
+      // BONUS QUIZ TIME
+      // =========================
+      if (dayData?.bonusQuizzes?.quizTakenTime) {
+        totalTime += Number(dayData.bonusQuizzes.quizTakenTime);
+        totalQuizzes += 1;
+      }
+    });
+
+    if (totalQuizzes === 0) return 0;
+
+    return Math.round(totalTime / totalQuizzes);
+  };
+
+  const formatDuration = totalSeconds => {
+    const seconds = Number(totalSeconds || 0);
+
+    // =========================
+    // LESS THAN 60 SEC
+    // =========================
+    if (seconds < 60) {
+      return `${seconds} sec`;
+    }
+
+    // =========================
+    // MINUTES
+    // =========================
+    const minutes = Math.floor(seconds / 60);
+
+    if (minutes < 60) {
+      const remainingSeconds = seconds % 60;
+
+      return remainingSeconds > 0
+        ? `${minutes} min ${remainingSeconds} sec`
+        : `${minutes} min`;
+    }
+
+    // =========================
+    // HOURS
+    // =========================
+    const hours = Math.floor(minutes / 60);
+
+    if (hours < 24) {
+      const remainingMinutes = minutes % 60;
+
+      return remainingMinutes > 0
+        ? `${hours} hr ${remainingMinutes} min`
+        : `${hours} hr`;
+    }
+
+    // =========================
+    // DAYS
+    // =========================
+    const days = Math.floor(hours / 24);
+
+    const remainingHours = hours % 24;
+
+    return remainingHours > 0
+      ? `${days} day ${remainingHours} hr`
+      : `${days} day`;
+  };
+
+  // ===============================
+  // USAGE
+  // ===============================
+
+  const challengeDays = leaderboardData?.challenge?.days || {};
+
+  const QuizTime = calculateAverageQuizTime(challengeDays);
+
+  const averageQuizTime = formatDuration(QuizTime);
+
+  // ===============================
+  // DISPLAY
+  // ===============================
+
+  const bonusUnlocked = moment().isSameOrAfter(bonusDate);
   return (
     <Wrapper orbsRight>
       <Header header="Quiz Hub" />
@@ -425,7 +560,7 @@ export default function QuizBoard({ navigation, route }) {
         <Animated.View style={[styles.body, { opacity: fade }]}>
           <View style={styles.heroCard}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.heroTitle}>Quiz Board</Text>
+              <Text style={styles.heroTitle}>Today's Quiz Score</Text>
 
               <Text style={styles.heroSub}>
                 Track your daily quiz performance & challenge progress
@@ -439,12 +574,82 @@ export default function QuizBoard({ navigation, route }) {
             </View>
           </View>
 
+          {/* QUIZ LEADERBOARD CARD */}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={styles.leaderboardCard}
+            onPress={() => navigation.navigate('Leaderboard')}
+          >
+            <View style={styles.leaderboardGlow} />
+
+            <View style={styles.leaderboardTop}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.leaderboardMini}>GLOBAL RANKING</Text>
+
+                <Text style={styles.leaderboardTitle}>Quiz Leaderboard</Text>
+
+                <Text style={styles.leaderboardSub}>
+                  Compete with challengers and climb the weekly rankings
+                </Text>
+              </View>
+
+              <View style={styles.leaderboardBadge}>
+                <Text style={styles.leaderboardBadgeEmoji}>🏆</Text>
+              </View>
+            </View>
+
+            <View style={styles.leaderboardStats}>
+              <View style={styles.leaderboardStatItem}>
+                <Text style={styles.leaderboardStatNumber}>
+                  #{leaderboardData?.rank || '--'}
+                </Text>
+
+                <Text style={styles.leaderboardStatLabel}>Your Rank</Text>
+              </View>
+
+              <View style={styles.leaderboardDivider} />
+
+              <View style={styles.leaderboardStatItem}>
+                <Text style={styles.leaderboardStatNumber}>{totalPoints}</Text>
+
+                <Text style={styles.leaderboardStatLabel}>Points</Text>
+              </View>
+
+              <View style={styles.leaderboardDivider} />
+
+              <View style={styles.leaderboardStatItem}>
+                <Text style={styles.leaderboardStatNumber}>
+                  🔥 {currentStreak}
+                </Text>
+
+                <Text style={styles.leaderboardStatLabel}>Streak</Text>
+              </View>
+            </View>
+
+            <View style={styles.leaderboardBottom}>
+              <Text style={styles.leaderboardBottomText}>
+                Tap to view full leaderboard
+              </Text>
+
+              <Text style={styles.leaderboardArrow}>→</Text>
+            </View>
+          </TouchableOpacity>
+
           {/* TODAY QUIZ CARD */}
 
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => {
-              // if bonus not attempted -> start quiz
+              // =========================
+              // BONUS LOCKED
+              // =========================
+              if (!bonusUnlocked && !bonusQuiz) {
+                return;
+              }
+
+              // =========================
+              // START BONUS QUIZ
+              // =========================
               if (!bonusQuiz) {
                 navigation.navigate('QuizStart', {
                   isBonus: true,
@@ -453,10 +658,18 @@ export default function QuizBoard({ navigation, route }) {
                 return;
               }
 
-              // if attempted -> toggle details
+              // =========================
+              // SHOW DETAILS
+              // =========================
               setShowBonusQuiz(!showBonusQuiz);
             }}
-            style={styles.bonusCard}
+            style={[
+              styles.bonusCard,
+              !bonusUnlocked &&
+                !bonusQuiz && {
+                  opacity: 0.8,
+                },
+            ]}
           >
             <View style={styles.todayTop}>
               <View>
@@ -485,7 +698,11 @@ export default function QuizBoard({ navigation, route }) {
                     },
                   ]}
                 >
-                  {!bonusQuiz ? 'START' : `${bonusCorrect}/${bonusTotal}`}
+                  {!bonusUnlocked && !bonusQuiz
+                    ? 'LOCKED'
+                    : !bonusQuiz
+                    ? 'START'
+                    : `${bonusCorrect}/${bonusTotal}`}
                 </Text>
               </View>
             </View>
@@ -493,7 +710,6 @@ export default function QuizBoard({ navigation, route }) {
             {!bonusQuiz ? (
               <BonusCountdown
                 targetDate={bonusDate}
-                formatHHMMSS={formatHHMMSS}
                 textStyle={styles.bonusCountdown}
               />
             ) : (
@@ -753,117 +969,131 @@ export default function QuizBoard({ navigation, route }) {
           )}
 
           <View style={styles.historyCard}>
-            <Text style={styles.historyTitle}>Quiz Analytics</Text>
+            {/* HEADER (click to expand/collapse) */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={toggleAnalytics}
+              style={styles.analyticsHeader}
+            >
+              <Text style={styles.historyTitle}>Quiz Analytics</Text>
 
-            <View style={styles.analyticsGrid}>
-              <View style={styles.analyticsItem}>
-                <Text style={styles.analyticsNumber}>{totalQuizzes}</Text>
+              <Text style={styles.analyticsToggle}>
+                {showAnalytics ? 'Hide ▲' : 'Show ▼'}
+              </Text>
+            </TouchableOpacity>
 
-                <Text style={styles.analyticsLabel}>Total Quizzes</Text>
+            {/* COLLAPSIBLE CONTENT */}
+            <Animated.View
+              style={{
+                opacity: anim,
+                maxHeight: anim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 1000],
+                }),
+                overflow: 'hidden',
+              }}
+            >
+              {/* GRID */}
+              <View style={styles.analyticsGrid}>
+                <View style={styles.analyticsItem}>
+                  <Text style={styles.analyticsNumber}>{totalQuizzes}</Text>
+                  <Text style={styles.analyticsLabel}>Total Quizzes</Text>
+                </View>
+
+                <View style={styles.analyticsItem}>
+                  <Text style={styles.analyticsNumber}>{overallAccuracy}%</Text>
+                  <Text style={styles.analyticsLabel}>Accuracy</Text>
+                </View>
+
+                <View style={styles.analyticsItem}>
+                  <Text style={styles.analyticsNumber}>{currentStreak}</Text>
+                  <Text style={styles.analyticsLabel}>Current Streak</Text>
+                </View>
+
+                <View style={styles.analyticsItem}>
+                  <Text style={styles.analyticsNumber}>{longestStreak}</Text>
+                  <Text style={styles.analyticsLabel}>Best Streak</Text>
+                </View>
+
+                <View style={styles.analyticsItem}>
+                  <Text style={styles.analyticsNumber}>
+                    {weakQuestionsCount}
+                  </Text>
+                  <Text style={styles.analyticsLabel}>Weak Questions</Text>
+                </View>
+
+                <View style={styles.analyticsItem}>
+                  <Text style={styles.analyticsNumber}>{totalPoints}</Text>
+                  <Text style={styles.analyticsLabel}>Total Points</Text>
+                </View>
+
+                <View style={styles.analyticsItem}>
+                  <Text style={styles.analyticsNumber}>{averageQuizTime}</Text>
+                  <Text style={styles.analyticsLabel}>Avg Time</Text>
+                </View>
+
+                <View style={styles.analyticsItem}>
+                  <Text style={styles.analyticsNumber}>
+                    {firstTimeClearanceRatio}
+                  </Text>
+                  <Text style={styles.analyticsLabel}>First Try Accuracy</Text>
+                </View>
               </View>
 
-              <View style={styles.analyticsItem}>
-                <Text style={styles.analyticsNumber}>{overallAccuracy}%</Text>
+              {/* HISTORY */}
+              <Text style={styles.recentTitle}>Recent Quiz History</Text>
 
-                <Text style={styles.analyticsLabel}>Accuracy</Text>
-              </View>
-
-              <View style={styles.analyticsItem}>
-                <Text style={styles.analyticsNumber}>{currentStreak}</Text>
-
-                <Text style={styles.analyticsLabel}>Current Streak</Text>
-              </View>
-
-              <View style={styles.analyticsItem}>
-                <Text style={styles.analyticsNumber}>{longestStreak}</Text>
-
-                <Text style={styles.analyticsLabel}>Best Streak</Text>
-              </View>
-
-              <View style={styles.analyticsItem}>
-                <Text style={styles.analyticsNumber}>{weakQuestionsCount}</Text>
-
-                <Text style={styles.analyticsLabel}>Weak Questions</Text>
-              </View>
-
-              <View style={styles.analyticsItem}>
-                <Text style={styles.analyticsNumber}>{totalPoints}</Text>
-
-                <Text style={styles.analyticsLabel}>Total Points</Text>
-              </View>
-              <View style={{ ...styles.analyticsItem, width: '99%' }}>
-                <Text style={styles.analyticsNumber}>
-                  {firstTimeClearanceRatio}
+              {allQuizDays.length === 0 ? (
+                <Text style={styles.emptyHistory}>
+                  No quizzes completed yet
                 </Text>
+              ) : (
+                allQuizDays.slice(0, 10).map(([date, item]) => {
+                  const normalAccuracy = item?.normalQuiz?.percentage || 0;
+                  const bonusAccuracy = item?.bonusQuizzes?.percentage || null;
 
-                <Text style={styles.analyticsLabel}>First Try Accuracy</Text>
-              </View>
-            </View>
-
-            {/* HISTORY */}
-            <Text style={styles.recentTitle}>Recent Quiz History</Text>
-
-            {allQuizDays.length === 0 ? (
-              <Text style={styles.emptyHistory}>No quizzes completed yet</Text>
-            ) : (
-              allQuizDays.slice(0, 10).map(([date, item]) => {
-                const normalAccuracy = item?.normalQuiz?.percentage || 0;
-
-                const bonusAccuracy = item?.bonusQuizzes?.percentage || null;
-
-                return (
-                  <View key={date} style={styles.historyRow}>
-                    <View>
-                      <Text style={styles.historyDate}>
-                        {moment(date).format('MMM DD, YYYY')}
-                      </Text>
-
-                      <Text style={styles.historyMeta}>
-                        Normal:{' '}
-                        {item?.normalQuiz
-                          ? `${item.normalQuiz.correctAnswers}/${item.normalQuiz.totalQuestions}`
-                          : 'Not Played'}
-                      </Text>
-
-                      {item?.bonusQuizzes && (
-                        <Text
-                          style={[
-                            styles.historyMeta,
-                            {
-                              color: '#FFD700',
-                              marginTop: 2,
-                            },
-                          ]}
-                        >
-                          Bonus:{' '}
-                          {`${item.bonusQuizzes.correctAnswers}/${item.bonusQuizzes.totalQuestions}`}
+                  return (
+                    <View key={date} style={styles.historyRow}>
+                      <View>
+                        <Text style={styles.historyDate}>
+                          {moment(date).format('MMM DD, YYYY')}
                         </Text>
-                      )}
-                    </View>
 
-                    <View style={styles.historyRight}>
-                      <Text style={styles.historyPercent}>
-                        {normalAccuracy}%
-                      </Text>
-
-                      {bonusAccuracy !== null && (
-                        <Text
-                          style={[
-                            styles.historyTime,
-                            {
-                              color: '#FFD700',
-                              marginTop: 4,
-                            },
-                          ]}
-                        >
-                          Bonus {bonusAccuracy}%
+                        <Text style={styles.historyMeta}>
+                          Normal:{' '}
+                          {item?.normalQuiz
+                            ? `${item.normalQuiz.correctAnswers}/${item.normalQuiz.totalQuestions}`
+                            : 'Not Played'}
                         </Text>
-                      )}
+
+                        {item?.bonusQuizzes && (
+                          <Text
+                            style={[styles.historyMeta, { color: '#FFD700' }]}
+                          >
+                            Bonus:{' '}
+                            {`${item.bonusQuizzes.correctAnswers}/${item.bonusQuizzes.totalQuestions}`}
+                          </Text>
+                        )}
+                      </View>
+
+                      <View style={styles.historyRight}>
+                        <Text style={styles.historyPercent}>
+                          {normalAccuracy}%
+                        </Text>
+
+                        {bonusAccuracy !== null && (
+                          <Text
+                            style={[styles.historyTime, { color: '#FFD700' }]}
+                          >
+                            Bonus {bonusAccuracy}%
+                          </Text>
+                        )}
+                      </View>
                     </View>
-                  </View>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </Animated.View>
           </View>
         </Animated.View>
       )}
@@ -1029,7 +1259,17 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: fontFamily.montserratBold,
   },
+  analyticsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
 
+  analyticsToggle: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    fontFamily: fontFamily.montserratMedium,
+  },
   analyticsLabel: {
     color: 'rgba(255,255,255,0.55)',
     marginTop: 4,
@@ -1265,5 +1505,123 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.45)',
     marginTop: 6,
     fontSize: 12,
+  },
+  leaderboardCard: {
+    marginTop: 18,
+    borderRadius: 24,
+    padding: 20,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(120,90,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(140,120,255,0.28)',
+    position: 'relative',
+  },
+
+  leaderboardGlow: {
+    position: 'absolute',
+    top: -30,
+    right: -20,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(140,120,255,0.18)',
+  },
+
+  leaderboardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  leaderboardMini: {
+    color: '#B8A9FF',
+    fontSize: 10,
+    letterSpacing: 2,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  leaderboardTitle: {
+    color: colors.white,
+    fontSize: 22,
+    marginTop: 6,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  leaderboardSub: {
+    color: 'rgba(255,255,255,0.62)',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 6,
+    width: '92%',
+    fontFamily: fontFamily.montserratMedium,
+  },
+
+  leaderboardBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  leaderboardBadgeEmoji: {
+    fontSize: 34,
+  },
+
+  leaderboardStats: {
+    marginTop: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+  },
+
+  leaderboardStatItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+
+  leaderboardStatNumber: {
+    color: colors.white,
+    fontSize: 18,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  leaderboardStatLabel: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 10,
+    marginTop: 5,
+    fontFamily: fontFamily.montserratMedium,
+  },
+
+  leaderboardDivider: {
+    width: 1,
+    height: 34,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+
+  leaderboardBottom: {
+    marginTop: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  leaderboardBottomText: {
+    color: '#CBBEFF',
+    fontSize: 12,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  leaderboardArrow: {
+    color: '#CBBEFF',
+    fontSize: 20,
+    fontFamily: fontFamily.montserratBold,
   },
 });
