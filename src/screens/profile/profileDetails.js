@@ -1,7 +1,3 @@
-// ===============================
-// ONLY LOGIC UPDATED
-// UI IS NOT CHANGED
-// ===============================
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -491,7 +487,6 @@ export default function ProfileDetails({ navigation }) {
   const [progressMode, setProgressMode] = useState('weekly');
   const [posts, setPosts] = useState([]);
   const [userData, setUserData] = useState({});
-  const [chartMode, setChartMode] = useState('auto');
   const [leaderboardData, setLeaderboardData] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedHabit, setSelectedHabit] = useState('fiber');
@@ -714,7 +709,6 @@ export default function ProfileDetails({ navigation }) {
 
   const profile = userData?.profile || {};
   const habits = userData?.habits || {};
-  const stats = leaderboardData?.challenge || {};
 
   const excludeKeys = [
     'booking',
@@ -726,12 +720,13 @@ export default function ProfileDetails({ navigation }) {
     'fruits',
     'Snacks',
     'Beverage',
+    'weightChallenge',
   ];
 
   const ALL_HABITS = Object.entries(habits || {}).filter(
     ([key]) =>
-      !excludeKeys.some(excluded =>
-        key?.toLowerCase().includes(excluded.toLowerCase()),
+      !excludeKeys.some(
+        excluded => key?.toLowerCase().trim() === excluded.toLowerCase().trim(),
       ),
   );
 

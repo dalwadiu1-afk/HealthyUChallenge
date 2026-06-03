@@ -1,0 +1,318 @@
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  Linking,
+  Dimensions,
+} from 'react-native';
+
+import { colors, fontFamily } from '../../constant/index';
+import { Wrapper } from '../../components';
+import { docJen, docJes } from '../../assets/images';
+
+export default function Social() {
+  const INSTAGRAM_URL = 'https://www.instagram.com/montclair_dietitian/';
+  const WEBSITE_URL = 'https://dineoncampus.com/montclair/meet-the-team';
+  const EMAIL = 'nutrition@montclair.edu';
+
+  const openLink = url => {
+    try {
+      Linking.openURL(url);
+    } catch (e) {
+      console.log('e :>> ', e);
+    }
+  };
+
+  const { height } = Dimensions.get('window');
+
+  return (
+    <Wrapper>
+      <View style={styles.container}>
+        {/* Hero Card */}
+        <View style={styles.profileCard}>
+          <Image source={docJen} style={styles.avatar} />
+
+          <Text style={styles.name}>Jennifer Bostedo</Text>
+
+          <Text style={styles.role}>
+            Director of Dining Services I | Freeman
+          </Text>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => openLink('mailto:jbostedo@gourmetdiningllc.com')}
+          >
+            <Text style={styles.contactText}>
+              ✉️ jbostedo@gourmetdiningllc.com
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => openLink('tel:+19736554414')}
+          >
+            <Text style={styles.contactText}>📞 (973) 655-4414</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.profileCard}>
+          <Image source={docJes} style={styles.avatar} />
+
+          <Text style={styles.name}>Jessica Carr, MS, RDN</Text>
+
+          <Text style={styles.role}>Senior Campus Dietitian | Freeman</Text>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => openLink('mailto:jcarr@gourmetdiningllc.com')}
+          >
+            <Text style={styles.contactText}>
+              ✉️ jcarr@gourmetdiningllc.com
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => openLink('tel:+19736554414')}
+          >
+            <Text style={styles.contactText}>📞 (973) 655-4414</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            activeOpacity={0.8}
+            onPress={() => openLink(INSTAGRAM_URL)}
+          >
+            <Text style={styles.actionText}>📸 Follow on Instagram</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            activeOpacity={0.8}
+            onPress={() => openLink(`mailto:${EMAIL}`)}
+          >
+            <Text style={styles.actionText}>📧 Contact Dietitian</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            activeOpacity={0.8}
+            onPress={() => openLink(WEBSITE_URL)}
+          >
+            <Text style={styles.actionText}>🌐 Visit Website</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Meet The Team */}
+        <View style={styles.teamCard}>
+          <Text style={styles.teamTitle}>👩‍⚕️ Meet the Dietitian Team</Text>
+
+          <Text style={styles.teamDescription}>
+            Learn more about our registered dietitians, wellness educators, and
+            nutrition professionals.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.teamButton}
+            activeOpacity={0.8}
+            onPress={() => openLink(WEBSITE_URL)}
+          >
+            <Text style={styles.teamButtonText}>View Team</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Services */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Services</Text>
+
+          <View style={styles.servicesWrap}>
+            <View style={styles.serviceChip}>
+              <Text style={styles.serviceText}>🍎 Nutrition Coaching</Text>
+            </View>
+
+            <View style={styles.serviceChip}>
+              <Text style={styles.serviceText}>🥗 Meal Planning</Text>
+            </View>
+
+            <View style={styles.serviceChip}>
+              <Text style={styles.serviceText}>💪 Healthy Habits</Text>
+            </View>
+
+            <View style={styles.serviceChip}>
+              <Text style={styles.serviceText}>📚 Wellness Education</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Why Connect */}
+        <View style={{ ...styles.card, paddingBottom: height / 13 }}>
+          <Text style={styles.sectionTitle}>Why Connect With Us?</Text>
+
+          <Text style={styles.bullet}>✓ Evidence-Based Nutrition Guidance</Text>
+
+          <Text style={styles.bullet}>✓ Personalized Wellness Support</Text>
+
+          <Text style={styles.bullet}>✓ Trusted Health Resources</Text>
+
+          <Text style={styles.bullet}>✓ Healthy Habit Building</Text>
+        </View>
+      </View>
+    </Wrapper>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    paddingTop: 6,
+    paddingBottom: 30,
+  },
+  contactText: {
+    color: colors.secondary,
+    fontSize: 13,
+    marginTop: 8,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  profileCard: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 24,
+    padding: 22,
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  avatar: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    marginBottom: 14,
+    borderWidth: 3,
+    borderColor: colors.secondary,
+  },
+
+  name: {
+    color: colors.white,
+    fontSize: 20,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  role: {
+    color: colors.secondary,
+    fontSize: 13,
+    marginTop: 4,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  bio: {
+    color: 'rgba(255,255,255,0.7)',
+    textAlign: 'center',
+    marginTop: 12,
+    lineHeight: 22,
+    fontFamily: fontFamily.montserratRegular,
+  },
+
+  card: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  sectionTitle: {
+    color: colors.white,
+    fontSize: 16,
+    marginBottom: 14,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  actionButton: {
+    backgroundColor: 'rgba(143,175,120,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.25)',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+
+  actionText: {
+    color: colors.secondary,
+    fontSize: 14,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  teamCard: {
+    backgroundColor: 'rgba(143,175,120,0.12)',
+    borderRadius: 22,
+    padding: 20,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.25)',
+  },
+
+  teamTitle: {
+    color: colors.white,
+    fontSize: 17,
+    marginBottom: 8,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  teamDescription: {
+    color: 'rgba(255,255,255,0.75)',
+    lineHeight: 22,
+    marginBottom: 16,
+    fontFamily: fontFamily.montserratRegular,
+  },
+
+  teamButton: {
+    backgroundColor: colors.secondary,
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+
+  teamButtonText: {
+    color: colors.dark,
+    fontSize: 14,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  servicesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+
+  serviceChip: {
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+
+  serviceText: {
+    color: colors.white,
+    fontSize: 12,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  bullet: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 13,
+    marginBottom: 10,
+    fontFamily: fontFamily.montserratMedium,
+  },
+});

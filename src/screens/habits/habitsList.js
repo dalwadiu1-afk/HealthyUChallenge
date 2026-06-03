@@ -124,6 +124,10 @@ function FlipCard({
     ],
   };
 
+  const goalAlreadySet =
+    selectedGoalData?.goalText &&
+    selectedGoalData.goalText.toString().trim() !== '';
+
   const onFlipCard = () => {
     // ======================
     // SELECTION MODE
@@ -174,7 +178,7 @@ function FlipCard({
     // ======================
 
     const allowed = selectedGoals.some(g => g.id === item.id);
-
+    console.log('allowed :>> ', allowed);
     if (!allowed) return;
 
     // ======================
@@ -182,7 +186,7 @@ function FlipCard({
     // DIRECT NAVIGATION
     // ======================
 
-    if (!item?.showInput) {
+    if (!item?.showInput || goalAlreadySet) {
       flipCard();
 
       setTimeout(() => {
@@ -202,6 +206,9 @@ function FlipCard({
 
     flipCard();
   };
+
+  const shouldShowGoalInput =
+    selectedGoals?.length === 3 && item?.showInput && !goalAlreadySet;
 
   return (
     <Animated.View style={[styles.cardWrapper, entranceStyle]}>
@@ -261,7 +268,7 @@ function FlipCard({
             },
           ]}
         >
-          {selectedGoals?.length === 3 && item?.showInput ? (
+          {shouldShowGoalInput ? (
             <>
               <Text style={styles.cardEmoji}>{cs.emoji}</Text>
 
@@ -270,7 +277,7 @@ function FlipCard({
               </Text>
 
               <TextInput
-                placeholder="Enter your goal..."
+                placeholder={item?.showInput}
                 placeholderTextColor="rgba(255,255,255,0.3)"
                 value={goalText}
                 onChangeText={setGoalText}

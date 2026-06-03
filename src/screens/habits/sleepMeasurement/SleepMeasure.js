@@ -160,7 +160,7 @@ export default function SleepClock({ navigation }) {
     // live listener
     ref.on('value', snapshot => {
       const data = snapshot.val() || {};
-
+      console.log('data :>> ', data);
       setSleepData(data);
 
       if (data?.goal?.selectedGoal) {
@@ -674,7 +674,12 @@ export default function SleepClock({ navigation }) {
               label: 'Avg Sleep',
               value: getAverageSleep(sleepData?.logs),
             },
-            { label: 'Goal', value: sleepData?.goal?.selectedGoal + ' Hrs' },
+            {
+              label: 'Goal',
+              value: sleepData?.goal?.selectedGoal
+                ? sleepData?.goal?.selectedGoal
+                : 0 + ' Hrs',
+            },
           ].map((item, i) => (
             <View
               key={i}
@@ -685,7 +690,10 @@ export default function SleepClock({ navigation }) {
             </View>
           ))}
         </View>
-
+        {console.log(
+          'sleepData?.goal?.selectedGoal >> ',
+          sleepData?.goal?.selectedGoal,
+        )}
         {/* ── Monthly goal input ── */}
         {!sleepData?.goal?.selectedGoal ? (
           <View style={styles.goalCard}>

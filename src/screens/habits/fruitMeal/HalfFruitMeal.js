@@ -16,6 +16,7 @@ import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import { Header, Wrapper } from '../../../components';
 import moment from 'moment';
+import storage from '@react-native-firebase/storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const USER_ID = auth().currentUser?.uid;
@@ -74,24 +75,68 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
 
   const TOTAL_DAYS = startMoment ? moment().endOf('month').date() : 0;
 
-  const saveDay = async (dayKey, uri) => {
-    const ref = database().ref(
-      `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}`,
-    );
+  /* =========================================
+    UPLOAD IMAGE TO FIREBASE STORAGE
+========================================= */
+  const uploadMealPhoto = async (dayKey, localUri) => {
+    try {
+      const storagePath = `halfPlateChallenge/${USER_ID}/${CURRENT_MONTH_KEY}/${dayKey}.jpg`;
 
-    await ref.update({
-      title: 'Half Plate Fruits & Veggies',
-      target: '1 Photo',
-      startedAt: habitData?.startedAt || moment().toISOString(),
+      const reference = storage().ref(storagePath);
 
-      [`days/${dayKey}`]: {
-        uri,
-        completed: true,
-        timestamp: moment().toISOString(),
-      },
+      await reference.putFile(localUri);
 
-      updatedAt: database.ServerValue.TIMESTAMP,
-    });
+      const downloadURL = await reference.getDownloadURL();
+
+      return {
+        success: true,
+        imageUrl: downloadURL,
+        storagePath,
+      };
+    } catch (error) {
+      console.log('UPLOAD ERROR:', error);
+
+      return {
+        success: false,
+        error,
+      };
+    }
+  };
+
+  const saveDay = async (dayKey, localUri) => {
+    try {
+      const uploadResult = await uploadMealPhoto(dayKey, localUri);
+
+      if (!uploadResult.success) {
+        return;
+      }
+
+      const { imageUrl, storagePath } = uploadResult;
+
+      const ref = database().ref(
+        `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}`,
+      );
+
+      await ref.update({
+        title: 'Half Plate Fruits & Veggies',
+        target: '1 Photo',
+        startedAt: habitData?.startedAt || moment().toISOString(),
+
+        [`days/${dayKey}`]: {
+          imageUrl,
+          storagePath,
+          completed: true,
+          timestamp: moment().toISOString(),
+          uploadedAt: Date.now(),
+        },
+
+        updatedAt: database.ServerValue.TIMESTAMP,
+      });
+
+      console.log('Photo saved successfully');
+    } catch (error) {
+      console.log('SAVE ERROR:', error);
+    }
   };
 
   const pickImage = async dayKey => {
@@ -109,11 +154,29 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
   };
 
   const deletePhoto = async dayKey => {
-    await database()
-      .ref(
-        `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}/days/${dayKey}`,
-      )
-      .remove();
+    try {
+      const snapshot = await database()
+        .ref(
+          `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}/days/${dayKey}`,
+        )
+        .once('value');
+
+      const data = snapshot.val();
+
+      if (data?.storagePath) {
+        await storage().ref(data.storagePath).delete();
+      }
+
+      await database()
+        .ref(
+          `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}/days/${dayKey}`,
+        )
+        .remove();
+
+      console.log('Photo deleted');
+    } catch (error) {
+      console.log('DELETE ERROR:', error);
+    }
   };
 
   const days = habitData?.days || {};
@@ -174,7 +237,7 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
 
         {isDone ? (
           <View style={styles.photoWrap}>
-            <Image source={{ uri: item.uri }} style={styles.photo} />
+            <Image source={{ uri: item.imageUrl }} style={styles.photo} />
 
             <Text style={styles.timestamp}>
               {new Date(item.timestamp).toLocaleDateString()}

@@ -9,7 +9,6 @@ import {
   StyleSheet,
   StatusBar,
   Alert,
-  Dimensions,
 } from 'react-native';
 import Svg, {
   Path,
@@ -25,6 +24,7 @@ import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
+import storage from '@react-native-firebase/storage';
 import moment from 'moment';
 
 const user = auth().currentUser;
@@ -157,6 +157,28 @@ export default function MeatlessChallenge({ navigation }) {
     return () => ref.off('value', listener);
   }, []);
 
+  const uploadMealImage = async (localUri, weekKey) => {
+    try {
+      const fileName = `meal_${Date.now()}.jpg`;
+
+      const storagePath = `meatLess/${USER_ID}/${CURRENT_MONTH_KEY}/${weekKey}/${fileName}`;
+
+      const reference = storage().ref(storagePath);
+
+      await reference.putFile(localUri);
+
+      const downloadURL = await reference.getDownloadURL();
+
+      return {
+        downloadURL,
+        storagePath,
+      };
+    } catch (error) {
+      console.log('UPLOAD ERROR:', error);
+      throw error;
+    }
+  };
+
   const saveMeal = async (weekKey, mealData) => {
     const normalizedGoal = getClosestMealGoal(habitData?.goal || 4);
 
@@ -174,6 +196,7 @@ export default function MeatlessChallenge({ navigation }) {
         [`weeks/${weekKey}`]: updatedMeals,
       });
   };
+
   const addMeal = async weekKey => {
     const weekNumber = Number(weekKey.replace('week', ''));
 
@@ -182,7 +205,10 @@ export default function MeatlessChallenge({ navigation }) {
     const meals = weeks?.[weekKey] || {};
 
     if (Object.keys(meals).length >= MAX_MEALS) {
-      Alert.alert('Limit reached', 'Max 4 meals per week');
+      Alert.alert(
+        'Limit reached',
+        `Maximum ${MAX_MEALS} meals allowed this week`,
+      );
       return;
     }
 
@@ -190,19 +216,39 @@ export default function MeatlessChallenge({ navigation }) {
 
     if (!granted) return;
 
-    launchCamera({ mediaType: 'photo', quality: 0.7 }, async res => {
-      const uri = res?.assets?.[0]?.uri;
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.7,
+        saveToPhotos: true,
+      },
+      async res => {
+        try {
+          if (res.didCancel || res.errorCode) return;
 
-      if (!uri) return;
+          const localUri = res?.assets?.[0]?.uri;
 
-      await saveMeal(weekKey, {
-        uri,
-        label: '',
-        timestamp: moment().toISOString(),
-      });
-    });
+          if (!localUri) return;
+
+          const { downloadURL, storagePath } = await uploadMealImage(
+            localUri,
+            weekKey,
+          );
+
+          await saveMeal(weekKey, {
+            imageUrl: downloadURL,
+            storagePath,
+            label: '',
+            timestamp: moment().toISOString(),
+            uploadedAt: Date.now(),
+          });
+        } catch (error) {
+          console.log(error);
+          Alert.alert('Error', 'Failed to upload image');
+        }
+      },
+    );
   };
-
   const updateLabel = async (weekKey, mealIndex, text) => {
     const currentMeals = Array.isArray(weeks?.[weekKey])
       ? [...weeks[weekKey]]
@@ -221,16 +267,31 @@ export default function MeatlessChallenge({ navigation }) {
   };
 
   const deleteMeal = async (weekKey, mealIndex) => {
-    const currentMeals = Array.isArray(weeks?.[weekKey]) ? weeks[weekKey] : [];
+    try {
+      const currentMeals = Array.isArray(weeks?.[weekKey])
+        ? [...weeks[weekKey]]
+        : [];
 
-    const updatedMeals = currentMeals.filter((_, index) => index !== mealIndex);
+      const meal = currentMeals[mealIndex];
 
-    await database()
-      .ref(
-        `users/${USER_ID}/habits/meatLess/${CURRENT_MONTH_KEY}/weeks/${weekKey}`,
-      )
-      .set(updatedMeals);
+      if (meal?.storagePath) {
+        await storage().ref(meal.storagePath).delete();
+      }
+
+      const updatedMeals = currentMeals.filter(
+        (_, index) => index !== mealIndex,
+      );
+
+      await database()
+        .ref(
+          `users/${USER_ID}/habits/meatLess/${CURRENT_MONTH_KEY}/weeks/${weekKey}`,
+        )
+        .set(updatedMeals);
+    } catch (error) {
+      console.log('DELETE ERROR:', error);
+    }
   };
+
   const MAX_MEALS = habitData?.goal || DEFAULT_MAX_MEALS;
   return (
     <View style={styles.root}>
@@ -376,7 +437,9 @@ export default function MeatlessChallenge({ navigation }) {
                       {mealsArray.map(([mealKey, meal], mi) => (
                         <View key={mi} style={styles.mealThumb}>
                           <Image
-                            source={{ uri: meal?.uri }}
+                            source={{
+                              uri: meal?.imageUrl || meal?.uri,
+                            }}
                             style={styles.mealImg}
                           />
 

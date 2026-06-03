@@ -6,6 +6,7 @@ import ProfileDetails from '../screens/profile/profileDetails';
 import InstructionsDetails from '../screens/profile/instructionsDetails';
 import Leaderboard from '../screens/profile/leaderboard';
 import EditProfile from '../screens/profile/editProfile';
+import Social from '../screens/profile/social';
 import QuizStart from '../screens/profile/quiz/QuizStart';
 import Quiz from '../screens/profile/quiz/Quiz';
 import QuizResult from '../screens/profile/quiz/QuizResult';
@@ -31,6 +32,7 @@ export default function ProfileStack() {
       <Stack.Screen name="Leaderboard" component={Leaderboard} />
       <Stack.Screen name="QuizStart" component={QuizStart} />
       <Stack.Screen name="Quiz" component={Quiz} />
+      <Stack.Screen name="Social" component={Social} />
       <Stack.Screen name="QuizResult" component={QuizResult} />
       <Stack.Screen name="QuizReview" component={QuizReview} />
       <Stack.Screen name="QuizBoard" component={QuizBoard} />

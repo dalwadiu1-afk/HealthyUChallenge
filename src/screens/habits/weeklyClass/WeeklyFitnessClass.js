@@ -17,11 +17,12 @@ import database from '@react-native-firebase/database';
 import { launchCamera } from 'react-native-image-picker';
 import moment from 'moment';
 import { requestCameraPermission } from '../../../utils/helper';
+import storage from '@react-native-firebase/storage';
 
 const USER_ID = auth().currentUser?.uid;
 
 const MONTH_KEY = moment().format('MMMM_YYYY');
-const CURRENT_WEEK = 'week1';
+const CURRENT_WEEK = `week${Math.ceil(moment().date() / 7)}`;
 
 const WEEK_PATH = `users/${USER_ID}/habits/fitness/${MONTH_KEY}/weeks/${CURRENT_WEEK}`;
 const PATH = `users/${USER_ID}/habits/fitness/${MONTH_KEY}`;
@@ -224,8 +225,18 @@ export default function FitnessClassUI() {
         (_, i) => existingPhotos[i] || null,
       );
 
+      // Upload to Firebase Storage
+      const storagePath = `fitness/${USER_ID}/${MONTH_KEY}/${CURRENT_WEEK}/${index}.jpg`;
+
+      const reference = storage().ref(storagePath);
+
+      await reference.putFile(uri);
+
+      const downloadURL = await reference.getDownloadURL();
+
+      // Save URL to database
       workoutPhotos[index] = {
-        uri,
+        imageUrl: downloadURL,
         caption: `I'm at workout #${index + 1}!`,
         uploadedAt: now,
       };
@@ -340,8 +351,11 @@ export default function FitnessClassUI() {
             onPress={() => handleUpload(index)}
             activeOpacity={0.8}
           >
-            {photo?.uri ? (
-              <Image source={{ uri: photo.uri }} style={styles.uploadImage} />
+            {photo?.imageUrl || photo?.uri ? (
+              <Image
+                source={{ uri: photo.imageUrl || photo?.uri }}
+                style={styles.uploadImage}
+              />
             ) : (
               <View style={styles.uploadPlaceholder}>
                 <CameraIcon />

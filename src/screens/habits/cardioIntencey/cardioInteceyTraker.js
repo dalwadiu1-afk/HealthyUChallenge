@@ -18,6 +18,7 @@ import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import moment from 'moment';
+import { CustomDropdown } from '../../../components/index';
 
 const USER_ID = auth().currentUser?.uid;
 
@@ -184,10 +185,10 @@ export default function CardioTrackerUI({ navigation }) {
 
       const snapshot = await weekRef.once('value');
       const prev = snapshot.val() || {};
-
+      console.log('goal?.goal :>> ', goal?.goal?.goal);
       await weekRef.update({
         title: goal?.title || 'Cardio',
-        target: goal?.target || '150 min/week',
+        target: `${goal?.goal?.goal} min/week` || '150 min/week',
         totalMinutes: (prev.totalMinutes || 0) + minutes,
         sessions: (prev.sessions || 0) + 1,
         avgIntensity: entry.intensity,
@@ -203,24 +204,22 @@ export default function CardioTrackerUI({ navigation }) {
   };
 
   const renderWeeks = () => {
-    return Object.entries(weeksData)
+    return Object.entries(weeksData || {})
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([weekKey, week]) => (
         <View key={weekKey} style={styles.weekCard}>
           <Text style={styles.weekTitle}>
-            {weekKey.toUpperCase()} • {week.title}
+            {week.title || 'Cardio Progress'}
           </Text>
 
-          {/* <Text style={styles.weekSub}>Target: {week.target}</Text> */}
+          <Text style={styles.weekSub}>🎯 {week.target || '150 min/week'}</Text>
 
           <Text style={styles.weekSub}>
-            Total: {week.totalMinutes || 0} min • Sessions: {week.sessions || 0}
+            ⏱ {week.totalMinutes || 0} min • 📊 {week.sessions || 0} Sessions
           </Text>
 
-          {/* DAYS */}
           {week.days &&
-            Object.keys(week?.days)?.length > 0 &&
-            Object.entries(week?.days)
+            Object.entries(week.days)
               .sort(([a], [b]) => moment(b).diff(moment(a)))
               .map(([date, day]) => (
                 <View key={date} style={styles.dayCard}>
@@ -228,9 +227,57 @@ export default function CardioTrackerUI({ navigation }) {
                     {moment(date).format('DD MMM YYYY')}
                   </Text>
 
-                  <Text style={styles.dayText}>
-                    ⏱ {day.duration} min • 🔥 {day.intensity}
-                  </Text>
+                  {(day.sessions || []).map((session, index) => (
+                    <View key={index} style={styles.sessionCard}>
+                      <View style={styles.sessionRow}>
+                        <Text style={styles.sessionType}>
+                          {session.type === 'timer'
+                            ? '⏱ Timer Session'
+                            : '✏️ Manual Entry'}
+                        </Text>
+
+                        <Text
+                          style={[
+                            styles.sessionIntensity,
+                            {
+                              color:
+                                session.intensity === 'High'
+                                  ? '#22c55e'
+                                  : session.intensity === 'Medium'
+                                  ? '#f59e0b'
+                                  : '#ef4444',
+                            },
+                          ]}
+                        >
+                          {session.intensity}
+                        </Text>
+                      </View>
+
+                      <Text style={styles.sessionMeta}>
+                        Duration: {session.duration || 0} min
+                      </Text>
+
+                      <Text style={styles.sessionMeta}>
+                        {moment(session.createdAt).format('hh:mm A')}
+                      </Text>
+
+                      {session.startPhoto && (
+                        <View style={styles.photoPreviewRow}>
+                          <Image
+                            source={{ uri: session.startPhoto }}
+                            style={styles.previewImage}
+                          />
+
+                          {session.endPhoto && (
+                            <Image
+                              source={{ uri: session.endPhoto }}
+                              style={styles.previewImage}
+                            />
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  ))}
                 </View>
               ))}
         </View>
@@ -278,7 +325,7 @@ export default function CardioTrackerUI({ navigation }) {
 
       await weekRef.update({
         title: goal?.title || 'Cardio Challenge',
-        target: goal?.target || '150 min/week',
+        target: `${goal?.goal?.goal} min/week` || '150 min/week',
         totalMinutes: (prev.totalMinutes || 0) + duration,
         sessions: (prev.sessions || 0) + 1,
         avgIntensity: intensity,
@@ -454,7 +501,6 @@ export default function CardioTrackerUI({ navigation }) {
             <Text style={styles.cardSub}>
               Didn't use the timer? Log your session manually.
             </Text>
-
             <TextInput
               placeholder="Duration (minutes)"
               keyboardType="numeric"
@@ -463,14 +509,12 @@ export default function CardioTrackerUI({ navigation }) {
               placeholderTextColor="rgba(255,255,255,0.25)"
               style={styles.input}
             />
-            <TextInput
-              placeholder="Intensity — Low / Medium / High"
+            <CustomDropdown
               value={manualIntensity}
-              onChangeText={setManualIntensity}
-              placeholderTextColor="rgba(255,255,255,0.25)"
-              style={styles.input}
+              onSelect={setManualIntensity}
+              placeholder="Select Intensity"
+              options={['Low', 'Medium', 'High']}
             />
-
             <TouchableOpacity
               style={styles.saveBtn}
               onPress={saveManual}
@@ -571,7 +615,47 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
+  sessionCard: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
 
+  sessionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  sessionType: {
+    color: colors.white,
+    fontSize: 12,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  sessionIntensity: {
+    fontSize: 12,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  sessionMeta: {
+    color: colors.grey,
+    fontSize: 11,
+    marginTop: 4,
+  },
+
+  photoPreviewRow: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+
+  previewImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 8,
+  },
   weekTitle: {
     color: colors.white,
     fontSize: 14,

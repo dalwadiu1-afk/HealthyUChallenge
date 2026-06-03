@@ -5,39 +5,50 @@ import { useDispatch } from 'react-redux';
 
 import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
+import BootSplash from 'react-native-bootsplash';
 
 import AuthStack from './src/navigation/AuthStack';
 import BottomNavigation from './src/navigation/BottomNavigation';
+import SplashScreen from './src/screens/authentication/splashScreen';
 
 import { setUserData, clearUser } from './src/redux/slices/userSlice';
 
-import {
-  calculateUserStats,
-  syncUserLeaderboardPoints,
-} from './src/utils/helper';
-
 const Stack = createNativeStackNavigator();
+
+const GOAL_TO_HABIT = {
+  BookAnAppointment: 'booking',
+  WeightResistanceTraining: 'fitness',
+  WeeklyFitnessClass: 'fitness',
+
+  DailyFruitIntake: 'dailyFruits',
+  SleepTracking: 'sleep',
+  CardioChallenge: 'cardio',
+  FiberIntake: 'fiber',
+  SugarIntake: 'sugarIntake',
+  WeightChallenge: 'weightChallenge',
+  BodyFatGoal: 'bodyFatGoal',
+};
 
 export default function AppNav() {
   const dispatch = useDispatch();
 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
+  const [userDataLoaded, setUserDataLoaded] = useState(false);
 
   const userRef = useRef(null);
-  const lastHashRef = useRef(null);
 
   // =========================
   // AUTH LISTENER
   // =========================
   useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged(authUser => {
-      setLoading(true);
-
       if (authUser) {
         setUser(authUser);
       } else {
         setUser(null);
+        setUserDataLoaded(true); // allow navigation to auth stack
         dispatch(clearUser());
       }
 
@@ -48,14 +59,15 @@ export default function AppNav() {
   }, [dispatch]);
 
   // =========================
-  // FIREBASE SYNC (NO LOOP)
+  // USER DATA SYNC
   // =========================
   useEffect(() => {
     if (!user?.uid) return;
 
     const uid = user.uid;
 
-    // cleanup old listener
+    setUserDataLoaded(false);
+
     if (userRef.current) {
       userRef.current.off();
     }
@@ -63,18 +75,32 @@ export default function AppNav() {
     const ref = database().ref(`users/${uid}`);
     userRef.current = ref;
 
-    const listener = ref.on('value', async snapshot => {
+    const listener = ref.on('value', snapshot => {
       const userData = snapshot.val();
 
       if (!userData) {
         dispatch(clearUser());
+        setUserDataLoaded(true);
         return;
       }
 
       try {
-        // =========================
-        // REDUX SYNC
-        // =========================
+        const selectedGoals = userData?.goal?.selectedGoals || [];
+
+        const selectedHabits = selectedGoals
+          .map(goal => {
+            const habitKey = GOAL_TO_HABIT[goal.screenName];
+
+            if (!habitKey) return null;
+
+            return {
+              ...goal,
+              habitKey,
+              habitData: userData?.habits?.[habitKey] || {},
+            };
+          })
+          .filter(Boolean);
+
         dispatch(
           setUserData({
             uid,
@@ -82,6 +108,8 @@ export default function AppNav() {
             profile: userData?.profile || {},
             habits: userData?.habits || {},
             goal: userData?.goal || {},
+            selectedHabits,
+
             posts: userData?.posts || {},
             snacks: userData?.snacks || {},
             activities: userData?.activities || {},
@@ -89,12 +117,14 @@ export default function AppNav() {
 
             stats: {
               ...(userData?.stats || {}),
-              ...stats,
             },
           }),
         );
-      } catch (err) {
-        console.log('APP SYNC ERROR:', err);
+
+        setUserDataLoaded(true);
+      } catch (error) {
+        console.log('APP SYNC ERROR:', error);
+        setUserDataLoaded(true);
       }
     });
 
@@ -104,9 +134,37 @@ export default function AppNav() {
   }, [user?.uid, dispatch]);
 
   // =========================
+  // SPLASH CONTROL
+  // =========================
+  useEffect(() => {
+    const hideSplash = async () => {
+      const appReady = !loading && (!user || userDataLoaded);
+
+      if (!appReady) return;
+
+      try {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        await BootSplash.hide({
+          fade: true,
+        });
+
+        setShowSplash(false);
+      } catch (error) {
+        console.log('Splash Error:', error);
+        setShowSplash(false);
+      }
+    };
+
+    hideSplash();
+  }, [loading, userDataLoaded, user]);
+
+  // =========================
   // LOADING
   // =========================
-  if (loading) return null;
+  if (loading || showSplash) {
+    return <SplashScreen />;
+  }
 
   // =========================
   // NAVIGATION
@@ -116,7 +174,11 @@ export default function AppNav() {
       {user ? (
         <BottomNavigation />
       ) : (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator
+          screenOptions={{
+            headerShown: false,
+          }}
+        >
           <Stack.Screen name="Auth" component={AuthStack} />
         </Stack.Navigator>
       )}

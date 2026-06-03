@@ -8,6 +8,7 @@ import {
   TextInput,
   StyleSheet,
   StatusBar,
+  Alert,
 } from 'react-native';
 import Svg, {
   Path,
@@ -17,13 +18,15 @@ import Svg, {
   Rect,
   Circle,
 } from 'react-native-svg';
-import { launchCamera } from 'react-native-image-picker';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import moment from 'moment';
+import Modal from 'react-native-modal';
+import storage from '@react-native-firebase/storage';
 
 const TOTAL_DAYS = 7;
 const TOTAL_WEEKS = 4;
@@ -78,11 +81,11 @@ const FermentedFoodChallenge = ({ navigation }) => {
   const [currentWeek, setCurrentWeek] = useState(0);
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const [startDate, setStartDate] = useState(null);
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(null);
   const completed = weeks.flat().filter(Boolean).length;
   const total = TOTAL_WEEKS * TOTAL_DAYS;
   const progress = completed / total;
-
-  const userRef = database().ref(`/users/${USER_ID}`);
 
   useEffect(() => {
     if (!USER_ID) return;
@@ -130,8 +133,10 @@ const FermentedFoodChallenge = ({ navigation }) => {
     });
 
     return () => {
-      goalRef.off('value', goalListener);
-      ref.off('value', listener);
+      return () => {
+        goalRef.off();
+        ref.off();
+      };
     };
   }, []);
 
@@ -151,6 +156,28 @@ const FermentedFoodChallenge = ({ navigation }) => {
     setCurrentWeek(week);
     setCurrentDayIndex(day);
   }, [startDate]);
+
+  const showImagePicker = dayIndex => {
+    setSelectedDay(dayIndex);
+    setPickerVisible(true);
+  };
+
+  const uploadImageToFirebase = async uri => {
+    try {
+      const fileName = `fermentedFood/${USER_ID}/${Date.now()}.jpg`;
+
+      const reference = storage().ref(fileName);
+
+      await reference.putFile(uri);
+
+      const downloadURL = await reference.getDownloadURL();
+
+      return downloadURL;
+    } catch (error) {
+      console.log('Image Upload Error:', error);
+      return null;
+    }
+  };
 
   const saveToDB = async updatedWeeks => {
     if (!USER_ID) return;
@@ -176,38 +203,102 @@ const FermentedFoodChallenge = ({ navigation }) => {
     await database().ref().update(updates);
   };
 
-  const pickImage = async dayIndex => {
+  const openCamera = async () => {
+    setPickerVisible(false);
+
+    const dayIndex = selectedDay;
+
     const { isToday } = getDayAccess(
       currentWeek,
       dayIndex,
       weeks[currentWeek][dayIndex],
     );
 
-    if (!isToday) return; // ❌ blocks past + future
-    //   return; // only today allowed
-    // }
+    const item = weeks[currentWeek][dayIndex];
+
+    if (!isToday && !item) return;
+
     const granted = await requestCameraPermission();
+
     if (!granted) return;
 
-    launchCamera({ mediaType: 'photo', quality: 0.7 }, response => {
-      if (response.didCancel || response.errorCode) return;
-      if (response?.assets?.length > 0) {
-        const nw = weeks.map(w => [...w]);
-        nw[currentWeek][dayIndex] = {
-          uri: response.assets[0].uri,
-          label: '',
-          timestamp: moment().format('MMMM D, YYYY hh:mm A'),
-        };
-        setWeeks(nw);
-        saveToDB(nw);
-        if (dayIndex < TOTAL_DAYS - 1) {
-          setCurrentDayIndex(p => p + 1);
-        } else if (currentWeek < TOTAL_WEEKS - 1) {
-          setCurrentWeek(p => p + 1);
-          setCurrentDayIndex(0);
-        }
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        saveToPhotos: true,
+      },
+      response => {
+        if (response.didCancel || response.errorCode) return;
+
+        const uri = response?.assets?.[0]?.uri;
+
+        if (!uri) return;
+
+        saveImage(dayIndex, uri);
+      },
+    );
+  };
+
+  const saveImage = async (dayIndex, localUri) => {
+    try {
+      const imageUrl = await uploadImageToFirebase(localUri);
+
+      if (!imageUrl) return;
+
+      const nw = weeks.map(w => [...w]);
+
+      nw[currentWeek][dayIndex] = {
+        uri: imageUrl,
+        label: '',
+        timestamp: moment().format('MMMM D, YYYY hh:mm A'),
+        uploadedAt: database.ServerValue.TIMESTAMP,
+      };
+
+      setWeeks(nw);
+
+      await saveToDB(nw);
+
+      if (dayIndex < TOTAL_DAYS - 1) {
+        setCurrentDayIndex(prev => prev + 1);
+      } else if (currentWeek < TOTAL_WEEKS - 1) {
+        setCurrentWeek(prev => prev + 1);
+        setCurrentDayIndex(0);
       }
-    });
+    } catch (error) {
+      console.log('Save Image Error:', error);
+    }
+  };
+
+  const openGallery = async () => {
+    setPickerVisible(false);
+
+    const dayIndex = selectedDay;
+
+    const { isToday } = getDayAccess(
+      currentWeek,
+      dayIndex,
+      weeks[currentWeek][dayIndex],
+    );
+
+    if (!isToday) return;
+
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        selectionLimit: 1,
+      },
+      response => {
+        if (response.didCancel || response.errorCode) return;
+
+        const uri = response?.assets?.[0]?.uri;
+
+        if (!uri) return;
+
+        saveImage(dayIndex, uri);
+      },
+    );
   };
 
   const updateLabel = async (dayIndex, text) => {
@@ -519,7 +610,7 @@ const FermentedFoodChallenge = ({ navigation }) => {
                   <View style={styles.actionRow}>
                     <TouchableOpacity
                       style={styles.retakeBtn}
-                      onPress={() => pickImage(dayIndex)}
+                      onPress={() => showImagePicker(dayIndex)}
                     >
                       <Text style={styles.retakeText}>Retake</Text>
                     </TouchableOpacity>
@@ -547,7 +638,7 @@ const FermentedFoodChallenge = ({ navigation }) => {
               ) : (
                 <TouchableOpacity
                   style={styles.uploadBtn}
-                  onPress={() => pickImage(dayIndex)}
+                  onPress={() => showImagePicker(dayIndex)}
                 >
                   <CameraIcon />
                   <Text style={styles.uploadText}>Upload Photo</Text>
@@ -557,6 +648,36 @@ const FermentedFoodChallenge = ({ navigation }) => {
           );
         })}
       </Wrapper>
+      <Modal
+        isVisible={pickerVisible}
+        onBackdropPress={() => setPickerVisible(false)}
+        backdropOpacity={0.7}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Upload Photo</Text>
+
+            <Text style={styles.modalSubtitle}>
+              Choose where you'd like to get your photo from
+            </Text>
+
+            <TouchableOpacity style={styles.modalButton} onPress={openCamera}>
+              <Text style={styles.modalButtonText}>📷 Camera</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalButton} onPress={openGallery}>
+              <Text style={styles.modalButtonText}>🖼 Gallery</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setPickerVisible(false)}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -872,6 +993,71 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.2)',
     fontSize: 11,
     fontFamily: fontFamily.interRegular,
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+
+  modalCard: {
+    width: '100%',
+    borderRadius: 24,
+    padding: 24,
+    backgroundColor: colors.bubbleDark,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 20,
+    textAlign: 'center',
+    marginBottom: 8,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  modalSubtitle: {
+    color: colors.grey,
+    textAlign: 'center',
+    marginBottom: 24,
+    fontSize: 13,
+    fontFamily: fontFamily.montserratRegular,
+  },
+
+  modalButton: {
+    height: 54,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    backgroundColor: 'rgba(143,175,120,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.25)',
+  },
+
+  modalButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  cancelButton: {
+    marginTop: 8,
+    height: 52,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+
+  cancelText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });
 

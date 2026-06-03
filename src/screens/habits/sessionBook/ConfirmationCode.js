@@ -45,15 +45,6 @@ const monthKey = new Date()
   })
   .replace(' ', '_');
 
-const getRemainingDays = createdAt => {
-  const expiresAt = createdAt + 7 * 24 * 60 * 60 * 1000;
-  const diff = expiresAt - Date.now();
-
-  if (diff <= 0) return 0;
-
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
-};
-
 export default function ConfirmationCode({ navigation, route }) {
   const { doctor } = route.params || {};
   console.log('route?.params :>> ', route?.params);
@@ -89,19 +80,27 @@ export default function ConfirmationCode({ navigation, route }) {
     fetchBooking();
   }, []);
 
-  const verifyOtp = async inputCode => {
-    console.log('objectdfg :>> ', otp, booking);
-    if (otp?.join('') === booking?.code) {
+  const verifyOtp = async () => {
+    try {
+      const enteredCode = otp.join('');
+
+      if (enteredCode !== booking?.code) {
+        return;
+      }
+
       await database()
         .ref(`/users/${uid}/habits/booking/${monthKey}/${bookingKey}`)
         .update({
           status: 'attended',
           used: true,
+          attendedAt: Date.now(),
         });
+
       closeOtp();
+    } catch (error) {
+      console.log('OTP Verify Error:', error);
     }
   };
-
   const openOtp = () => {
     setShowOtp(true);
     Animated.timing(slideAnim, {
@@ -218,26 +217,37 @@ export default function ConfirmationCode({ navigation, route }) {
         <View style={styles.bookingDivider} />
 
         {/* TIMER */}
+        {/* DOCTOR EMAIL */}
         <View style={styles.bookingRow}>
           <View style={styles.bookingIcon}>
             <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-              <Path d="M12 8v4l3 3" stroke={colors.secondary} strokeWidth={2} />
               <Path
-                d="M12 22a10 10 0 100-20 10 10 0 000 20z"
+                d="M4 6h16v12H4z"
+                stroke={colors.secondary}
+                strokeWidth={1.5}
+              />
+              <Path
+                d="M4 7l8 6 8-6"
                 stroke={colors.secondary}
                 strokeWidth={1.5}
               />
             </Svg>
           </View>
+
           <View style={{ flex: 1 }}>
-            <Text style={styles.bookingLabel}>Time Remaining</Text>
-            <Text style={styles.bookingValue}>
-              {doctor?.createdAt
-                ? `${getRemainingDays(doctor?.createdAt)} days left`
-                : '---'}
+            <Text style={styles.bookingLabel}>Doctor Email</Text>
+
+            <Text
+              selectable
+              selectionColor={colors.secondary}
+              style={styles.bookingValue}
+            >
+              {doctor?.email || 'No email available'}
             </Text>
           </View>
         </View>
+
+        <View style={styles.bookingDivider} />
 
         <View style={styles.bookingDivider} />
 

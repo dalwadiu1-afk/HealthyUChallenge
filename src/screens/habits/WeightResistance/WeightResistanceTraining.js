@@ -16,7 +16,7 @@ import { Header, Wrapper } from '../../../components';
 
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
-
+import storage from '@react-native-firebase/storage';
 import { launchCamera } from 'react-native-image-picker';
 import { requestCameraPermission } from '../../../utils/helper';
 import moment from 'moment';
@@ -62,23 +62,17 @@ function CheckIcon() {
 }
 
 export default function WeightTrainingUI() {
+  const [weeklyTarget, setWeeklyTarget] = useState(DEFAULT_WEEKLY_TARGET);
+  const TOTAL_WEEKS = 4;
+  const TOTAL = weeklyTarget * 4;
   const [sessions, setSessions] = useState(
     Array.from({ length: TOTAL }, () => ({
       photo: null,
       timestamp: null,
     })),
   );
-
-  const [weeklyTarget, setWeeklyTarget] = useState(DEFAULT_WEEKLY_TARGET);
-
-  const TOTAL = weeklyTarget * 4;
-
-  const TOTAL_WEEKS = 4;
-
   const [startDate, setStartDate] = useState(null);
-
   const tempPhotos = useRef({});
-
   const headerAnim = useRef(new Animated.Value(0)).current;
 
   /* =========================================
@@ -102,24 +96,19 @@ export default function WeightTrainingUI() {
     FETCH GOAL TARGET FROM FIREBASE
   ========================================= */
   useEffect(() => {
-    const ref = database().ref(
-      `users/${USER_ID}/habits/weightTraining/${monthKey}`,
-    );
+    const ref = database().ref(`users/${USER_ID}/goal/selectedGoals`);
 
     const listener = ref.on('value', snapshot => {
-      const data = snapshot.val() || {};
+      const goals = snapshot.val() || [];
 
-      // goal can come from goal / target / total
-      const firebaseGoal =
-        Number(data?.goal) ||
-        Number(data?.target) ||
-        Number(data?.total) ||
-        DEFAULT_WEEKLY_TARGET;
+      const weightTrainingGoal = Array.isArray(goals)
+        ? goals.find(item => item?.key === 'weightTraining')
+        : Object.values(goals).find(item => item?.key === 'weightTraining');
 
-      // minimum 2 sessions per week
-      const finalGoal = Math.max(firebaseGoal, 2);
+      const target =
+        Number(weightTrainingGoal?.goalText) || DEFAULT_WEEKLY_TARGET;
 
-      setWeeklyTarget(finalGoal);
+      setWeeklyTarget(Math.max(target, 2));
     });
 
     return () => ref.off('value', listener);
@@ -174,9 +163,10 @@ export default function WeightTrainingUI() {
           ? photosObj
           : Object.values(photosObj);
 
+        console.log('photosArray :>> ', photosArray);
         for (let i = 0; i < weeklyTarget; i++) {
           restored.push({
-            photo: photosArray?.[i]?.uri || null,
+            photo: photosArray?.[i]?.imageUrl || null,
             timestamp: photosArray?.[i]?.timestamp || null,
           });
         }
@@ -260,6 +250,17 @@ export default function WeightTrainingUI() {
 
       const positionInsideWeek = index % weeklyTarget;
 
+      // STORAGE PATH
+      const storagePath = `weightTraining/${USER_ID}/${monthKey}/week${weekNumber}/${positionInsideWeek}.jpg`;
+      const reference = storage().ref(storagePath);
+
+      // Upload local image
+      await reference.putFile(photoData.photo);
+
+      // Download URL
+      const downloadURL = await reference.getDownloadURL();
+
+      // Database Path
       const ref = database().ref(
         `users/${USER_ID}/habits/weightTraining/${monthKey}/weeks/week${weekNumber}`,
       );
@@ -272,13 +273,12 @@ export default function WeightTrainingUI() {
         ? data.workoutPhotos
         : Object.values(data?.workoutPhotos || {});
 
-      if (!Array.isArray(workoutPhotos)) {
-        workoutPhotos = Object.values(workoutPhotos || {});
-      }
-
+      console.log('downloadURL :>> ', downloadURL);
       workoutPhotos[positionInsideWeek] = {
-        uri: photoData.photo,
+        imageUrl: downloadURL,
+        storagePath,
         timestamp: photoData.timestamp,
+        uploadedAt: Date.now(),
       };
 
       const totalCompleted = workoutPhotos.filter(Boolean).length;
@@ -291,8 +291,10 @@ export default function WeightTrainingUI() {
       });
 
       delete tempPhotos.current[index];
+
+      console.log('Upload Success');
     } catch (e) {
-      console.log('SAVE ERROR:', e);
+      console.log('UPLOAD ERROR:', e);
     }
   };
 

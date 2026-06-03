@@ -83,11 +83,11 @@ export default function BookAnAppointment({ navigation, route }) {
 
       setDoctor(doctorData);
 
-      const ref = database().ref(`/users/${uid}/habits/booking/${monthKey}`);
+      const ref = database().ref(`/users/${uid}/habits/booking`);
 
       const listener = ref.on('value', snapshot => {
         const data = snapshot.val();
-
+        console.log('data :>> ', data);
         if (!data) {
           setLoading(false);
           return;
@@ -96,15 +96,8 @@ export default function BookAnAppointment({ navigation, route }) {
         const latest = Object.values(data).reduce((latest, current) => {
           return current.createdAt > latest.createdAt ? current : latest;
         });
-
-        const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-
-        const isExpired = Date.now() > latest?.createdAt + SEVEN_DAYS;
-
-        console.log('isExpired :>> ', isExpired);
-
-        // only redirect if request is still valid
-        if (latest?.status === 'requested' && !isExpired && !latest?.used) {
+        console.log('latest?.status :>> ', latest?.status);
+        if (latest?.status === 'requested') {
           navigation.replace('ConfirmationCode', {
             doctor: {
               ...latest,
@@ -124,7 +117,7 @@ export default function BookAnAppointment({ navigation, route }) {
   };
 
   const openEmail = () => {
-    const professorEmail = 'Carr@gourmetdiningllc.com';
+    const professorEmail = doctor?.email;
     const subject = 'Request for Appointment';
 
     const selectedDaysText =
@@ -161,8 +154,6 @@ Email: ${email}`;
     try {
       const userId = uid;
 
-      const now = Date.now();
-
       const monthKey = new Date()
         .toLocaleString('en-US', {
           month: 'long',
@@ -170,14 +161,40 @@ Email: ${email}`;
         })
         .replace(' ', '_');
 
+      // ==========================
+      // CHECK EXISTING APPOINTMENT
+      // ==========================
+      const bookingSnap = await database()
+        .ref(`/users/${userId}/habits/booking/${monthKey}`)
+        .once('value');
+
+      const bookings = bookingSnap.val();
+
+      if (bookings) {
+        const latest = Object.values(bookings).reduce((a, b) =>
+          a.createdAt > b.createdAt ? a : b,
+        );
+
+        if (latest?.status === 'requested') {
+          Alert.alert(
+            'Appointment Pending',
+            'Please complete your current appointment before booking another one.',
+          );
+          return;
+        }
+      }
+
+      // ==========================
+      // CREATE NEW APPOINTMENT
+      // ==========================
+      const now = Date.now();
+
       const appointmentId = database().ref().push().key;
 
-      // generate session code
       const code = generateCode();
 
       const updates = {};
 
-      // booking + session data
       updates[`users/${userId}/habits/booking/${monthKey}/${appointmentId}`] = {
         code,
         doctorId,
@@ -186,24 +203,19 @@ Email: ${email}`;
         status: 'requested',
         bookingId: appointmentId,
         createdAt: now,
-        expiresAt: now + 10 * 60 * 1000,
         used: false,
       };
 
-      // single write
-      await database()
-        .ref()
-        .update(updates)
-        .then(() => {
-          navigation?.navigate('ConfirmationCode', {
-            doctor: {
-              ...doctor,
-              ...updates[
-                `users/${userId}/habits/booking/${monthKey}/${appointmentId}`
-              ],
-            },
-          });
-        });
+      await database().ref().update(updates);
+
+      navigation.navigate('ConfirmationCode', {
+        doctor: {
+          ...doctor,
+          ...updates[
+            `users/${userId}/habits/booking/${monthKey}/${appointmentId}`
+          ],
+        },
+      });
     } catch (e) {
       console.log('error:', e);
     }

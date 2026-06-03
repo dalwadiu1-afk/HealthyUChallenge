@@ -69,6 +69,13 @@ const MENU_ITEMS = [
   //   screenName: 'ProfileDetails',
   //   badge: null,
   // },
+  {
+    emoji: '👥',
+    title: 'Social',
+    subtitle: 'Connect with our dietitian',
+    screenName: 'Social',
+    badge: 'New',
+  },
 ];
 
 const demo = {
