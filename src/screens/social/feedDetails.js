@@ -144,6 +144,7 @@ export default function FeedDetails({ navigation, route }) {
           <View style={styles.postWrap}>
             <ChatCard
               item={{
+                ...post,
                 name: post?.name,
                 message: post?.message || post?.text,
                 picture: post?.image,
@@ -252,7 +253,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     position: 'absolute',
-    bottom: 0,
+    bottom: height / 10,
     left: 0,
     right: 0,
     flexDirection: 'row',

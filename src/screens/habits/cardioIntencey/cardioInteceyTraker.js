@@ -9,6 +9,7 @@ import {
   StyleSheet,
   StatusBar,
   Dimensions,
+  Platform,
 } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { launchCamera } from 'react-native-image-picker';
@@ -16,6 +17,7 @@ import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
+import storage from '@react-native-firebase/storage';
 import auth from '@react-native-firebase/auth';
 import moment from 'moment';
 import { CustomDropdown } from '../../../components/index';
@@ -51,6 +53,30 @@ const getIntensity = minutes => {
   if (minutes >= 30) return { label: 'High', color: '#22c55e' };
   if (minutes >= 15) return { label: 'Medium', color: '#f59e0b' };
   return { label: 'Low', color: '#ef4444' };
+};
+
+const uploadImageToFirebase = async (imageUri, type = 'photo') => {
+  try {
+    const uid = auth().currentUser?.uid;
+
+    if (!uid) {
+      throw new Error('User not logged in');
+    }
+
+    const fileName = `cardio/${uid}/${type}_${Date.now()}.jpg`;
+
+    const reference = storage().ref(fileName);
+
+    const uploadUri =
+      Platform.OS === 'ios' ? imageUri.replace('file://', '') : imageUri;
+
+    await reference.putFile(uploadUri);
+
+    return await reference.getDownloadURL();
+  } catch (error) {
+    console.log('UPLOAD ERROR:', error);
+    throw error;
+  }
 };
 
 export default function CardioTrackerUI({ navigation }) {
@@ -134,9 +160,19 @@ export default function CardioTrackerUI({ navigation }) {
   }, []);
 
   const handleStart = async () => {
-    setStartTime(moment()); // ✅ FIXED
-    setSessionStarted(true);
-    await openCamera('start');
+    try {
+      const localUri = await openCamera('start');
+
+      if (!localUri) return;
+
+      const imageUrl = await uploadImageToFirebase(localUri, 'start');
+
+      setStartPhoto(imageUrl);
+      setStartTime(moment());
+      setSessionStarted(true);
+    } catch (error) {
+      console.log('Start Upload Error:', error);
+    }
   };
 
   const appendDaySession = async (weekRef, dateKey, entry) => {
@@ -185,7 +221,6 @@ export default function CardioTrackerUI({ navigation }) {
 
       const snapshot = await weekRef.once('value');
       const prev = snapshot.val() || {};
-      console.log('goal?.goal :>> ', goal?.goal?.goal);
       await weekRef.update({
         title: goal?.title || 'Cardio',
         target: `${goal?.goal?.goal} min/week` || '150 min/week',
@@ -289,10 +324,14 @@ export default function CardioTrackerUI({ navigation }) {
       setSessionStarted(false);
 
       const end = moment();
-      setEndTime(end);
 
-      // 👉 TAKE END PHOTO FIRST
-      const uri = await openCamera('end');
+      const localUri = await openCamera('end');
+
+      let uploadedEndPhoto = null;
+
+      if (localUri) {
+        uploadedEndPhoto = await uploadImageToFirebase(localUri, 'end');
+      }
 
       const duration = startTime
         ? moment(end).diff(moment(startTime), 'minutes')
@@ -300,9 +339,21 @@ export default function CardioTrackerUI({ navigation }) {
 
       const intensity = getIntensity(duration).label;
 
+      const entry = {
+        type: 'timer',
+        duration,
+        intensity,
+        startTime: moment(startTime).toISOString(),
+        endTime: end.toISOString(),
+        startPhoto,
+        endPhoto: uploadedEndPhoto,
+        createdAt: moment().toISOString(),
+      };
+
+      // save to firebase database...
+
       const dateKey = end.format('YYYY-MM-DD');
       const monthKey = end.format('MMMM_YYYY');
-
       const week = getWeekIndex(startDate);
 
       const weekRef = database().ref(
@@ -312,31 +363,23 @@ export default function CardioTrackerUI({ navigation }) {
       const snapshot = await weekRef.once('value');
       const prev = snapshot.val() || {};
 
-      const entry = {
-        type: 'timer',
-        duration,
-        intensity,
-        startTime: startTime ? moment(startTime).toISOString() : null,
-        endTime: end.toISOString(),
-        startPhoto,
-        endPhoto: uri, // ✅ use direct result
-        createdAt: moment().toISOString(),
-      };
-
       await weekRef.update({
         title: goal?.title || 'Cardio Challenge',
-        target: `${goal?.goal?.goal} min/week` || '150 min/week',
+        target: `${goal?.goal?.goal || 150} min/week`,
         totalMinutes: (prev.totalMinutes || 0) + duration,
         sessions: (prev.sessions || 0) + 1,
         avgIntensity: intensity,
       });
 
       await appendDaySession(weekRef, dateKey, entry);
-      setEndPhoto(uri); // optional UI update
+
+      setEndPhoto(uploadedEndPhoto);
+      setEndTime(end);
     } catch (e) {
-      console.log('❌ handleStop error:', e);
+      console.log('Stop Upload Error:', e);
     }
   };
+
   const duration =
     startTime && endTime
       ? moment(endTime).diff(moment(startTime), 'minutes')
@@ -533,9 +576,9 @@ export default function CardioTrackerUI({ navigation }) {
             </TouchableOpacity>
           </View>
         )}
-        <View style={styles.card}>
+        <View style={{ ...styles.card, marginBottom: 110 }}>
           <Text style={styles.cardTitle}>Weekly Progress</Text>
-          <ScrollView>
+          <ScrollView contentContainerStyle={{}}>
             {Object.keys(weeksData || {}).length > 0 ? (
               renderWeeks()
             ) : (

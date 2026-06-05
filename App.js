@@ -52,7 +52,6 @@ export default function App() {
           });
 
           // OPTIONAL
-          console.log('FCM TOKEN SAVED');
         }
       } catch (e) {
         console.log('FCM SETUP ERROR:', e);
@@ -67,8 +66,6 @@ export default function App() {
   // =========================
   useEffect(() => {
     const unsubscribe = messaging().onMessage(async remoteMessage => {
-      console.log('📩 FCM RECEIVED:', remoteMessage);
-
       const title =
         remoteMessage?.notification?.title ||
         remoteMessage?.data?.title ||

@@ -71,11 +71,10 @@ export default function ProfileHeader({
       ]}
     >
       <View style={styles.headerAvatar}>
-        {console.log('userData?.avatar :>> ', userData?.avatar)}
         {userData?.avatar || profileData?.profile?.avatar ? (
           <Image
             source={{
-              uri: userData?.avatar || profileData?.profile?.avatar,
+              uri: profileData?.profile?.avatar || userData?.avatar,
             }}
             style={styles.headerAvatarImage}
           />

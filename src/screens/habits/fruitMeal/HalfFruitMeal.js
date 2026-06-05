@@ -22,12 +22,14 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const USER_ID = auth().currentUser?.uid;
 
 const today = moment();
-const CURRENT_MONTH_KEY = today.format('MMMM_YYYY');
 const todayMoment = moment().format('YYYY-MM-DD');
 
 const CARD_SIZE = (SCREEN_WIDTH - 18 * 2 - 10) / 2;
 
-const HalfPlateFruitsVeggies = ({ navigation }) => {
+const HalfPlateFruitsVeggies = ({ navigation, route }) => {
+  const CURRENT_MONTH_KEY = route?.params?.monthKey
+    ? route?.params?.monthKey
+    : today.format('MMMM_YYYY');
   const [habitData, setHabitData] = useState({});
   const [startDate, setStartDate] = useState(null);
 
@@ -56,7 +58,7 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
 
     const listener = ref.on('value', snapshot => {
       const data = snapshot.val();
-
+      console.log('data :>> ', data);
       if (data) {
         setHabitData(data);
       } else {

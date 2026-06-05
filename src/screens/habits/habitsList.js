@@ -178,7 +178,6 @@ function FlipCard({
     // ======================
 
     const allowed = selectedGoals.some(g => g.id === item.id);
-    console.log('allowed :>> ', allowed);
     if (!allowed) return;
 
     // ======================
@@ -531,7 +530,7 @@ export default function HabitsList({ navigation }) {
       screenName: 'CardioTrackerUI',
       category: 'Fitness',
       key: 'cardio',
-      showInput: 'Enter cardio minutes per day (max 120 min)',
+      showInput: 'Enter cardio minutes per week (max 120 min)',
     },
 
     {
@@ -617,7 +616,7 @@ export default function HabitsList({ navigation }) {
 
     const ref = database().ref(`/users/${uid}/goal`);
 
-    const listener = ref.on('value', snap => {
+    const listener = ref.on('value', async snap => {
       const data = snap.val() || {};
 
       const savedGoals = data?.selectedGoals || [];
@@ -635,7 +634,20 @@ export default function HabitsList({ navigation }) {
         createdAt && moment().diff(moment(createdAt), 'days') >= 30;
 
       if (expired) {
-        ref.remove();
+        const archiveMonth = moment(createdAt).format('MMMM_YYYY');
+
+        const archiveData = {
+          goals: savedGoals,
+          startDate: createdAt,
+          endDate: moment(createdAt).add(30, 'days').format('YYYY-MM-DD'),
+          archivedAt: moment().format('YYYY-MM-DD HH:mm:ss'),
+        };
+
+        await database()
+          .ref(`/users/${uid}/previousGoals/${archiveMonth}`)
+          .set(archiveData);
+
+        await ref.remove();
 
         setSelectedGoals([]);
         setSelectionMode(true);

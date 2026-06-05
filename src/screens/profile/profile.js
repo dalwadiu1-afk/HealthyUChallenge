@@ -12,79 +12,10 @@ import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
 import { colors, fontFamily } from '../../constant';
 import { Wrapper } from '../../components';
-import { calculateStreak, extractUserHabits } from '../../utils/helper';
 import { useSelector } from 'react-redux';
 import moment from 'moment';
 
 const { width, height } = Dimensions.get('window');
-
-const userId = auth().currentUser?.uid || 'USER_UID';
-const MENU_ITEMS = [
-  {
-    emoji: '🪪',
-    title: 'Profile Details',
-    subtitle: 'Your personalized health overview',
-    screenName: 'ProfileDetails',
-    badge: 'Active',
-  },
-  {
-    emoji: '🧠',
-    title: 'Quiz Hub',
-    subtitle: 'Track quizzes, streaks & performance',
-    screenName: 'QuizBoard',
-    badge: 'Live',
-  },
-  // {
-  //   emoji: '🎯',
-  //   title: 'Goals',
-  //   subtitle: 'View & edit your health goals',
-  //   screenName: 'ProfileDetails',
-  //   badge: null,
-  // },
-  // {
-  //   emoji: '💪',
-  //   title: 'My Body',
-  //   subtitle: 'BMI, weight, body measurements',
-  //   screenName: 'ProfileDetails',
-  //   badge: 'Missing Info',
-  // },
-  {
-    emoji: '🏆',
-    title: 'Quiz Leaderboard',
-    subtitle: 'See how you rank with others',
-    screenName: 'Leaderboard',
-    badge: null,
-  },
-  {
-    emoji: '📋',
-    title: 'Instructions',
-    subtitle: 'App guide and how-to tips',
-    screenName: 'Instructions',
-    badge: 'New',
-  },
-  // {
-  //   emoji: '⚙️',
-  //   title: 'Settings',
-  //   subtitle: 'Notifications, privacy & more',
-  //   screenName: 'ProfileDetails',
-  //   badge: null,
-  // },
-  {
-    emoji: '👥',
-    title: 'Social',
-    subtitle: 'Connect with our dietitian',
-    screenName: 'Social',
-    badge: 'New',
-  },
-];
-
-const demo = {
-  '2026-05-10': {},
-  '2026-05-11': {},
-  '2026-05-12': {},
-  '2026-05-13': {},
-  // '2026-05-17': {},
-};
 
 function MenuItem({ item, onPress, index }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -163,6 +94,56 @@ export default function Profile({ navigation }) {
   const [profileData, setProfileData] = useState(null);
   const [leaderboardData, setLeaderboardData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const MENU_ITEMS = [
+    {
+      emoji: '🪪',
+      title: 'Profile Details',
+      subtitle: 'Your personalized health overview',
+      screenName: 'ProfileDetails',
+      badge: 'Active',
+    },
+    {
+      emoji: '🏋️',
+      title: 'Workout History',
+      subtitle: 'View completed workouts and progress',
+      screenName: 'ArchivedGoals',
+      badge: 'New',
+    },
+    {
+      emoji: '🧠',
+      title: 'Quiz Hub',
+      subtitle: 'Track quizzes, streaks & performance',
+      screenName: 'QuizBoard',
+      badge: 'Live',
+    },
+    {
+      emoji: '🏆',
+      title: 'Quiz Leaderboard',
+      subtitle: 'See how you rank with others',
+      screenName: 'Leaderboard',
+      badge: null,
+    },
+
+    profileData?.profile?.role === 'admin' && {
+      emoji: '📊',
+      title: 'Quiz Analytics',
+      subtitle: 'View quiz performance insights',
+      screenName: 'QuizAnalytics',
+      badge: 'Admin',
+    },
+
+    {
+      emoji: '👥',
+      title: 'Social',
+      subtitle: 'Connect with our dietitian',
+      screenName: 'Social',
+      badge: 'New',
+    },
+    // { // emoji: '🎯', // title: 'Goals', // subtitle: 'View & edit your health goals', // screenName: 'ProfileDetails', // badge: null, // },
+    // { // emoji: '💪', // title: 'My Body', // subtitle: 'BMI, weight, body measurements', // screenName: 'ProfileDetails', // badge: 'Missing Info', // },
+    // { // emoji: '📋', // title: 'Instructions', // subtitle: 'App guide and how-to tips', // screenName: 'Instructions', // badge: 'New', // },
+    // { // emoji: '⚙️', // title: 'Settings', // subtitle: 'Notifications, privacy & more', // screenName: 'ProfileDetails', // badge: null, // },
+  ].filter(Boolean);
 
   useEffect(() => {
     Animated.parallel([
@@ -178,8 +159,6 @@ export default function Profile({ navigation }) {
       }),
     ]).start();
   }, []);
-
-  const todayDate = new Date();
 
   // remaining days from start date -> next 30 days
 
@@ -231,36 +210,19 @@ export default function Profile({ navigation }) {
 
   const consistency = status?.consistency || 0;
 
-  const activeDays = status?.activeDays || 0;
-
-  const totalPoints =
-    challenge?.totalChallengePoints || leaderboardData?.points || 0;
-
-  const challengeStartDate = challenge?.startDate;
-  const challengeEndDate = challenge?.endDate;
-
-  // DAYS LEFT
+  const startDay = profileData?.goal?.startDate;
+  const TOTAL_CHALLENGE_DAYS = 30;
   let remainingDays = 0;
 
-  if (challengeEndDate) {
+  if (startDay) {
+    const start = new Date(startDay);
     const today = new Date();
-    const end = new Date(challengeEndDate);
 
-    const diff = end - today;
+    const diffInMs = today - start;
+    const daysPassed = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
 
-    remainingDays = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+    remainingDays = Math.max(0, TOTAL_CHALLENGE_DAYS - daysPassed);
   }
-
-  // CURRENT DATE
-  const todayKey = new Date().toISOString().split('T')[0];
-
-  // TODAY QUIZ DATA
-  const todayQuizData = challenge?.days?.[todayKey] || {};
-
-  const todayPoints = todayQuizData?.points || 0;
-
-  const todayQuiz =
-    (todayQuizData?.normalQuiz ? 1 : 0) + (todayQuizData?.bonusQuizzes ? 1 : 0);
 
   // STATS FOR UI
   const STATS = [
@@ -275,7 +237,7 @@ export default function Profile({ navigation }) {
       emoji: '🏆',
     },
     {
-      label: 'Days Left',
+      label: 'Days Left of\nChallenge',
       value: remainingDays,
       emoji: '📅',
     },
@@ -285,20 +247,14 @@ export default function Profile({ navigation }) {
       emoji: '⚡',
     },
   ];
-
-  // USER INITIALS
-  const initials = profile?.name
-    ? profile.name
-        .split(' ')
-        .map(word => word[0])
-        .join('')
-        .substring(0, 2)
-        .toUpperCase()
-    : 'US';
-
-  // MEMBER SINCE
-  const memberSince = profile?.memberSince || new Date().getFullYear();
-
+  const handleLogout = async () => {
+    try {
+      await auth().signOut();
+      console.log('User logged out');
+    } catch (error) {
+      console.log('Logout error:', error);
+    }
+  };
   // GOALS TEXT
   const selectedGoalsText =
     profileData?.goal?.selectedGoals
@@ -346,7 +302,7 @@ export default function Profile({ navigation }) {
 
           <Text style={styles.userHandle}>
             {profile?.username || '@username'} · Member since{' '}
-            {memberSince || 2026}
+            {moment(profile?.memberSince).format('YYYY') || '2026'}
           </Text>
 
           {/* Stats row */}
@@ -389,7 +345,11 @@ export default function Profile({ navigation }) {
         </View>
 
         {/* Logout */}
-        <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.logoutBtn}
+          activeOpacity={0.8}
+          onPress={handleLogout}
+        >
           <Text style={styles.logoutIcon}>🚪</Text>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>

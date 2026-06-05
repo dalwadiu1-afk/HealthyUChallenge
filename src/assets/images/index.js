@@ -2,6 +2,7 @@ import { colors } from '../../constant/colors';
 
 export const docJes = require('../images/jessica.png');
 export const docJen = require('../images/jennifer.png');
+export const docsheri = require('../images/sheri.png');
 
 export const backBtn = `<svg width="8" height="16" viewBox="0 0 8 16" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M7.17157 0.707031L1.58578 6.29282C0.804733 7.07387 0.804735 8.3402 1.58578 9.12124L7.17157 14.707" stroke="white" stroke-width="2"/>

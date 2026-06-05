@@ -70,7 +70,7 @@ exports.tuesdayQuizReminder = onSchedule(
       const timezone = user?.timezone || 'America/New_York';
 
       const now = moment().tz(timezone);
-
+      // now.day() === 2 Tue
       if (now.day() === 2 && now.hour() === 12) {
         promises.push(
           sendPushNotification({
@@ -106,13 +106,13 @@ exports.wednesdayDoublePoints = onSchedule(
       const timezone = user?.timezone || 'America/New_York';
 
       const now = moment().tz(timezone);
-
+      // now.day() === 3 wed
       if (now.day() === 3 && now.hour() === 12) {
         promises.push(
           sendPushNotification({
             token,
             title: '🏆 Wellness Wednesday',
-            body: 'Earn your place on the leaderboard with double quiz points!',
+            body: 'Earn your place on the leaderboard with double quiz points! Today!',
           }),
         );
       }

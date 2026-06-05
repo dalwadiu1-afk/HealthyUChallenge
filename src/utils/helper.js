@@ -44,19 +44,63 @@ const generateDaysFromToday = (
 
 const requestCameraPermission = async () => {
   try {
-    const granted = await PermissionsAndroid.requestMultiple([
-      PermissionsAndroid.PERMISSIONS.CAMERA,
-      PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-    ]);
-
-    if (granted['android.permission.CAMERA'] === 'granted') {
+    if (Platform.OS !== 'android') {
       return true;
-    } else {
-      console.log('Permission denied');
-      return false;
     }
-  } catch (err) {
-    console.warn(err);
+
+    const permissions = [PermissionsAndroid.PERMISSIONS.CAMERA];
+
+    if (Platform.Version >= 33) {
+      permissions.push(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES);
+    } else {
+      permissions.push(
+        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+      );
+    }
+
+    const granted = await PermissionsAndroid.requestMultiple(permissions, {
+      title: 'Camera & Photo Access',
+      message:
+        'HealthyU Challenge needs access to your camera and photos so you can capture or upload veggie meal pictures and track your weekly challenge progress.',
+      buttonNeutral: 'Ask Me Later',
+      buttonNegative: 'Cancel',
+      buttonPositive: 'Allow',
+    });
+
+    const cameraGranted =
+      granted[PermissionsAndroid.PERMISSIONS.CAMERA] ===
+      PermissionsAndroid.RESULTS.GRANTED;
+
+    const galleryGranted =
+      Platform.Version >= 33
+        ? granted[PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES] ===
+          PermissionsAndroid.RESULTS.GRANTED
+        : granted[PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE] ===
+          PermissionsAndroid.RESULTS.GRANTED;
+
+    const hasPermission = cameraGranted && galleryGranted;
+
+    if (!hasPermission) {
+      Alert.alert(
+        'Permission Required',
+        'Camera and Photo permissions are required to upload veggie meal photos.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Open Settings',
+            onPress: () => Linking.openSettings(),
+          },
+        ],
+      );
+    }
+
+    return hasPermission;
+  } catch (error) {
+    console.log('Permission Error:', error);
     return false;
   }
 };

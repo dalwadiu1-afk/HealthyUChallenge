@@ -9,6 +9,7 @@ import {
   StyleSheet,
   StatusBar,
   Alert,
+  Platform,
 } from 'react-native';
 import Svg, {
   Path,
@@ -18,13 +19,16 @@ import Svg, {
   Rect,
   Circle,
 } from 'react-native-svg';
-import { launchCamera } from 'react-native-image-picker';
+import storage from '@react-native-firebase/storage';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import Modal from 'react-native-modal';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import moment from 'moment';
+import { useSelector } from 'react-redux';
 
 const USER_ID = auth().currentUser?.uid;
 const getMonthKey = () => moment().format('MMMM_YYYY');
@@ -51,12 +55,40 @@ function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   );
 }
 
+const uploadImageToFirebase = async uri => {
+  try {
+    const uid = auth().currentUser?.uid;
+
+    if (!uid) {
+      throw new Error('User not logged in');
+    }
+
+    const filename = `beverage_${Date.now()}.jpg`;
+
+    const storageRef = storage().ref(`beverages/${uid}/${filename}`);
+
+    const uploadUri = Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
+
+    await storageRef.putFile(uploadUri);
+
+    const downloadURL = await storageRef.getDownloadURL();
+
+    return downloadURL;
+  } catch (error) {
+    console.log('UPLOAD ERROR:', error);
+    throw error;
+  }
+};
+
 export default function BeverageChallengeUI({ navigation }) {
   const [photo, setPhoto] = useState(null);
   const [label, setLabel] = useState('');
   const [timestamp, setTimestamp] = useState('');
   const [ingredients, setIngredients] = useState([]);
   const [ingredientInput, setIngredientInput] = useState('');
+  const [imagePickerVisible, setImagePickerVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const profile = useSelector(state => state?.user?.profile);
 
   useEffect(() => {
     if (!USER_ID) return;
@@ -71,16 +103,16 @@ export default function BeverageChallengeUI({ navigation }) {
     const listener = ref.on('value', snapshot => {
       const data = snapshot.val();
 
-      if (data) {
-        setPhoto(data.photo || null);
-        setLabel(data.name || '');
-        setIngredients(data.ingredients || []);
-        setTimestamp(
-          data.timestamp
-            ? moment(data.timestamp).format('MMM D, YYYY • h:mm A')
-            : '',
-        );
-      }
+      // if (data) {
+      //   setPhoto(data.photo || null);
+      //   setLabel(data.name || '');
+      //   setIngredients(data.ingredients || []);
+      //   setTimestamp(
+      //     data.timestamp
+      //       ? moment(data.timestamp).format('MMM D, YYYY • h:mm A')
+      //       : '',
+      //   );
+      // }
     });
 
     return () => ref.off('value', listener);
@@ -97,32 +129,85 @@ export default function BeverageChallengeUI({ navigation }) {
     setIngredientInput('');
   };
 
-  const handleCamera = async () => {
-    const granted = await requestCameraPermission();
-    if (!granted) return;
+  const openCamera = async () => {
+    try {
+      const granted = await requestCameraPermission();
 
-    return new Promise(resolve => {
-      launchCamera({ mediaType: 'photo', quality: 0.7 }, response => {
-        if (response.didCancel || response.errorCode) {
-          resolve(null);
-          return;
-        }
+      if (!granted) return;
 
-        const uri = response?.assets?.[0]?.uri;
-        if (!uri) {
-          resolve(null);
-          return;
-        }
+      launchCamera(
+        {
+          mediaType: 'photo',
+          quality: 0.8,
+        },
+        async response => {
+          if (response.didCancel) return;
 
-        setPhoto(uri);
-        setTimestamp(moment().format('MMM D, YYYY • h:mm A'));
+          if (response.assets?.length > 0) {
+            try {
+              setUploading(true);
 
-        resolve(uri);
-      });
-    });
+              const localUri = response.assets[0].uri;
+
+              const imageUrl = await uploadImageToFirebase(localUri);
+
+              setPhoto(imageUrl);
+
+              setTimestamp(moment().format('MMM D, YYYY • h:mm A'));
+            } catch (error) {
+              Alert.alert('Error', 'Failed to upload image');
+            } finally {
+              setUploading(false);
+              setImagePickerVisible(false);
+            }
+          }
+        },
+      );
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const openGallery = async () => {
+    try {
+      launchImageLibrary(
+        {
+          mediaType: 'photo',
+          quality: 0.8,
+        },
+        async response => {
+          if (response.didCancel) return;
+
+          if (response.assets?.length > 0) {
+            try {
+              setUploading(true);
+
+              const localUri = response.assets[0].uri;
+
+              const imageUrl = await uploadImageToFirebase(localUri);
+
+              setPhoto(imageUrl);
+
+              setTimestamp(moment().format('MMM D, YYYY • h:mm A'));
+            } catch (error) {
+              Alert.alert('Error', 'Failed to upload image');
+            } finally {
+              setUploading(false);
+              setImagePickerVisible(false);
+            }
+          }
+        },
+      );
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const handlePost = async () => {
+    if (uploading) {
+      Alert.alert('Please wait', 'Image is still uploading');
+      return;
+    }
     if (!photo) {
       Alert.alert('Please upload a photo 📸');
       return;
@@ -168,8 +253,8 @@ export default function BeverageChallengeUI({ navigation }) {
       const postData = {
         postId,
         userId: USER_ID,
-        name: currentUser?.displayName || 'User',
-        avatar: currentUser?.photoURL || '',
+        name: profile?.name || 'User',
+        avatar: profile?.avatar || '',
         text: `🍹 ${label}`,
         beverageName: label,
         ingredients,
@@ -221,10 +306,14 @@ export default function BeverageChallengeUI({ navigation }) {
         {/* Photo section */}
         <TouchableOpacity
           style={[styles.photoBox, photo && styles.photoBoxFilled]}
-          onPress={handleCamera}
+          onPress={() => setImagePickerVisible(true)}
           activeOpacity={0.85}
         >
-          {photo ? (
+          {uploading ? (
+            <View style={styles.photoPlaceholder}>
+              <Text style={styles.photoPlaceholderText}>Uploading...</Text>
+            </View>
+          ) : photo ? (
             <Image source={{ uri: photo }} style={styles.photo} />
           ) : (
             <View style={styles.photoPlaceholder}>
@@ -367,6 +456,32 @@ export default function BeverageChallengeUI({ navigation }) {
           ))}
         </View>
       </Wrapper>
+      <Modal
+        isVisible={imagePickerVisible}
+        onBackdropPress={() => setImagePickerVisible(false)}
+        onBackButtonPress={() => setImagePickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Choose Image</Text>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openCamera}>
+              <Text style={styles.modalBtnText}>📸 Camera</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openGallery}>
+              <Text style={styles.modalBtnText}>🖼 Gallery</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setImagePickerVisible(false)}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -632,5 +747,54 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: fontFamily.montserratRegular,
     flex: 1,
+  },
+  modalOverlay: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalCard: {
+    width: '85%',
+    backgroundColor: '#1E1E1E',
+    borderRadius: 20,
+    padding: 20,
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  modalBtn: {
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+
+  modalBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  cancelBtn: {
+    marginTop: 5,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  cancelText: {
+    color: '#ef4444',
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });

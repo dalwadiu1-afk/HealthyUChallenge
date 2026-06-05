@@ -235,60 +235,39 @@ export default function WalkingRewardBoard({ navigation }) {
         return (b.challenge?.streak || 0) - (a.challenge?.streak || 0);
       });
 
-      const top3 = sorted.slice(0, 3).map((u, index) => {
+      const top3 = (sorted || []).slice(0, 3).map((u, index) => {
         const challenge = u?.challenge || {};
         const days = challenge?.days || {};
+        const status = u?.status || {};
 
-        // ✅ TOTAL QUIZZES
+        // =========================
+        // QUIZ COMPLETED (ACCURATE)
+        // =========================
         const quizCompleted = Object.values(days).reduce((acc, d) => {
-          const normalQuizCount = d?.normalQuiz
-            ? Object.keys(d.normalQuiz).length
-            : 0;
-
-          const bonusQuizCount = d?.bonusQuizzes
-            ? Object.keys(d.bonusQuizzes).length
-            : 0;
-
-          return acc + normalQuizCount + bonusQuizCount;
+          const normal = d?.normalQuiz ? 1 : 0;
+          const bonus = d?.bonusQuizzes ? 1 : 0;
+          return acc + normal + bonus;
         }, 0);
 
-        // ✅ COMPLETED DAYS
-        const completedDays = Object.values(days).filter(
-          day => (day?.points || 0) > 0,
-        ).length;
-
-        // ✅ CONSISTENCY
-        const durationDays = challenge?.durationDays || 1;
-
-        const consistency = Math.round((completedDays / durationDays) * 100);
-
-        // ✅ TOTAL STEPS
-        const stepsTotal = Object.values(days).reduce(
-          (acc, d) => acc + (d?.steps || 0),
-          0,
-        );
+        // =========================
+        // POINTS (MATCH LEADERBOARD)
+        // =========================
+        const points = challenge?.totalChallengePoints || 0;
 
         return {
           rank: index + 1,
 
-          profile: u?.avatar || u?.profile || 'https://i.pravatar.cc/300',
-
+          profile: u?.avatar || 'https://i.pravatar.cc/300',
           name: u?.name || 'User',
 
-          // ✅ ACTUAL DATA
           streak: challenge?.streak || 0,
+          consistency: status?.consistency,
+          quizCompleted: status?.quizCompleted,
 
-          consistency,
-
-          quizCompleted,
-
-          steps: `${stepsTotal} steps`,
-
-          // ✅ WEEKLY POINTS
-          points: getWeeklyPoints(challenge),
+          // IMPORTANT: same source as leaderboard
+          points,
         };
       });
-
       const userIndex = sorted.findIndex(item => item.uid === uid);
 
       const totalUsers = sorted.length;
@@ -430,6 +409,12 @@ export default function WalkingRewardBoard({ navigation }) {
   const todayProgress =
     todayPoints > 0 ? Math.min((todayPoints / 50) * 100, 100) : 0;
 
+  console.log(
+    'moment(userData?.challenge?.startDate)?.format :>> ',
+    // moment(userData?.challenge?.startDate)?.format('YYYY-MM-DD hh:mm:ss'),
+    profileData?.profile?.memberSince,
+  );
+
   return (
     <View style={styles.root}>
       {/* HEADER */}
@@ -444,7 +429,11 @@ export default function WalkingRewardBoard({ navigation }) {
           userData={userData}
           profileData={profileData}
           startDate={
-            moment(userData?.challenge?.startDate)?.format('YYYY-MM-DD') || ''
+            moment(
+              profileData?.profile?.memberSince
+                ? profileData?.profile?.memberSince
+                : userData?.challenge?.startDate,
+            )?.format('YYYY-MM-DD') || ''
           }
           streakData={mergedQuiz}
           onPress={() => navigation.navigate('AvgSteps')}

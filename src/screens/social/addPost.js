@@ -9,6 +9,7 @@ import {
   ScrollView,
   Image,
   Platform,
+  Dimensions,
 } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import ChatCard from '../../components/social/chatCard';
@@ -19,6 +20,9 @@ import { SvgImg } from '../../components';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import storage from '@react-native-firebase/storage';
 import { attachIcon, uploadIcon } from '../../assets/images';
+import Modal from 'react-native-modal';
+
+const { height } = Dimensions.get('window');
 
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   return (
@@ -40,124 +44,143 @@ function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   );
 }
 
+const uploadImageToFirebase = async uri => {
+  try {
+    const user = auth().currentUser;
+    if (!user) throw new Error('Not logged in');
+
+    const fileName = `posts/${user.uid}/${Date.now()}.jpg`;
+
+    const reference = storage().ref(fileName);
+
+    const uploadUri = Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
+
+    await reference.putFile(uploadUri);
+
+    return await reference.getDownloadURL();
+  } catch (error) {
+    console.log('UPLOAD ERROR:', error);
+    throw error;
+  }
+};
+
+const formatTime = timestamp => {
+  if (!timestamp) return '';
+  const diff = Math.floor((Date.now() - timestamp) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return new Date(timestamp).toLocaleDateString();
+};
+
 export default function AddPost({ navigation }) {
   const [message, setMessage] = useState('');
-  const [image, setImage] = useState(null);
+  const [image, setImage] = useState('');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [posts, setPosts] = useState([]);
+
+  useEffect(() => {
+    const user = auth().currentUser;
+    if (!user) return;
+
+    const ref = database()
+      .ref('posts')
+      .orderByChild('userId')
+      .equalTo(user.uid);
+
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (!data) {
+        setPosts([]);
+        return;
+      }
+
+      const formatted = Object.keys(data).map(key => ({
+        id: key,
+        ...data[key],
+      }));
+
+      // latest first
+      formatted.sort((a, b) => b.createdAt - a.createdAt);
+
+      setPosts(formatted);
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
+
+  const handleUpload = async uri => {
+    try {
+      setUploading(true);
+
+      const url = await uploadImageToFirebase(uri);
+
+      setImage(url);
+      setModalVisible(false);
+    } catch (err) {
+      console.log(err);
+      Alert.alert('Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleCreatePost = async () => {
     if (!message.trim() && !image) return;
 
-    const user = auth().currentUser || 'USER_UID';
-    if (!user) return;
-
     try {
-      let imageUrl = '';
+      const user = auth().currentUser;
+      if (!user) return;
 
-      if (image) {
-        // imageUrl = await uploadImage(image); // ✅ upload first
-        imageUrl = image; // ✅ upload first
-      }
+      const ref = database().ref('posts').push();
 
-      console.log('newPost :>> ');
-      const newPostRef = database().ref('posts').push();
-
-      const newPost = {
+      await ref.set({
         userId: user.uid,
         name: user.displayName || 'User',
         avatar: user.photoURL || '',
-
-        message: message,
-        image: imageUrl, // ✅ CORRECT
-
+        message: message.trim(),
+        image: image || '',
         createdAt: Date.now(),
-
-        likes: {}, // ✅ IMPORTANT
-        comments: {}, // ✅ IMPORTANT
-      };
-      console.log('newPost :>> ', newPost);
-      await newPostRef.set(newPost);
+        likes: {},
+        comments: {},
+      });
 
       setMessage('');
-      setImage(null);
-
-      navigation.goBack();
+      setImage('');
     } catch (err) {
-      console.log('Post error:', err);
+      console.log('POST ERROR:', err);
     }
-  };
-
-  const pickImage = async () => {
-    const result = await launchImageLibrary({
-      mediaType: 'photo',
-      quality: 0.7,
-    });
-
-    if (result.didCancel) return;
-
-    const uri = result.assets?.[0]?.uri;
-    setImage(uri);
   };
 
   const openCamera = async () => {
-    const result = await launchCamera({
+    const res = await launchCamera({
       mediaType: 'photo',
-      quality: 0.7,
+      quality: 0.8,
     });
 
-    if (result.didCancel) return;
+    if (res.didCancel) return;
 
-    const uri = result.assets?.[0]?.uri;
-    setImage(uri);
+    const uri = res.assets?.[0]?.uri;
+    if (!uri) return;
+
+    await handleUpload(uri);
   };
 
-  const addComment = async text => {
-    const commentRef = database().ref(`posts/${postId}/comments`).push();
+  const openGallery = async () => {
+    const res = await launchImageLibrary({
+      mediaType: 'photo',
+      quality: 0.8,
+    });
 
-    const newComment = {
-      userId: user.uid,
-      name: user.displayName || 'User',
-      text: text,
-      createdAt: Date.now(),
-      likes: {},
-    };
+    if (res.didCancel) return;
 
-    await commentRef.set(newComment);
+    const uri = res.assets?.[0]?.uri;
+    if (!uri) return;
+
+    await handleUpload(uri);
   };
-
-  const uploadImage = async uri => {
-    try {
-      const fileName = `posts/${Date.now()}.jpg`;
-
-      // ✅ FIX ANDROID PATH ISSUE
-      const uploadUri =
-        Platform.OS === 'android' ? uri.replace('file://', '') : uri;
-
-      const reference = storage().ref(fileName);
-
-      await reference.putFile(uploadUri);
-
-      const url = await reference.getDownloadURL();
-
-      console.log('UPLOAD SUCCESS:', url);
-
-      return url;
-    } catch (error) {
-      console.log('UPLOAD ERROR:', error);
-      return '';
-    }
-  };
-
-  const posts = [
-    {
-      id: 1,
-      name: 'Linh Nguyen',
-      message:
-        'I am very happy to be with Cafit in training sessions and how about you?',
-      time: '10:30 AM || 2s ago',
-      picture:
-        'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-    },
-  ];
 
   return (
     <View style={styles.root}>
@@ -184,7 +207,7 @@ export default function AddPost({ navigation }) {
             />
           </Svg>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Linh's Post</Text>
+        <Text style={styles.headerTitle}>Share Something</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -193,8 +216,28 @@ export default function AddPost({ navigation }) {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        {posts.map((item, index) => (
-          <ChatCard key={index} item={item} />
+        {posts.map(post => (
+          <ChatCard
+            key={post.id}
+            item={{
+              ...post,
+              name: post?.name,
+              message: post?.message || post?.text,
+              picture: post?.image,
+              time: formatTime(post?.createdAt),
+              likes: post?.likesCount,
+              comments: post?.commentsCount,
+              isLiked: post?.isLiked,
+
+              beverageName: post.beverageName,
+              ingredients: post.ingredients || [],
+              type: post.type,
+
+              snackName: post?.snackName,
+              qty: post?.qty,
+              type: post?.type,
+            }}
+          />
         ))}
       </ScrollView>
       {image && (
@@ -210,12 +253,12 @@ export default function AddPost({ navigation }) {
         </View>
       )}
       {/* Comment input bar */}
-      <View style={styles.inputBar}>
+      <View style={{ ...styles.inputBar }}>
         {/* Attach */}
         <TouchableOpacity
           style={styles.iconBtn}
           activeOpacity={0.8}
-          onPress={pickImage}
+          onPress={() => setModalVisible(true)}
         >
           <SvgImg iconName={attachIcon} height={22} width={22} />
         </TouchableOpacity>
@@ -250,6 +293,29 @@ export default function AddPost({ navigation }) {
           <SvgImg iconName={uploadIcon} height={20} width={20} />
         </TouchableOpacity>
       </View>
+      <Modal
+        isVisible={modalVisible}
+        onBackdropPress={() => setModalVisible(false)}
+      >
+        <View style={styles.modalBox}>
+          <Text style={styles.modalTitle}>Select Image</Text>
+
+          <TouchableOpacity style={styles.modalBtn} onPress={openCamera}>
+            <Text style={styles.modalText}>📸 Camera</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.modalBtn} onPress={openGallery}>
+            <Text style={styles.modalText}>🖼 Gallery</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.modalBtn, { backgroundColor: '#333' }]}
+            onPress={() => setModalVisible(false)}
+          >
+            <Text style={styles.modalText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -259,6 +325,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.dark,
     paddingTop: (StatusBar.currentHeight || 44) + 8,
+  },
+  modalBox: {
+    backgroundColor: '#1E1E1E',
+    padding: 20,
+    borderRadius: 16,
+  },
+
+  modalTitle: {
+    color: '#fff',
+    fontSize: 16,
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+
+  modalBtn: {
+    padding: 14,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 12,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+
+  modalText: {
+    color: '#fff',
+    fontSize: 14,
   },
 
   header: {
@@ -315,7 +406,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    paddingBottom: 28,
+    paddingBottom: height / 9,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.08)',
     backgroundColor: 'rgba(255,255,255,0.03)',

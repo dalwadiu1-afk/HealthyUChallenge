@@ -1,5 +1,12 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  Platform,
+} from 'react-native';
 import ActionSheet from 'react-native-actions-sheet';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import database from '@react-native-firebase/database';
@@ -8,6 +15,22 @@ import { Header, RadioBtn, Wrapper } from '../../components';
 import InputBox from '../../components/common/InputBox';
 import { requestCameraPermission } from '../../utils/helper';
 import auth from '@react-native-firebase/auth';
+import storage from '@react-native-firebase/storage';
+
+const uploadImageToFirebase = async uri => {
+  const user = auth().currentUser;
+  if (!user) throw new Error('No user logged in');
+
+  const cleanUri = Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
+
+  const fileName = `profile/${user.uid}/${Date.now()}.jpg`;
+
+  const ref = storage().ref(fileName);
+
+  await ref.putFile(cleanUri);
+
+  return await ref.getDownloadURL();
+};
 
 export default function EditProfile({ navigation }) {
   const actionSheetRef = useRef(null);
@@ -41,7 +64,7 @@ export default function EditProfile({ navigation }) {
       saveToPhotos: true,
     };
 
-    launchCamera(options, response => {
+    launchCamera(options, async response => {
       console.log('Camera Response:', response); // 🔥 DEBUG
 
       if (response.didCancel) return;
@@ -53,7 +76,8 @@ export default function EditProfile({ navigation }) {
       const uri = response.assets?.[0]?.uri;
 
       if (uri) {
-        updateField('image', uri);
+        const url = await uploadImageToFirebase(uri);
+        updateField('image', url);
         actionSheetRef.current?.hide();
       }
     });
@@ -73,7 +97,7 @@ export default function EditProfile({ navigation }) {
       quality: 0.8,
     };
 
-    launchImageLibrary(options, response => {
+    launchImageLibrary(options, async response => {
       if (response.didCancel) return;
       if (response.errorCode) {
         console.log('Gallery Error:', response.errorMessage);
@@ -82,7 +106,8 @@ export default function EditProfile({ navigation }) {
 
       const uri = response.assets?.[0]?.uri;
       if (uri) {
-        updateField('image', uri);
+        const url = await uploadImageToFirebase(uri);
+        updateField('image', url); // store Firebase URL
         actionSheetRef.current?.hide();
       }
     });
@@ -95,6 +120,7 @@ export default function EditProfile({ navigation }) {
         name: form?.name,
         username: form?.username,
         avatar: form?.image,
+        image: form?.image,
         gender: form?.gender,
       });
 
@@ -107,7 +133,6 @@ export default function EditProfile({ navigation }) {
   };
 
   useEffect(() => {
-    console.log('userId :>> ', userId);
     const ref = database().ref(`users/${userId}/profile`);
 
     const listener = ref.on('value', snapshot => {
@@ -135,9 +160,12 @@ export default function EditProfile({ navigation }) {
 
         {/* AVATAR */}
         <View style={styles.avatarContainer}>
+          {console.log('form?.image :>> ', form)}
+
           <Image
             source={{
               uri:
+                form?.avatar ||
                 form?.image ||
                 'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
             }}

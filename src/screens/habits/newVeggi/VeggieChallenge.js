@@ -10,13 +10,15 @@ import {
   Platform,
 } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
-import { launchCamera } from 'react-native-image-picker';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import moment from 'moment';
+import Modal from 'react-native-modal';
+import storage from '@react-native-firebase/storage';
 
 const user = auth().currentUser;
 const CURRENT_MONTH_KEY = moment().format('MMMM_YYYY');
@@ -70,10 +72,32 @@ const getWeekUnlockData = (goalStartDate, weekNumber) => {
   };
 };
 
+const uploadImageToFirebase = async localUri => {
+  try {
+    const extension = localUri.split('.').pop();
+
+    const fileName = `veggie_${Date.now()}.${extension}`;
+
+    const storagePath = `users/${USER_ID}/veggieChallenge/${CURRENT_MONTH_KEY}/${fileName}`;
+
+    const reference = storage().ref(storagePath);
+
+    await reference.putFile(localUri);
+
+    return await reference.getDownloadURL();
+  } catch (error) {
+    console.log('UPLOAD ERROR', error);
+    return null;
+  }
+};
+
 const VeggieChallenge = ({ navigation }) => {
   const [goalStartDate, setGoalStartDate] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [weeks, setWeeks] = useState({});
   const [labels, setLabels] = useState({});
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [selectedWeek, setSelectedWeek] = useState(null);
 
   useEffect(() => {
     if (!USER_ID) return;
@@ -159,54 +183,6 @@ const VeggieChallenge = ({ navigation }) => {
     }
   };
 
-  const pickImage = async weekKey => {
-    const granted = await requestCameraPermission();
-
-    if (!granted) return;
-
-    launchCamera(
-      {
-        mediaType: 'photo',
-        quality: 0.7,
-      },
-      async response => {
-        if (response.didCancel) return;
-
-        if (response.errorCode) {
-          console.log(response.errorMessage);
-          return;
-        }
-
-        try {
-          const asset = response?.assets?.[0];
-
-          const uri =
-            Platform.OS === 'android'
-              ? asset?.uri
-              : asset?.uri?.replace('file://', '');
-          if (!uri) return;
-
-          const updated = {
-            ...weeks,
-            [weekKey]: {
-              ...weeks[weekKey],
-              uri,
-              label: weeks[weekKey]?.label || '',
-              timestamp: moment().valueOf(),
-              locked: false,
-            },
-          };
-
-          setWeeks(updated);
-
-          await updateWeeks(updated);
-        } catch (e) {
-          console.log('IMAGE ERROR', e);
-        }
-      },
-    );
-  };
-
   const updateLabel = async (weekKey, text) => {
     const updated = {
       ...weeks,
@@ -222,25 +198,125 @@ const VeggieChallenge = ({ navigation }) => {
   };
 
   const deleteEntry = async weekKey => {
-    const updated = { ...weeks };
+    try {
+      const imageUrl = weeks?.[weekKey]?.uri;
 
-    const currentWeekNumber = Number(weekKey.replace('week', ''));
+      if (imageUrl?.includes('firebasestorage')) {
+        const storageRef = storage().refFromURL(imageUrl);
+        await storageRef.delete();
+      }
 
-    updated[weekKey] = {
-      ...updated[weekKey],
-      uri: '',
-      label: '',
-      timestamp: null,
-    };
+      const updated = { ...weeks };
 
-    // remove future weeks
-    for (let i = currentWeekNumber + 1; i <= MAX_WEEKS; i++) {
-      delete updated[`week${i}`];
+      const currentWeekNumber = Number(weekKey.replace('week', ''));
+
+      updated[weekKey] = {
+        ...updated[weekKey],
+        uri: '',
+        label: '',
+        timestamp: null,
+      };
+
+      for (let i = currentWeekNumber + 1; i <= MAX_WEEKS; i++) {
+        delete updated[`week${i}`];
+      }
+
+      setWeeks(updated);
+
+      await updateWeeks(updated);
+    } catch (error) {
+      console.log('DELETE ERROR', error);
     }
+  };
+  const saveImage = async localUri => {
+    try {
+      setUploading(true);
 
-    setWeeks(updated);
+      const imageUrl = await uploadImageToFirebase(localUri);
 
-    await updateWeeks(updated);
+      if (!imageUrl || !selectedWeek) {
+        setUploading(false);
+        return;
+      }
+
+      const updated = {
+        ...weeks,
+        [selectedWeek]: {
+          ...weeks[selectedWeek],
+          uri: imageUrl,
+          label: weeks[selectedWeek]?.label || '',
+          timestamp: moment().valueOf(),
+          locked: false,
+        },
+      };
+
+      setWeeks(updated);
+
+      await updateWeeks(updated);
+
+      setSelectedWeek(null);
+    } catch (error) {
+      console.log('SAVE IMAGE ERROR', error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const openGallery = async () => {
+    setPickerVisible(false);
+
+    const granted = await requestCameraPermission();
+
+    if (!granted) return;
+
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        selectionLimit: 1,
+        quality: 0.8,
+      },
+      async response => {
+        if (response.didCancel || response.errorCode) return;
+
+        const uri = response?.assets?.[0]?.uri;
+
+        if (!uri) return;
+
+        const uploadUri =
+          Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
+
+        await saveImage(uploadUri);
+      },
+    );
+  };
+
+  // there is issue with camera opening
+
+  const openCamera = async () => {
+    setPickerVisible(false);
+
+    const granted = await requestCameraPermission();
+    console.log('requestCameraPermission :>> ', granted);
+    if (!granted) return;
+
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+      },
+      async response => {
+        if (response.didCancel || response.errorCode) return;
+
+        const uri = response?.assets?.[0]?.uri;
+
+        if (!uri) return;
+
+        const uploadUri =
+          Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
+
+        await saveImage(uploadUri);
+      },
+    );
   };
 
   const safeWeeks = Object.values(weeks || {});
@@ -345,7 +421,10 @@ const VeggieChallenge = ({ navigation }) => {
                       <View style={styles.entryActions}>
                         <TouchableOpacity
                           style={styles.retakeBtn}
-                          onPress={() => pickImage(weekKey)}
+                          onPress={() => {
+                            setSelectedWeek(weekKey);
+                            setPickerVisible(true);
+                          }}
                         >
                           <Text style={styles.retakeText}>Retake</Text>
                         </TouchableOpacity>
@@ -361,12 +440,13 @@ const VeggieChallenge = ({ navigation }) => {
                   ) : (
                     <TouchableOpacity
                       style={styles.uploadBtn}
-                      onPress={() => pickImage(weekKey)}
+                      onPress={() => {
+                        setSelectedWeek(weekKey);
+                        setPickerVisible(true);
+                      }}
                     >
                       <CameraIcon />
-                      <Text style={styles.uploadText}>
-                        Upload Veggie Meal Photo
-                      </Text>
+                      <Text style={styles.modalTitle}>Upload Veggie Meal</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -374,6 +454,31 @@ const VeggieChallenge = ({ navigation }) => {
             })}
         </View>
       </Wrapper>
+      <Modal
+        isVisible={pickerVisible}
+        onBackdropPress={() => setPickerVisible(false)}
+      >
+        <View style={styles.modalCard}>
+          <Text style={styles.modalTitle}>
+            {uploading ? 'Uploading...' : 'Upload Veggie Meal'}
+          </Text>
+
+          <TouchableOpacity style={styles.modalButton} onPress={openCamera}>
+            <Text style={styles.modalButtonText}>📷 Camera</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.modalButton} onPress={openGallery}>
+            <Text style={styles.modalButtonText}>🖼 Gallery</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={() => setPickerVisible(false)}
+          >
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -626,6 +731,52 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.35)',
     fontSize: 14,
     fontFamily: fontFamily.montserratMedium,
+  },
+  modalCard: {
+    borderRadius: 24,
+    padding: 24,
+    backgroundColor: colors.bubbleDark,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 20,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  modalButton: {
+    height: 54,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    backgroundColor: 'rgba(143,175,120,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.25)',
+  },
+
+  modalButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  cancelButton: {
+    height: 52,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+
+  cancelText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });
 

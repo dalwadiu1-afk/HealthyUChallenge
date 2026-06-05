@@ -77,7 +77,7 @@ export default function Quiz({ navigation, route }) {
       else {
         const doc = await firestore()
           .collection(isBonus ? 'BonusQuizes' : 'quizCategories')
-          .doc(isBonus ? dynamicWeekId : monthKey)
+          .doc(monthKey)
           .get();
 
         const data = doc.data();

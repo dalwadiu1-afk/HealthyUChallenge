@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   TextInput,
   Animated,
+  Dimensions,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { colors } from '../../constant/colors';
@@ -18,6 +19,8 @@ import ProfileHeader from '../../components/profile/ProfileHeader';
 import { Wrapper } from '../../components';
 import database, { onValue } from '@react-native-firebase/database';
 import moment from 'moment';
+
+const { height } = Dimensions.get('window');
 
 const STORIES = [
   { id: 0, name: 'Your Story', color: '#4D6644', isOwn: true },
@@ -154,6 +157,18 @@ export default function Feeds({ navigation }) {
     }
   };
 
+  const deletePost = async postId => {
+    try {
+      if (!postId) return;
+
+      await database().ref(`/posts/${postId}`).remove();
+
+      console.log('Post deleted:', postId);
+    } catch (error) {
+      console.log('Delete error:', error);
+    }
+  };
+
   const mergedQuiz = userData?.quizzes?.days || {};
 
   return (
@@ -176,63 +191,64 @@ export default function Feeds({ navigation }) {
       <Wrapper
         orbsRight
         safeAreaPops={{ edges: ['bottom'] }}
-        containerStyle={{ paddingHorizontal: 0 }}
+        containerStyle={{ paddingHorizontal: 0, paddingBottom: height / 12 }}
       >
         <FlatList
           data={filteredPosts}
           keyExtractor={item => item.id.toString()}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
-          ListHeaderComponent={
-            <>
-              {/* Search */}
-              {!hideStories ? (
-                <>
-                  <View style={styles.searchRow}>
-                    <Text style={styles.searchIcon}>🔍</Text>
-                    <TextInput
-                      style={styles.searchInput}
-                      placeholder="Search friends or posts…"
-                      placeholderTextColor="rgba(255,255,255,0.3)"
-                      value={search}
-                      onChangeText={setSearch}
-                    />
-                  </View>
+          // ListHeaderComponent={
+          //   <>
+          //     {/* Search */}
+          //     {!hideStories ? (
+          //       <>
+          //         <View style={styles.searchRow}>
+          //           <Text style={styles.searchIcon}>🔍</Text>
+          //           <TextInput
+          //             style={styles.searchInput}
+          //             placeholder="Search friends or posts…"
+          //             placeholderTextColor="rgba(255,255,255,0.3)"
+          //             value={search}
+          //             onChangeText={setSearch}
+          //           />
+          //         </View>
 
-                  {/* Stories */}
-                  <Text style={styles.sectionLabel}>Stories</Text>
-                  <FlatList
-                    data={STORIES}
-                    horizontal
-                    keyExtractor={s => s.id.toString()}
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.storiesRow}
-                    renderItem={({ item }) => <StoryItem story={item} />}
-                  />
-                </>
-              ) : (
-                <View />
-              )}
+          //         {/* Stories */}
+          //         <Text style={styles.sectionLabel}>Stories</Text>
+          //         <FlatList
+          //           data={STORIES}
+          //           horizontal
+          //           keyExtractor={s => s.id.toString()}
+          //           showsHorizontalScrollIndicator={false}
+          //           contentContainerStyle={styles.storiesRow}
+          //           renderItem={({ item }) => <StoryItem story={item} />}
+          //         />
+          //       </>
+          //     ) : (
+          //       <View />
+          //     )}
 
-              {/* Feed label */}
-              <View style={styles.feedLabelRow}>
-                <Text style={styles.sectionLabel}>Community Feed</Text>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => setHideStories(!hideStories)}
-                >
-                  <Text style={styles.seeAll}>
-                    {hideStories ? 'See Less' : 'See all'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          }
+          //     {/* Feed label */}
+          //     <View style={styles.feedLabelRow}>
+          //       <Text style={styles.sectionLabel}>Community Feed</Text>
+          //       <TouchableOpacity
+          //         activeOpacity={0.7}
+          //         onPress={() => setHideStories(!hideStories)}
+          //       >
+          //         <Text style={styles.seeAll}>
+          //           {hideStories ? 'See Less' : 'See all'}
+          //         </Text>
+          //       </TouchableOpacity>
+          //     </View>
+          //   </>
+          // }
+
           renderItem={({ item, index }) => {
-            console.log('object :>> ', item);
             return (
               <ChatCard
                 item={{
+                  ...item,
                   name: item?.name,
                   message: item?.message || item?.text,
                   picture: item?.image,
@@ -260,6 +276,10 @@ export default function Feeds({ navigation }) {
                     showComment: true,
                   })
                 }
+                isUser={
+                  userId == item?.userId || userData?.profile?.role == 'admin'
+                }
+                onDeletePress={() => deletePost(item?.id)}
               />
             );
           }}
@@ -443,7 +463,7 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 20,
+    bottom: height / 8,
     right: 20,
     width: 52,
     height: 52,

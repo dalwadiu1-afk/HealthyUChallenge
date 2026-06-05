@@ -48,7 +48,7 @@ export default function QuizStart({ navigation, route }) {
       // 1. Get month document
       const docSnap = await firestore()
         .collection(isBonus ? 'BonusQuizes' : 'quizCategories')
-        .doc(isBonus ? dynamicWeekId : monthKey)
+        .doc(monthKey)
         .get();
 
       // 2. Pick category (fitness)

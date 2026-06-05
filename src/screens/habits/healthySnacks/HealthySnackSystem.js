@@ -4,11 +4,11 @@ import {
   Text,
   TouchableOpacity,
   Image,
-  ScrollView,
   TextInput,
   StyleSheet,
   StatusBar,
   Alert,
+  Platform,
 } from 'react-native';
 import Svg, {
   Path,
@@ -23,8 +23,11 @@ import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
+import storage from '@react-native-firebase/storage';
 import auth from '@react-native-firebase/auth';
 import moment from 'moment';
+import Modal from 'react-native-modal';
+import { useSelector } from 'react-redux';
 
 const getMonthKey = () => moment().format('MMMM_YYYY');
 
@@ -33,6 +36,31 @@ const getDateKey = () => {
 };
 
 const USER_ID = auth().currentUser?.uid;
+
+const uploadImageToFirebase = async uri => {
+  try {
+    const uid = auth().currentUser?.uid;
+
+    if (!uid) {
+      throw new Error('User not logged in');
+    }
+
+    const filename = `${Date.now()}_${Math.floor(Math.random() * 100000)}.jpg`;
+
+    const storageRef = storage().ref(`snacks/${uid}/${filename}`);
+
+    const uploadUri = Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
+
+    await storageRef.putFile(uploadUri);
+
+    const downloadURL = await storageRef.getDownloadURL();
+
+    return downloadURL;
+  } catch (error) {
+    console.log('UPLOAD ERROR:', error);
+    throw error;
+  }
+};
 
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   return (
@@ -79,6 +107,9 @@ export default function SnackSystemUI({ navigation }) {
   const [image, setImage] = useState(null);
   const [requests, setRequests] = useState([]);
   const [showImagePicker, setShowImagePicker] = useState(false);
+  const [imagePickerVisible, setImagePickerVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const profile = useSelector(state => state?.user?.profile);
 
   useEffect(() => {
     if (!USER_ID) return;
@@ -114,6 +145,76 @@ export default function SnackSystemUI({ navigation }) {
     });
   };
 
+  const openCamera = async () => {
+    try {
+      const granted = await requestCameraPermission();
+
+      if (!granted) return;
+
+      launchCamera(
+        {
+          mediaType: 'photo',
+          quality: 0.8,
+        },
+        async response => {
+          if (response.didCancel) return;
+
+          if (response.assets?.length > 0) {
+            try {
+              setUploading(true);
+
+              const localUri = response.assets[0].uri;
+
+              const imageUrl = await uploadImageToFirebase(localUri);
+
+              setImage(imageUrl);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to upload image');
+            } finally {
+              setUploading(false);
+              setImagePickerVisible(false);
+            }
+          }
+        },
+      );
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const openGallery = async () => {
+    try {
+      launchImageLibrary(
+        {
+          mediaType: 'photo',
+          quality: 0.8,
+        },
+        async response => {
+          if (response.didCancel) return;
+
+          if (response.assets?.length > 0) {
+            try {
+              setUploading(true);
+
+              const localUri = response.assets[0].uri;
+
+              const imageUrl = await uploadImageToFirebase(localUri);
+
+              setImage(imageUrl);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to upload image');
+            } finally {
+              setUploading(false);
+              setImagePickerVisible(false);
+            }
+          }
+        },
+      );
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
   const handleGallery = () => {
     launchImageLibrary({ mediaType: 'photo' }, res => {
       if (res.assets?.length > 0) setImage(res.assets[0].uri);
@@ -122,15 +223,20 @@ export default function SnackSystemUI({ navigation }) {
   };
 
   const addRequest = async () => {
+    const userId = auth().currentUser?.uid;
+    if (uploading) {
+      Alert.alert('Please wait', 'Image is still uploading');
+      return;
+    }
+
     if (!snackName.trim() || !qty.trim()) return;
 
     try {
-      const ref = database().ref(`users/${USER_ID}/snacks/requests`).push();
-
-      await ref.update({
+      const ref = database().ref(`users/${userId}/snacks/requests`).push();
+      await ref.set({
         name: snackName.trim(),
         qty: qty.trim(),
-        image: image || '',
+        image: image || '', // Firebase Storage URL
         status: 'pending',
         createdAt: moment().valueOf(),
         type: 'snack',
@@ -210,8 +316,8 @@ export default function SnackSystemUI({ navigation }) {
                     postId,
                     userId: USER_ID,
 
-                    avatar: currentUser?.photoURL || '',
-                    name: currentUser?.displayName || 'Admin',
+                    avatar: profile?.avatar || profile?.image || '',
+                    name: profile?.name || 'Admin',
 
                     requestId: item.id,
 
@@ -272,11 +378,18 @@ export default function SnackSystemUI({ navigation }) {
     }
   };
 
-  const deleteRequest = async id => {
+  const deleteRequest = async item => {
     try {
-      await database().ref(`users/${USER_ID}/snacks/requests/${id}`).remove();
+      if (item.image) {
+        const storageRef = storage().refFromURL(item.image);
+        await storageRef.delete().catch(() => {});
+      }
+
+      await database()
+        .ref(`users/${USER_ID}/snacks/requests/${item.id}`)
+        .remove();
     } catch (e) {
-      console.log('Delete error:', e);
+      console.log(e);
     }
   };
 
@@ -285,7 +398,8 @@ export default function SnackSystemUI({ navigation }) {
   const TABS = [
     { key: 'request', label: '📋 My List' },
     { key: 'approved', label: '✅ Approved' },
-    { key: 'admin', label: '🛠 Admin' },
+
+    ...(profile?.role == 'admin' ? [{ key: 'admin', label: '🛠 Admin' }] : []),
   ];
 
   return (
@@ -331,7 +445,11 @@ export default function SnackSystemUI({ navigation }) {
           </TouchableOpacity>
         ))}
       </View>
-      <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
+      <Wrapper
+        isForgot
+        safeAreaPops={{ edges: ['bottom'] }}
+        containerStyle={{ paddingBottom: 100 }}
+      >
         {/* ── REQUEST TAB ── */}
         {activeTab === 'request' && (
           <>
@@ -357,10 +475,14 @@ export default function SnackSystemUI({ navigation }) {
               {!showImagePicker ? (
                 <TouchableOpacity
                   style={[styles.uploadBtn, image && styles.uploadBtnFilled]}
-                  onPress={() => setShowImagePicker(true)}
+                  onPress={() => setImagePickerVisible(true)}
                   activeOpacity={0.8}
                 >
-                  {image ? (
+                  {uploading ? (
+                    <View style={styles.uploadInner}>
+                      <Text style={styles.uploadText}>Uploading...</Text>
+                    </View>
+                  ) : image ? (
                     <Image source={{ uri: image }} style={styles.uploadImg} />
                   ) : (
                     <View style={styles.uploadInner}>
@@ -418,15 +540,16 @@ export default function SnackSystemUI({ navigation }) {
               )}
 
               <TouchableOpacity
-                style={[
-                  styles.submitBtn,
-                  (!snackName.trim() || !qty.trim()) &&
-                    styles.submitBtnDisabled,
-                ]}
+                disabled={uploading || !snackName.trim() || !qty.trim()}
                 onPress={addRequest}
                 activeOpacity={0.85}
+                style={[
+                  styles.submitBtn,
+                  (uploading || !snackName.trim() || !qty.trim()) &&
+                    styles.submitBtnDisabled,
+                ]}
               >
-                {snackName.trim() && qty.trim() && (
+                {snackName.trim() && qty.trim() && !uploading && (
                   <GradientBg
                     id="addSnack"
                     c1="#6A9455"
@@ -435,14 +558,15 @@ export default function SnackSystemUI({ navigation }) {
                     horizontal
                   />
                 )}
+
                 <Text
                   style={[
                     styles.submitBtnText,
-                    (!snackName.trim() || !qty.trim()) &&
+                    (uploading || !snackName.trim() || !qty.trim()) &&
                       styles.submitBtnDisabledText,
                   ]}
                 >
-                  Submit Request
+                  {uploading ? 'Uploading...' : 'Submit Request'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -584,7 +708,6 @@ export default function SnackSystemUI({ navigation }) {
                         </Text>
                       </View>
                     </View>
-                    {console.log('item.status >> ', item.status)}
                     <View style={styles.adminBtnRow}>
                       {/* SHOW APPROVE ONLY IF NOT APPROVED */}
                       {item.status !== 'approved' && (
@@ -635,7 +758,7 @@ export default function SnackSystemUI({ navigation }) {
 
                       <TouchableOpacity
                         style={styles.deleteBtn}
-                        onPress={() => deleteRequest(item.id)}
+                        onPress={() => deleteRequest(item)}
                         activeOpacity={0.8}
                       >
                         <Text style={styles.deleteBtnText}>Delete</Text>
@@ -648,6 +771,32 @@ export default function SnackSystemUI({ navigation }) {
           </>
         )}
       </Wrapper>
+      <Modal
+        isVisible={imagePickerVisible}
+        onBackdropPress={() => setImagePickerVisible(false)}
+        onBackButtonPress={() => setImagePickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Choose Image</Text>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openCamera}>
+              <Text style={styles.modalBtnText}>📸 Camera</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openGallery}>
+              <Text style={styles.modalBtnText}>🖼 Gallery</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setImagePickerVisible(false)}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -938,5 +1087,56 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.3)',
     fontSize: 13,
     fontFamily: fontFamily.montserratRegular,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalCard: {
+    width: '85%',
+    backgroundColor: '#1E1E1E',
+    borderRadius: 20,
+    padding: 20,
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  modalBtn: {
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+
+  modalBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  cancelBtn: {
+    marginTop: 5,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  cancelText: {
+    color: '#ef4444',
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });

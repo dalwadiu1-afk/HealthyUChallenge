@@ -201,13 +201,13 @@ export default function Welcome({ navigation }) {
               <Text style={styles.outlineBtnText}>Create Account</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={styles.guestBtn}
               onPress={() => {}}
               activeOpacity={0.65}
             >
               <Text style={styles.guestText}>Continue as a guest</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </Animated.View>
         </View>
       </Wrapper>

@@ -84,20 +84,20 @@ export default function Login({ navigation }) {
     let valid = true;
 
     // EMAIL VALIDATION
-    if (!email) {
-      setError(prev => ({
-        ...prev,
-        email: 'Email is required.',
-      }));
-      valid = false;
-    } else if (!isValidEmail(email)) {
-      setError(prev => ({
-        ...prev,
-        email:
-          'Only users with a montclair.edu email address can access this feature!',
-      }));
-      valid = false;
-    }
+    // if (!email) {
+    //   setError(prev => ({
+    //     ...prev,
+    //     email: 'Email is required.',
+    //   }));
+    //   valid = false;
+    // } else if (!isValidEmail(email)) {
+    //   setError(prev => ({
+    //     ...prev,
+    //     email:
+    //       'Only users with a montclair.edu email address can access this feature!',
+    //   }));
+    //   valid = false;
+    // }
 
     // PASSWORD VALIDATION
     if (!password) {
@@ -176,7 +176,9 @@ export default function Login({ navigation }) {
         default:
           setError(prev => ({
             ...prev,
-            general: 'Unable to log in right now. Please try again shortly.',
+            general:
+              err?.message ||
+              'Unable to log in right now. Please try again shortly.',
           }));
           break;
       }
@@ -212,26 +214,34 @@ export default function Login({ navigation }) {
               labelStyle={styles.inputLabel}
               inputContainerStyle={styles.textInput}
               value={email}
-              onChangeText={setEmail}
-              placeholder="Enter your email"
-              placeholderTextColor="rgba(255,255,255,0.3)"
+              onChangeText={text => {
+                setEmail(text);
+
+                if (error.email) {
+                  setError(prev => ({ ...prev, email: '' }));
+                }
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
               returnKeyType="next"
-              errorMessage={error?.general ? error?.general : error?.email}
+              errorMessage={error.email}
             />
           </View>
 
           {/* Password */}
           <View style={styles.inputGroup}>
             <InputBox
-              label={' Password'}
+              label={'Password'}
               labelStyle={styles.inputLabel}
               inputContainerStyle={[styles.textInput, { flex: 1 }]}
               value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              placeholderTextColor="rgba(255,255,255,0.3)"
+              onChangeText={text => {
+                setPassword(text);
+
+                if (error.password) {
+                  setError(prev => ({ ...prev, password: '' }));
+                }
+              }}
               secureTextEntry={secureText}
               returnKeyType="done"
               onRightIconPress={() => setSecureText(!secureText)}
@@ -241,9 +251,24 @@ export default function Login({ navigation }) {
                   ? 'rgba(255,255,255,0.1)'
                   : 'rgba(255,255,255,0.8)',
               }}
-              errorMessage={error?.general ? error?.general : error?.email}
+              errorMessage={error.password}
             />
           </View>
+
+          {error.general ? (
+            <Text
+              style={{
+                color: '#FF6B6B',
+                fontSize: 13,
+                marginTop: 8,
+                marginBottom: 12,
+                textAlign: 'center',
+                fontFamily: fontFamily.montserratMedium,
+              }}
+            >
+              {error.general}
+            </Text>
+          ) : null}
 
           {/* Forgot password */}
 

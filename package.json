@@ -3,8 +3,8 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "android": "npx react-native run-android --port 8082",
-    "start": "react-native start --port 8082",
+    "android": "npx react-native run-android",
+    "start": "react-native start",
     "lint": "eslint .",
     "test": "jest",
     "postinstall": "patch-package",

@@ -151,7 +151,6 @@ export default function AppNav() {
 
         setShowSplash(false);
       } catch (error) {
-        console.log('Splash Error:', error);
         setShowSplash(false);
       }
     };

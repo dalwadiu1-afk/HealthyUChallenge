@@ -95,7 +95,6 @@ export function StreakCalendar({
 }) {
   const [cycle, setCycle] = useState(0);
 
-  console.log('streakData :>> ', streakData);
   const completedDates = useMemo(() => {
     if (!streakData) return [];
 

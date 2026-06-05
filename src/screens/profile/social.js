@@ -10,19 +10,24 @@ import {
 } from 'react-native';
 
 import { colors, fontFamily } from '../../constant/index';
-import { Wrapper } from '../../components';
-import { docJen, docJes } from '../../assets/images';
+import { Header, Wrapper } from '../../components';
+import { docJen, docJes, docsheri } from '../../assets/images';
 
 export default function Social() {
   const INSTAGRAM_URL = 'https://www.instagram.com/montclair_dietitian/';
   const WEBSITE_URL = 'https://dineoncampus.com/montclair/meet-the-team';
   const EMAIL = 'nutrition@montclair.edu';
 
-  const openLink = url => {
+  const openLink = async url => {
     try {
-      Linking.openURL(url);
+      await Linking.openURL(url);
     } catch (e) {
-      console.log('e :>> ', e);
+      console.log('Primary failed, trying fallback browser');
+      try {
+        await Linking.openURL(`googlechrome:${url}`);
+      } catch (err) {
+        console.log('Fallback failed:', err);
+      }
     }
   };
 
@@ -30,15 +35,16 @@ export default function Social() {
 
   return (
     <Wrapper>
+      <Header header="Info" />
       <View style={styles.container}>
         {/* Hero Card */}
         <View style={styles.profileCard}>
           <Image source={docJen} style={styles.avatar} />
 
-          <Text style={styles.name}>Jennifer Bostedo</Text>
+          <Text style={styles.name}>Jennifer Bostedo, RDN </Text>
 
           <Text style={styles.role}>
-            Director of Dining Services I | Freeman
+            Director of Dining and Wellness | Freeman
           </Text>
 
           <TouchableOpacity
@@ -50,12 +56,36 @@ export default function Social() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
+          {/* <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => openLink('tel:+19736554414')}
           >
             <Text style={styles.contactText}>📞 (973) 655-4414</Text>
+          </TouchableOpacity> */}
+        </View>
+
+        <View style={styles.profileCard}>
+          <Image source={docsheri} style={styles.avatar} />
+
+          <Text style={styles.name}>Sheridan Van Biert, MS, RDN</Text>
+
+          <Text style={styles.role}>Campus Dietitian | Sam's</Text>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => openLink('mailto:jbostedo@gourmetdiningllc.com')}
+          >
+            <Text style={styles.contactText}>
+              ✉️ swheeler@gourmetdiningllc.com
+            </Text>
           </TouchableOpacity>
+
+          {/* <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => openLink('tel:+19736554414')}
+          >
+            <Text style={styles.contactText}>📞 (973) 655-4414</Text>
+          </TouchableOpacity> */}
         </View>
 
         <View style={styles.profileCard}>
@@ -74,12 +104,12 @@ export default function Social() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
+          {/* <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => openLink('tel:+19736554414')}
           >
             <Text style={styles.contactText}>📞 (973) 655-4414</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         {/* Quick Actions */}

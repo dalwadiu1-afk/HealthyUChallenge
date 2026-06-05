@@ -19,13 +19,15 @@ import Svg, {
   Rect,
   Circle,
 } from 'react-native-svg';
-import { launchCamera } from 'react-native-image-picker';
+import Modal from 'react-native-modal';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import Share from 'react-native-share';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
+import storage from '@react-native-firebase/storage';
 import moment from 'moment';
 const user = auth().currentUser;
 const USER_ID = user?.uid;
@@ -70,10 +72,29 @@ const CAPTIONS = (friend, timestamp) => [
   `👊 ${friend} and I showed up!\n⏱ ${timestamp}\n🚀 Progress!\n\n#NoDaysOff`,
 ];
 
+const uploadImageToFirebase = async uri => {
+  try {
+    const fileName = `friendWorkout/${USER_ID}/${Date.now()}.jpg`;
+
+    const reference = storage().ref(fileName);
+
+    await reference.putFile(uri);
+
+    const downloadURL = await reference.getDownloadURL();
+
+    return downloadURL;
+  } catch (error) {
+    console.log('UPLOAD ERROR:', error);
+    throw error;
+  }
+};
+
 export default function FriendWorkoutChallenge({ navigation }) {
   const TOTAL_WEEKS = 4;
   const [startDate, setStartDate] = useState(null);
   const [weekError, setWeekError] = useState({});
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [selectedWeek, setSelectedWeek] = useState(null);
   const [workoutsPerWeek, setWorkoutsPerWeek] = useState(4);
   const [weeks, setWeeks] = useState(
     Array.from({ length: TOTAL_WEEKS }, (_, i) => ({
@@ -195,6 +216,104 @@ export default function FriendWorkoutChallenge({ navigation }) {
     );
   };
 
+  const savePhoto = async localUri => {
+    const week = weeks.find(w => w.week === selectedWeek);
+
+    if (!week) return;
+
+    const weekIndex = week.week - 1;
+
+    // Allow ONLY current week
+    if (weekIndex !== currentWeekIndex) {
+      setWeekError(prev => ({
+        ...prev,
+        [week.week]: '🔒 Only current week is accessible',
+      }));
+      return;
+    }
+
+    if (week.workoutPhotos.length >= workoutsPerWeek) {
+      setWeekError(prev => ({
+        ...prev,
+        [week.week]: '✅ Week already completed',
+      }));
+      return;
+    }
+
+    try {
+      const imageUrl = await uploadImageToFirebase(localUri);
+
+      const newWorkout = {
+        uri: imageUrl,
+        friend: '',
+        timestamp: moment().toISOString(),
+      };
+
+      const updatedPhotos = [...week.workoutPhotos, newWorkout];
+
+      const updatedWeek = {
+        ...week,
+        workoutPhotos: updatedPhotos,
+        completed: updatedPhotos.length === workoutsPerWeek,
+      };
+
+      const updatedWeeks = weeks.map(w =>
+        w.week === week.week ? updatedWeek : w,
+      );
+
+      setWeeks(updatedWeeks);
+
+      await saveWeek(week.week, updatedWeek);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+  const openCamera = async () => {
+    setPickerVisible(false);
+
+    const granted = await requestCameraPermission();
+
+    if (!granted) return;
+
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        saveToPhotos: true,
+      },
+      async response => {
+        if (response.didCancel || response.errorCode) return;
+
+        const uri = response?.assets?.[0]?.uri;
+
+        if (!uri) return;
+
+        await savePhoto(uri);
+      },
+    );
+  };
+
+  const openGallery = async () => {
+    setPickerVisible(false);
+
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        selectionLimit: 1,
+        quality: 0.8,
+      },
+      async response => {
+        if (response.didCancel || response.errorCode) return;
+
+        const uri = response?.assets?.[0]?.uri;
+
+        if (!uri) return;
+
+        await savePhoto(uri);
+      },
+    );
+  };
+
   const getCurrentWeekIndex = () => {
     if (!startDate) return 0;
 
@@ -290,24 +409,42 @@ export default function FriendWorkoutChallenge({ navigation }) {
     const granted = await requestCameraPermission();
     if (!granted) return;
 
-    launchCamera({ mediaType: 'photo', quality: 0.7 }, async res => {
-      const uri = res?.assets?.[0]?.uri;
-      if (!uri) return;
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+      },
+      async response => {
+        if (response.didCancel || response.errorCode) return;
 
-      const updatedWeeks = weeks.map(w => {
-        if (w.week !== weekNumber) return w;
+        const localUri = response?.assets?.[0]?.uri;
+        if (!localUri) return;
 
-        const updatedPhotos = [...w.workoutPhotos];
-        updatedPhotos[photoIndex].uri = uri;
+        const imageUrl = await uploadImageToFirebase(localUri);
 
-        return { ...w, workoutPhotos: updatedPhotos };
-      });
+        const updatedWeeks = weeks.map(w => {
+          if (w.week !== weekNumber) return w;
 
-      setWeeks(updatedWeeks);
+          const updatedPhotos = [...w.workoutPhotos];
 
-      const updatedWeek = updatedWeeks.find(w => w.week === weekNumber);
-      await saveWeek(weekNumber, updatedWeek);
-    });
+          updatedPhotos[photoIndex] = {
+            ...updatedPhotos[photoIndex],
+            uri: imageUrl,
+          };
+
+          return {
+            ...w,
+            workoutPhotos: updatedPhotos,
+          };
+        });
+
+        setWeeks(updatedWeeks);
+
+        const updatedWeek = updatedWeeks.find(w => w.week === weekNumber);
+
+        await saveWeek(weekNumber, updatedWeek);
+      },
+    );
   };
 
   const handleShare = async photoItem => {
@@ -543,7 +680,10 @@ export default function FriendWorkoutChallenge({ navigation }) {
               {!isLocked && weekItem.workoutPhotos.length < workoutsPerWeek && (
                 <TouchableOpacity
                   style={styles.shareBtn}
-                  onPress={() => handleCamera(weekItem.week)}
+                  onPress={() => {
+                    setSelectedWeek(weekItem.week);
+                    setPickerVisible(true);
+                  }}
                 >
                   <Text style={styles.shareText}>Add Workout</Text>
                 </TouchableOpacity>
@@ -569,6 +709,90 @@ export default function FriendWorkoutChallenge({ navigation }) {
           </Text>
         </TouchableOpacity> */}
       </Wrapper>
+      <Modal
+        isVisible={pickerVisible}
+        onBackdropPress={() => setPickerVisible(false)}
+      >
+        <View
+          style={{
+            backgroundColor: colors.bubbleDark,
+            borderRadius: 20,
+            padding: 20,
+          }}
+        >
+          <Text
+            style={{
+              color: colors.white,
+              fontSize: 18,
+              textAlign: 'center',
+              marginBottom: 20,
+              fontFamily: fontFamily.montserratBold,
+            }}
+          >
+            Upload Workout Photo
+          </Text>
+
+          <TouchableOpacity
+            style={{
+              height: 52,
+              borderRadius: 12,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: 'rgba(143,175,120,0.12)',
+              marginBottom: 12,
+            }}
+            onPress={openCamera}
+          >
+            <Text
+              style={{
+                color: colors.white,
+                fontFamily: fontFamily.montserratSemiBold,
+              }}
+            >
+              📷 Camera
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              height: 52,
+              borderRadius: 12,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: 'rgba(143,175,120,0.12)',
+              marginBottom: 12,
+            }}
+            onPress={openGallery}
+          >
+            <Text
+              style={{
+                color: colors.white,
+                fontFamily: fontFamily.montserratSemiBold,
+              }}
+            >
+              🖼 Gallery
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              height: 50,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+            onPress={() => setPickerVisible(false)}
+          >
+            <Text
+              style={{
+                color: '#FF6B6B',
+                fontFamily: fontFamily.montserratSemiBold,
+              }}
+            >
+              Cancel
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 }

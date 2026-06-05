@@ -49,7 +49,7 @@ export default function BookAnAppointment({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const appState = useRef(AppState.currentState);
   const [emailOpened, setEmailOpened] = useState(false);
-
+  // Need to fix this fun
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (
@@ -92,19 +92,19 @@ export default function BookAnAppointment({ navigation, route }) {
           setLoading(false);
           return;
         }
-
         const latest = Object.values(data).reduce((latest, current) => {
+          console.log('object :>> ', latest, current);
           return current.createdAt > latest.createdAt ? current : latest;
         });
-        console.log('latest?.status :>> ', latest?.status);
-        if (latest?.status === 'requested') {
-          navigation.replace('ConfirmationCode', {
-            doctor: {
-              ...latest,
-              ...doctorData,
-            },
-          });
-        }
+        console.log('latest?.status :>> ', data, latest?.status);
+        // if (latest?.status === 'requested') {
+        navigation.replace('ConfirmationCode', {
+          doctor: {
+            ...latest,
+            ...doctorData,
+          },
+        });
+        // }
 
         setLoading(false);
       });

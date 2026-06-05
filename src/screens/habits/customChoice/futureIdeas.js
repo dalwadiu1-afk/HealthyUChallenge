@@ -8,6 +8,8 @@ import {
   TextInput,
   StyleSheet,
   StatusBar,
+  Alert,
+  Platform,
 } from 'react-native';
 import Svg, {
   Path,
@@ -17,7 +19,9 @@ import Svg, {
   Rect,
   Circle,
 } from 'react-native-svg';
-import { launchCamera } from 'react-native-image-picker';
+import storage from '@react-native-firebase/storage';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import Modal from 'react-native-modal';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 
@@ -53,8 +57,38 @@ export default function FutureIdeasUI({ navigation, route }) {
   const [goalText, setGoalText] = useState('');
   const [photo, setPhoto] = useState(null);
   const [goals, setGoals] = useState([]);
+  const [imagePickerVisible, setImagePickerVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const goalTitle = route?.params?.goalTitle || 'Custom Goal';
+
+  const uploadImageToFirebase = async imageUri => {
+    try {
+      const uid = auth().currentUser?.uid;
+
+      if (!uid) {
+        throw new Error('User not authenticated');
+      }
+
+      const fileName = `${Date.now()}_${Math.floor(
+        Math.random() * 1000000,
+      )}.jpg`;
+
+      const reference = storage().ref(`${goalTitle}/${uid}/${fileName}`);
+
+      const pathToFile =
+        Platform.OS === 'ios' ? imageUri.replace('file://', '') : imageUri;
+
+      await reference.putFile(pathToFile);
+
+      const downloadURL = await reference.getDownloadURL();
+
+      return downloadURL;
+    } catch (error) {
+      console.log('Firebase Upload Error:', error);
+      throw error;
+    }
+  };
 
   // FETCH GOALS
   useEffect(() => {
@@ -94,6 +128,79 @@ export default function FutureIdeasUI({ navigation, route }) {
         setPhoto(res.assets[0].uri);
       }
     });
+  };
+
+  const openCamera = async () => {
+    try {
+      const granted = await requestCameraPermission();
+
+      if (!granted) return;
+
+      launchCamera(
+        {
+          mediaType: 'photo',
+          quality: 0.8,
+        },
+        async response => {
+          if (response.didCancel) return;
+
+          if (response.assets?.length > 0) {
+            try {
+              setUploading(true);
+
+              const localUri = response.assets[0].uri;
+
+              const imageUrl = await uploadImageToFirebase(localUri);
+
+              setPhoto(imageUrl);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to upload image');
+            } finally {
+              setUploading(false);
+              setImagePickerVisible(false);
+            }
+          }
+        },
+      );
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const openGallery = async () => {
+    const granted = await requestCameraPermission();
+
+    if (!granted) return;
+    try {
+      launchImageLibrary(
+        {
+          mediaType: 'photo',
+          quality: 0.8,
+        },
+        async response => {
+          if (response.didCancel) return;
+
+          if (response.assets?.length > 0) {
+            try {
+              setUploading(true);
+
+              const localUri = response.assets[0].uri;
+
+              const imageUrl = await uploadImageToFirebase(localUri);
+
+              setPhoto(imageUrl);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to upload image');
+            } finally {
+              setUploading(false);
+              setImagePickerVisible(false);
+            }
+          }
+        },
+      );
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   // SAVE GOAL
@@ -152,7 +259,7 @@ export default function FutureIdeasUI({ navigation, route }) {
             </Svg>
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Custom Goal</Text>
+          <Text style={styles.headerTitle}>{goalTitle}</Text>
 
           <View style={{ width: 44 }} />
         </View>
@@ -198,10 +305,14 @@ export default function FutureIdeasUI({ navigation, route }) {
           {/* PHOTO */}
           <TouchableOpacity
             style={[styles.photoBtn, photo && styles.photoBtnFilled]}
-            onPress={pickPhoto}
+            onPress={() => setImagePickerVisible(true)}
             activeOpacity={0.8}
           >
-            {photo ? (
+            {uploading ? (
+              <View style={styles.photoBtnInner}>
+                <Text style={styles.photoBtnText}>Uploading...</Text>
+              </View>
+            ) : photo ? (
               <>
                 <Image source={{ uri: photo }} style={styles.photoImg} />
 
@@ -219,7 +330,6 @@ export default function FutureIdeasUI({ navigation, route }) {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
-
                   <Circle
                     cx={12}
                     cy={13}
@@ -229,9 +339,7 @@ export default function FutureIdeasUI({ navigation, route }) {
                   />
                 </Svg>
 
-                <Text style={styles.photoBtnText}>
-                  Add Inspiration Photo (optional)
-                </Text>
+                <Text style={styles.photoBtnText}>Add Inspiration Photo</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -277,10 +385,9 @@ export default function FutureIdeasUI({ navigation, route }) {
                   <View style={styles.goalNumBadge}>
                     <Text style={styles.goalNumText}>{goals.length - idx}</Text>
                   </View>
-
                   <Text style={styles.goalTime}>
                     {item?.time ||
-                      moment(item?.createdAt).format('MMM DD, YYYY')}
+                      moment(item?.createdAt).format('MMM DD, YYYY hh:mm A')}
                   </Text>
                 </View>
 
@@ -304,6 +411,32 @@ export default function FutureIdeasUI({ navigation, route }) {
           </View>
         )}
       </ScrollView>
+      <Modal
+        isVisible={imagePickerVisible}
+        onBackdropPress={() => setImagePickerVisible(false)}
+        onBackButtonPress={() => setImagePickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Choose Image</Text>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openCamera}>
+              <Text style={styles.modalBtnText}>📸 Camera</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openGallery}>
+              <Text style={styles.modalBtnText}>🖼 Gallery</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setImagePickerVisible(false)}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -368,7 +501,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.montserratSemiBold,
   },
 
-  scroll: { padding: 18, paddingTop: 16, paddingBottom: 48 },
+  scroll: { padding: 18, paddingTop: 16, paddingBottom: 120 },
 
   inputCard: {
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -530,5 +663,54 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.montserratRegular,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  modalOverlay: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalCard: {
+    width: '85%',
+    backgroundColor: '#1E1E1E',
+    borderRadius: 20,
+    padding: 20,
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  modalBtn: {
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+
+  modalBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  cancelBtn: {
+    marginTop: 5,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  cancelText: {
+    color: '#ef4444',
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });

@@ -402,8 +402,6 @@ const BodyFatGoalScreen = ({ navigation }) => {
       // 🔥 SINGLE FIREBASE WRITE
       await database().ref().update(updates);
 
-      console.log('Saved successfully');
-
       setLocked(true);
       setEditable(false);
     } catch (e) {

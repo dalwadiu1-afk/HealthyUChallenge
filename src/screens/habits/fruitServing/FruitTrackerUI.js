@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   StatusBar,
   Alert,
   TextInput,
+  Platform,
 } from 'react-native';
 import Svg, {
   Path,
@@ -18,14 +19,15 @@ import Svg, {
   Rect,
   Circle,
 } from 'react-native-svg';
-import { launchCamera } from 'react-native-image-picker';
+import storage from '@react-native-firebase/storage';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import Modal from 'react-native-modal';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
 import firestore from '@react-native-firebase/firestore';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
-import { useEffect } from 'react';
 import moment from 'moment';
 
 const getMonthKey = () => moment().format('MMM_YYYY');
@@ -80,11 +82,38 @@ function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   );
 }
 
+const uploadImageToFirebase = async uri => {
+  try {
+    const uid = auth().currentUser?.uid;
+
+    if (!uid) {
+      throw new Error('User not logged in');
+    }
+
+    const fileName = `fruit_${Date.now()}.jpg`;
+
+    const reference = storage().ref(`dailyFruits/${uid}/${fileName}`);
+
+    const uploadUri = Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
+
+    await reference.putFile(uploadUri);
+
+    const downloadURL = await reference.getDownloadURL();
+
+    return downloadURL;
+  } catch (error) {
+    console.log('IMAGE UPLOAD ERROR:', error);
+    throw error;
+  }
+};
+
 export default function FruitTrackerUI({ navigation }) {
   const [selectedFruit, setSelectedFruit] = useState(null);
   const [photo, setPhoto] = useState(null);
   const [startDate, setStartDate] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [imagePickerVisible, setImagePickerVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [customServing, setCustomServing] = useState('');
   const [weeksData, setWeeksData] = useState({});
   const [fruits, setFruits] = useState(FRUITS);
@@ -167,12 +196,66 @@ export default function FruitTrackerUI({ navigation }) {
     return () => ref.off('value', listener);
   }, [startDate]);
 
-  const pickPhoto = async () => {
+  const openCamera = async () => {
     const granted = await requestCameraPermission();
+
     if (!granted) return;
-    launchCamera({ mediaType: 'photo', quality: 0.7 }, res => {
-      if (res.assets?.length > 0) setPhoto(res.assets[0].uri);
-    });
+
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+      },
+      async response => {
+        if (response.didCancel) return;
+
+        if (response.assets?.length > 0) {
+          try {
+            setUploading(true);
+
+            const imageUri = response.assets[0].uri;
+
+            const downloadURL = await uploadImageToFirebase(imageUri);
+
+            setPhoto(downloadURL);
+          } catch (error) {
+            Alert.alert('Upload Failed', 'Could not upload image.');
+          } finally {
+            setUploading(false);
+            setImagePickerVisible(false);
+          }
+        }
+      },
+    );
+  };
+
+  const openGallery = async () => {
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+      },
+      async response => {
+        if (response.didCancel) return;
+
+        if (response.assets?.length > 0) {
+          try {
+            setUploading(true);
+
+            const imageUri = response.assets[0].uri;
+
+            const downloadURL = await uploadImageToFirebase(imageUri);
+
+            setPhoto(downloadURL);
+          } catch (error) {
+            Alert.alert('Upload Failed', 'Could not upload image.');
+          } finally {
+            setUploading(false);
+            setImagePickerVisible(false);
+          }
+        }
+      },
+    );
   };
 
   const addLog = async () => {
@@ -232,8 +315,10 @@ export default function FruitTrackerUI({ navigation }) {
       });
 
       setSelectedFruit(null);
-      setCustomServing('');
       setPhoto(null);
+      setCustomServing('');
+      setImagePickerVisible(false);
+      setUploading(false);
     } catch (e) {
       console.log('Error saving fruit log:', e);
     }
@@ -405,10 +490,14 @@ export default function FruitTrackerUI({ navigation }) {
           {/* Photo */}
           <TouchableOpacity
             style={[styles.photoBtn, photo && styles.photoBtnFilled]}
-            onPress={pickPhoto}
+            onPress={() => setImagePickerVisible(true)}
             activeOpacity={0.8}
           >
-            {photo ? (
+            {uploading ? (
+              <View style={styles.photoBtnInner}>
+                <Text style={styles.photoBtnText}>Uploading...</Text>
+              </View>
+            ) : photo ? (
               <Image source={{ uri: photo }} style={styles.photoImg} />
             ) : (
               <View style={styles.photoBtnInner}>
@@ -417,8 +506,6 @@ export default function FruitTrackerUI({ navigation }) {
                     d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
                     stroke="rgba(143,175,120,0.6)"
                     strokeWidth={1.8}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
                   />
                   <Circle
                     cx={12}
@@ -428,7 +515,8 @@ export default function FruitTrackerUI({ navigation }) {
                     strokeWidth={1.8}
                   />
                 </Svg>
-                <Text style={styles.photoBtnText}>Add Photo (optional)</Text>
+
+                <Text style={styles.photoBtnText}>Add Photo</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -460,7 +548,7 @@ export default function FruitTrackerUI({ navigation }) {
         </View>
 
         {/* Today's log */}
-        <View style={styles.card}>
+        <View style={{ ...styles.card, marginBottom: 110 }}>
           <Text style={styles.cardTitle}>Fruit Progress</Text>
 
           <ScrollView>
@@ -472,6 +560,32 @@ export default function FruitTrackerUI({ navigation }) {
           </ScrollView>
         </View>
       </Wrapper>
+      <Modal
+        isVisible={imagePickerVisible}
+        onBackdropPress={() => setImagePickerVisible(false)}
+        onBackButtonPress={() => setImagePickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Choose Image</Text>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openCamera}>
+              <Text style={styles.modalBtnText}>📸 Camera</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openGallery}>
+              <Text style={styles.modalBtnText}>🖼 Gallery</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setImagePickerVisible(false)}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -780,5 +894,54 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.3)',
     fontSize: 12,
     marginTop: 6,
+  },
+  modalOverlay: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalCard: {
+    width: '85%',
+    backgroundColor: '#1E1E1E',
+    borderRadius: 20,
+    padding: 20,
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  modalBtn: {
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+
+  modalBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  cancelBtn: {
+    marginTop: 5,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  cancelText: {
+    color: '#ef4444',
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });

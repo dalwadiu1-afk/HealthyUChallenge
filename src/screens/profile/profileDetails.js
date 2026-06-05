@@ -1532,6 +1532,7 @@ export default function ProfileDetails({ navigation }) {
   const renderFeed = ({ item, index }) => (
     <ChatCard
       item={{
+        ...item,
         name: item?.name,
         message: item?.message || item?.text,
         picture: item?.image,
@@ -1550,6 +1551,8 @@ export default function ProfileDetails({ navigation }) {
         type: item?.type,
       }}
       index={index}
+      isUser={userId == item?.userId || userData?.profile?.role == 'admin'}
+      onDeletePress={() => deletePost(item?.id)}
       onLikePress={() => toggleLike(item.id)}
       onCardPress={() =>
         navigation.navigate('SocialStack', {
@@ -1736,6 +1739,18 @@ export default function ProfileDetails({ navigation }) {
       habitTargets[habitKey] = monthData.goal || monthData.target;
     }
   });
+
+  const deletePost = async postId => {
+    try {
+      if (!postId) return;
+
+      await database().ref(`/posts/${postId}`).remove();
+
+      console.log('Post deleted:', postId);
+    } catch (error) {
+      console.log('Delete error:', error);
+    }
+  };
 
   return (
     <Wrapper

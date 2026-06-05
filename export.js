@@ -13,7 +13,6 @@ async function importData() {
   const users = data.users;
   for (const userId in users) {
     await db.collection('users').doc(userId).set(users[userId]);
-    console.log(`Imported user ${userId}`);
   }
 
   // DOCTORS
