@@ -203,6 +203,7 @@ export function Wrapper({
                         paddingHorizontal: 23,
                         flex: 1,
                         ...containerStyle,
+                        paddingBottom: height / 12,
                       }
                 }
               >

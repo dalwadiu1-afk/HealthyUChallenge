@@ -15,6 +15,7 @@ import { AuthBtn } from '../../components/common/authBtn';
 import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
 import moment from 'moment';
+import analytics from '@react-native-firebase/analytics';
 
 const { height, width } = Dimensions.get('window');
 
@@ -167,13 +168,14 @@ export default function Signup({ navigation }) {
         password,
       );
 
-      // Optional: set display name
+      // set display name
       await userCredential.user.updateProfile({
         displayName: username,
       });
 
+      // save in DB
       await database()
-        .ref(`users/${userCredential?.user?.uid}/profile`)
+        .ref(`users/${userCredential.user.uid}/profile`)
         .update({
           name: username,
           username: username,
@@ -181,6 +183,19 @@ export default function Signup({ navigation }) {
           memberSince: moment().format('YYYY-MM-DD HH:mm:ss'),
         });
 
+      // ✅ ANALYTICS (ADD THIS)
+      await analytics().setUserId(userCredential.user.uid);
+
+      await analytics().logSignUp({
+        method: 'email',
+      });
+
+      await analytics().setUserProperties({
+        username,
+        memberSince: moment().format('YYYY-MM-DD'),
+      });
+
+      // navigate
       navigation.replace('Main');
     } catch (err) {
       console.log(err);

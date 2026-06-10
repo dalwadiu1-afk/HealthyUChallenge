@@ -21,15 +21,10 @@ import storage from '@react-native-firebase/storage';
 
 const USER_ID = auth().currentUser?.uid;
 
-const MONTH_KEY = moment().format('MMMM_YYYY');
-const CURRENT_WEEK = `week${Math.ceil(moment().date() / 7)}`;
-
-const WEEK_PATH = `users/${USER_ID}/habits/fitness/${MONTH_KEY}/weeks/${CURRENT_WEEK}`;
-const PATH = `users/${USER_ID}/habits/fitness/${MONTH_KEY}`;
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 const { height } = Dimensions.get('window');
-/* ICONS */
+
+/* ICONS unchanged */
 function CameraIcon() {
   return (
     <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
@@ -62,13 +57,41 @@ function CheckIcon() {
   );
 }
 
-export default function FitnessClassUI() {
-  const [TOTAL, setTOTAL] = useState(4);
+function MissedIcon() {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M18 6L6 18"
+        stroke="#FF6B6B"
+        strokeWidth={2.5}
+        strokeLinecap="round"
+      />
+      <Path
+        d="M6 6L18 18"
+        stroke="#FF6B6B"
+        strokeWidth={2.5}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
 
-  const [weekData, setWeekData] = useState({});
+export default function FitnessClassUI({ route }) {
+  const today = moment();
+
+  const CURRENT_MONTH_KEY = route?.params?.monthKey
+    ? route?.params?.monthKey
+    : today.format('MMMM_YYYY');
+
+  const MONTH_KEY = CURRENT_MONTH_KEY;
+  const PATH = `users/${USER_ID}/habits/fitness/${MONTH_KEY}`;
+  const getWeekRef = weekKey => database().ref(`${PATH}/weeks/${weekKey}`);
+
+  const [TOTAL, SetTOTAL] = useState(4);
+  const [goal, setGoal] = useState(4);
+
+  const [weekData, setWeekData] = useState([]);
   const [photos, setPhotos] = useState(Array(TOTAL).fill(null));
-
-  const tempPhotos = useRef(Array(TOTAL).fill(null)).current;
 
   const headerAnim = useRef(new Animated.Value(0)).current;
 
@@ -80,104 +103,161 @@ export default function FitnessClassUI() {
     }).start();
   }, []);
 
-  /* LIVE LISTENER */
-  /* LIVE LISTENER */
   useEffect(() => {
-    const rootRef = database().ref(PATH);
-    const weekRef = database().ref(WEEK_PATH);
+    setWeekData([]);
+  }, [MONTH_KEY]);
 
-    const listener = rootRef.on('value', async snapshot => {
+  /* =========================
+     FIREBASE LIVE LISTENER
+  ========================== */
+  useEffect(() => {
+    const rootRef = database().ref(
+      `users/${USER_ID}/habits/fitness/${MONTH_KEY}`,
+    );
+
+    const listener = rootRef.on('value', snapshot => {
       const rootData = snapshot.val() || {};
 
-      // GET GOAL FROM ROOT
-      const firebaseGoal =
-        Number(rootData?.goal) ||
-        Number(rootData?.total) ||
-        parseInt(rootData?.target) ||
-        0;
+      SetTOTAL(Number(rootData.goal || 4));
 
-      // MINIMUM 4
-      const totalTarget = Math.max(firebaseGoal, 4);
+      const weeks = rootData.weeks || {};
 
-      setTOTAL(totalTarget);
+      const weekArray = Object.keys(weeks)
+        .sort((a, b) => {
+          const n1 = parseInt(a.replace('week', ''));
+          const n2 = parseInt(b.replace('week', ''));
+          return n1 - n2;
+        })
+        .map(key => {
+          const w = weeks[key];
 
-      // NOW GET WEEK DATA
-      const weekSnapshot = await weekRef.once('value');
+          const isCompleted = w?.completed === true;
 
-      const weekData = weekSnapshot.val() || {};
-
-      setWeekData(weekData);
-
-      const firebasePhotos = weekData?.workoutPhotos || {};
-
-      const formattedPhotos = Array.from(
-        { length: totalTarget },
-        (_, i) => firebasePhotos[i] || null,
-      );
-
-      setPhotos(formattedPhotos);
-
-      // AUTO LOCK
-      if (
-        weekData?.expiresAt &&
-        moment().valueOf() > weekData.expiresAt &&
-        !weekData?.locked
-      ) {
-        weekRef.update({
-          locked: true,
+          return {
+            weekKey: key,
+            ...w,
+            status: isCompleted ? 'completed' : 'in-progress',
+          };
         });
-      }
+
+      setWeekData(weekArray);
     });
 
-    return () => {
-      rootRef.off('value', listener);
-    };
+    return () => rootRef.off('value', listener);
   }, []);
 
-  console.log('TOTAL :>> ', TOTAL);
+  /* =========================
+     CURRENT WEEK LOGIC FIX
+  ========================== */
+  const getCurrentWeekKey = (monthKey = CURRENT_MONTH_KEY) => {
+    const now = moment(monthKey, 'MMMM_YYYY');
+    const todayDate = moment().date();
 
-  const isExpired =
-    weekData?.expiresAt && moment().valueOf() > weekData?.expiresAt;
+    return `week${Math.ceil(todayDate / 7)}`;
+  };
 
-  const isLocked = weekData?.locked || isExpired;
+  const currentWeek = getCurrentWeekKey();
+  const getWeekData = weekKey =>
+    weekData.find(w => w.weekKey === weekKey) || null;
 
-  /* 📸 PICK IMAGE */
-  const handleUpload = async index => {
+  const currentWeekData = getWeekData(currentWeek);
+
+  /* =========================
+     LOCK LOGIC FIXED
+  ========================== */
+  const isWeekLocked = weekKey => {
+    const w = getWeekData(weekKey);
+    if (!w) return false;
+
+    return (
+      w.locked === true ||
+      (w.expiresAt && moment().valueOf() > w.expiresAt) ||
+      weekKey !== currentWeek
+    );
+  };
+
+  /* =========================
+     PROGRESS FIX (CURRENT WEEK ONLY)
+  ========================== */
+  const done = currentWeekData?.workoutPhotos
+    ? Object.values(currentWeekData.workoutPhotos).filter(Boolean).length
+    : 0;
+
+  const progress = done / TOTAL;
+
+  /* =========================
+     REMAINING TIME FIX
+  ========================== */
+  const getRemainingTime = () => {
+    if (!currentWeekData?.expiresAt) return '24h remaining';
+
+    const diff = currentWeekData.expiresAt - moment().valueOf();
+    if (diff <= 0) return 'Expired';
+
+    const duration = moment.duration(diff);
+
+    return `${Math.floor(
+      duration.asHours(),
+    )}h ${duration.minutes()}m remaining`;
+  };
+
+  /* =========================
+     UPLOAD (ONLY CURRENT WEEK)
+  ========================== */
+  const handleUpload = async (index, weekKey) => {
     try {
-      if (isLocked) {
-        Alert.alert('Week Locked', 'This fitness session has expired.');
+      // ❌ BLOCK OLD WEEKS
+      if (weekKey !== currentWeek) {
+        Alert.alert('Locked', 'Past weeks cannot be edited');
+        return;
+      }
+
+      const ref = getWeekRef(weekKey);
+      const snap = await ref.once('value');
+      const data = snap.val() || {};
+
+      if (data.locked) {
+        Alert.alert('Locked', 'Week already completed');
         return;
       }
 
       const granted = await requestCameraPermission();
       if (!granted) return;
 
-      return new Promise(async resolve => {
-        launchCamera({ mediaType: 'photo', quality: 0.7 }, response => {
-          // change save path and camera is not working
+      launchCamera({ mediaType: 'photo' }, async res => {
+        const uri = res.assets?.[0]?.uri;
+        if (!uri) return;
 
-          if (response.didCancel) return;
+        const now = moment().valueOf();
 
-          const uri = response.assets?.[0]?.uri;
+        const storagePath = `fitness/${USER_ID}/${MONTH_KEY}/${weekKey}/${index}.jpg`;
+        const storageRef = storage().ref(storagePath);
 
-          if (!uri) return;
+        await storageRef.putFile(uri);
+        const url = await storageRef.getDownloadURL();
 
-          tempPhotos[index] = uri;
+        const existing = data.workoutPhotos || {};
 
-          /* instant UI */
-          setPhotos(prev => {
-            const updated = [...prev];
+        const updatedPhotos = {
+          ...existing,
+          [index]: {
+            imageUrl: url,
+            uploadedAt: now,
+            caption: `Workout #${index + 1}`,
+          },
+        };
 
-            updated[index] = {
-              uri,
-              caption: `I'm at workout #${index + 1}!`,
-              uploadedAt: moment().valueOf(),
-            };
+        const totalCompleted =
+          Object.values(updatedPhotos).filter(Boolean).length;
 
-            return updated;
-          });
-
-          saveWorkout(index, uri);
+        await ref.update({
+          workoutPhotos: updatedPhotos,
+          totalCompleted,
+          completed: totalCompleted === TOTAL,
+          locked: totalCompleted === TOTAL,
+          startedAt: data.startedAt || now,
+          expiresAt: data.expiresAt || now + DAY_MS,
+          updatedAt: now,
         });
       });
     } catch (e) {
@@ -185,142 +265,59 @@ export default function FitnessClassUI() {
     }
   };
 
-  /* SAVE TO FIREBASE */
-  const saveWorkout = async (index, uri) => {
-    try {
-      const ref = database().ref(WEEK_PATH);
-
-      const snapshot = await ref.once('value');
-
-      const data = snapshot.val() || {};
-
-      const now = moment().valueOf();
-
-      /* LOCK CHECK */
-      if (data?.locked) {
-        Alert.alert('Locked', 'Week already locked.');
-        return;
-      }
-
-      /* EXPIRE CHECK */
-      if (data?.expiresAt && now > data.expiresAt) {
-        await ref.update({
-          locked: true,
-        });
-
-        Alert.alert('Expired', '24 hour workout window expired.');
-
-        return;
-      }
-
-      /* INIT START */
-      let startedAt = data?.startedAt || now;
-
-      let expiresAt = data?.expiresAt || startedAt + DAY_MS;
-
-      const existingPhotos = data?.workoutPhotos || {};
-
-      const workoutPhotos = Array.from(
-        { length: TOTAL },
-        (_, i) => existingPhotos[i] || null,
-      );
-
-      // Upload to Firebase Storage
-      const storagePath = `fitness/${USER_ID}/${MONTH_KEY}/${CURRENT_WEEK}/${index}.jpg`;
-
-      const reference = storage().ref(storagePath);
-
-      await reference.putFile(uri);
-
-      const downloadURL = await reference.getDownloadURL();
-
-      // Save URL to database
-      workoutPhotos[index] = {
-        imageUrl: downloadURL,
-        caption: `I'm at workout #${index + 1}!`,
-        uploadedAt: now,
-      };
-
-      const totalCompleted = workoutPhotos.filter(Boolean).length;
-
-      const completed = totalCompleted === TOTAL;
-
-      await ref.update({
-        target: `${TOTAL} workout photos weekly`,
-
-        startedAt,
-        expiresAt,
-
-        completed,
-        locked: completed,
-
-        totalCompleted,
-        updatedAt: now,
-
-        workoutPhotos,
-      });
-
-      tempPhotos[index] = null;
-    } catch (e) {
-      console.log('SAVE ERROR:', e);
-    }
-  };
-
-  const done = photos.filter(Boolean).length;
-
-  const progress = done / TOTAL;
-
-  const getRemainingTime = () => {
-    if (!weekData?.expiresAt) return '24h remaining';
-
-    const diff = weekData.expiresAt - moment().valueOf();
-
-    if (diff <= 0) return 'Expired';
-
-    const duration = moment.duration(diff);
-
-    const hours = Math.floor(duration.asHours());
-    const minutes = duration.minutes();
-
-    return `${hours}h ${minutes}m remaining`;
-  };
-
-  /* CARD */
-  const WorkoutCard = ({ index, photo }) => {
-    console.log('photo :>> ', photo);
+  /* =========================
+     WORKOUT CARD FIX
+  ========================== */
+  const WorkoutCard = ({ index, weekKey, monthKey }) => {
     const anim = useRef(new Animated.Value(0)).current;
-    const done = !!photo;
-
+    console.log('moment().format() :>> ', monthKey);
     useEffect(() => {
       Animated.timing(anim, {
         toValue: 1,
-        duration: 380,
-        delay: index * 90,
+        duration: 400,
         useNativeDriver: true,
       }).start();
     }, []);
 
-    const isDone = !!photo;
+    const week = getWeekData(weekKey);
+
+    const photos = week?.workoutPhotos || [];
+
+    const photo = photos[index]?.imageUrl;
+
+    const isCompleted = !!photo;
+
+    const isCurrentWeek = weekKey === currentWeek;
+
+    const isCurrentMonth = monthKey === CURRENT_MONTH_KEY;
+    // 🔥 FINAL TRUTH LOGIC
+    const isMissed = !isCurrentMonth && !photo;
+
+    const locked = !isCurrentWeek || !isCurrentMonth || week?.locked;
 
     return (
-      <Animated.View
-        style={{
-          opacity: anim,
-          transform: [
-            {
-              translateY: anim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [24, 0],
-              }),
+      <Animated.View style={{ opacity: anim }}>
+        <View
+          style={[
+            styles.card,
+            isMissed && {
+              borderColor: '#FF6B6B',
+              backgroundColor: 'rgba(255,107,107,0.05)',
             },
-          ],
-        }}
-      >
-        <View style={[styles.card, isDone && styles.cardDone]}>
+          ]}
+        >
           <View style={styles.cardHeader}>
-            <View style={[styles.numBadge, isDone && styles.numBadgeDone]}>
-              {isDone ? (
+            <View
+              style={[
+                styles.numBadge,
+                isCompleted && styles.completedBadge,
+                isMissed && styles.missedBadge,
+              ]}
+            >
+              {isCompleted ? (
                 <CheckIcon />
+              ) : isMissed ? (
+                <MissedIcon />
               ) : (
                 <Text style={styles.numText}>{index + 1}</Text>
               )}
@@ -328,56 +325,39 @@ export default function FitnessClassUI() {
 
             <View style={styles.cardHeaderText}>
               <Text style={styles.cardTitle}>Workout #{index + 1}</Text>
-
-              <Text style={styles.cardSub}>
-                {isDone ? photo?.caption : 'Tap to upload proof'}
-              </Text>
             </View>
-
-            {isDone && (
-              <View style={styles.donePill}>
-                <Text style={styles.donePillText}>Uploaded</Text>
-              </View>
-            )}
           </View>
 
           <TouchableOpacity
-            disabled={isLocked || isDone}
-            style={[
-              styles.uploadBox,
-              isDone && styles.uploadBoxDone,
-              isLocked && styles.lockedBox,
-            ]}
-            onPress={() => handleUpload(index)}
-            activeOpacity={0.8}
+            disabled={locked || !!photo}
+            style={styles.uploadBox}
+            onPress={() => handleUpload(index, weekKey)}
           >
-            {photo?.imageUrl || photo?.uri ? (
-              <Image
-                source={{ uri: photo.imageUrl || photo?.uri }}
-                style={styles.uploadImage}
-              />
+            {photo ? (
+              <Image source={{ uri: photo }} style={styles.uploadImage} />
             ) : (
               <View style={styles.uploadPlaceholder}>
                 <CameraIcon />
-
                 <Text style={styles.uploadText}>
-                  {isLocked ? 'Session Locked' : '+ Upload Photo'}
+                  {isCompleted
+                    ? 'Completed'
+                    : isMissed
+                    ? 'Missed'
+                    : locked
+                    ? 'Locked'
+                    : '+ Upload Photo'}
                 </Text>
               </View>
             )}
           </TouchableOpacity>
-
-          {done && photo?.uploadedAt && (
-            <Text style={styles.timestamp}>
-              Uploaded{' '}
-              {moment(photo?.uploadedAt).format('MMM D, YYYY • h:mm A')}
-            </Text>
-          )}
         </View>
       </Animated.View>
     );
   };
 
+  /* =========================
+     UI MAPPING FIX
+  ========================== */
   return (
     <Wrapper isForgot>
       <View style={styles.root}>
@@ -391,48 +371,60 @@ export default function FitnessClassUI() {
           </Text>
 
           <View style={styles.progressCard}>
-            <View style={styles.progressLabelRow}>
-              <Text style={styles.progressLabel}>Progress</Text>
+            <Text style={styles.progressCount}>
+              {done} / {TOTAL}
+            </Text>
 
-              <Text style={styles.progressCount}>
-                {done} / {TOTAL} workouts
-              </Text>
-            </View>
-
-            <View style={styles.progressBg}>
-              <Animated.View
-                style={[
-                  styles.progressFill,
-                  {
-                    width: `${progress * 100}%`,
-                  },
-                ]}
-              />
-            </View>
-
-            <View style={styles.progressDots}>
-              {Array.from({ length: TOTAL }).map((_, i) => (
-                <View
-                  key={i}
-                  style={[styles.dot, i < done && styles.dotFilled]}
-                />
-              ))}
-            </View>
-
-            <View style={styles.statusRow}>
-              <Text style={styles.statusText}>
-                {weekData?.completed
-                  ? 'Completed ✓'
-                  : isLocked
-                  ? 'Locked'
-                  : getRemainingTime()}
-              </Text>
-            </View>
+            <Text style={styles.statusText}>
+              {isWeekLocked(currentWeek) ? 'Locked' : getRemainingTime()}
+            </Text>
           </View>
         </Animated.View>
 
-        {photos.map((photo, index) => (
-          <WorkoutCard key={index} index={index} photo={photo} />
+        {/* =====================
+            WEEK HISTORY (FIXED)
+        ====================== */}
+        {weekData.map((week, i) => (
+          <View key={week.weekKey} style={styles.weekCard}>
+            <Text style={styles.weekTitle}>
+              Week {week.weekKey.replace('week', '')}
+            </Text>
+
+            <Text style={styles.weekSub}>
+              {week.totalCompleted || 0} workouts uploaded
+            </Text>
+
+            {/* preview */}
+            <View style={{ flexDirection: 'row', marginTop: 10 }}>
+              {week.workoutPhotos &&
+                Object.values(week.workoutPhotos)
+                  .slice(0, 3)
+                  .map((p, i) => (
+                    <Image
+                      key={i}
+                      source={{ uri: p?.imageUrl }}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 8,
+                        marginRight: 6,
+                      }}
+                    />
+                  ))}
+            </View>
+          </View>
+        ))}
+
+        {/* =====================
+            CURRENT WEEK CARDS
+        ====================== */}
+        {Array.from({ length: TOTAL }).map((_, i) => (
+          <WorkoutCard
+            key={i}
+            index={i}
+            weekKey={currentWeek}
+            monthKey={moment().format('MMMM_YYYY')}
+          />
         ))}
       </View>
     </Wrapper>
@@ -444,7 +436,15 @@ const styles = StyleSheet.create({
     flex: 1,
     marginBottom: height / 12,
   },
+  completedBadge: {
+    backgroundColor: 'rgba(76,175,80,0.2)',
+    borderColor: '#4CAF50',
+  },
 
+  missedBadge: {
+    backgroundColor: 'rgba(255,107,107,0.15)',
+    borderColor: '#FF6B6B',
+  },
   heroTitle: {
     color: colors.white,
     fontSize: 22,
@@ -467,7 +467,35 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 22,
   },
+  weekCard: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
 
+  weekTitle: {
+    color: colors.white,
+    fontSize: 14,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  weekSub: {
+    color: colors.grey,
+    fontSize: 12,
+    marginTop: 4,
+  },
+
+  weekStatus: {
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
   progressLabelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -30,7 +30,7 @@ import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import moment from 'moment';
 
-const getMonthKey = () => moment().format('MMM_YYYY');
+const getMonthKey = () => moment().format('MMMM_YYYY');
 
 const getWeekKey = startDate => getWeekFromStart(startDate);
 

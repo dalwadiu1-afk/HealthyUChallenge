@@ -70,7 +70,8 @@ export default function ArchivedGoals({ navigation }) {
 
   const fetchArchivedGoals = async () => {
     try {
-      const uid = auth().currentUser.uid;
+      const uid = auth().currentUser?.uid;
+      if (!uid) return;
 
       const snapshot = await database()
         .ref(`/users/${uid}/previousGoals`)
@@ -80,24 +81,31 @@ export default function ArchivedGoals({ navigation }) {
 
       const formattedData = {};
 
-      Object.entries(data).forEach(([monthKey, monthData]) => {
-        formattedData[monthKey] =
-          monthData.goals?.map(goal => ({
-            ...goal,
-            archivedAt: monthData.archivedAt,
-            startDate: monthData.startDate,
-            endDate: monthData.endDate,
-          })) || [];
-      });
+      // 🔥 sort months DESC (latest first)
+      Object.entries(data)
+        .sort(
+          ([a], [b]) =>
+            moment(b, 'MMMM_YYYY').valueOf() - moment(a, 'MMMM_YYYY').valueOf(),
+        )
+        .forEach(([monthKey, monthData]) => {
+          formattedData[monthKey] = Array.isArray(monthData?.goals)
+            ? monthData.goals.map(goal => ({
+                ...goal,
+                archivedAt: monthData.archivedAt,
+                startDate: monthData.startDate,
+                endDate: monthData.endDate,
+              }))
+            : [];
+        });
 
       setArchiveData(formattedData);
 
-      // Auto open first month
+      // Auto open latest month
       const firstMonth = Object.keys(formattedData)[0];
 
       if (firstMonth) {
         setExpandedMonths({
-          [firstMonth]: true,
+          [firstMonth]: false,
         });
       }
     } catch (error) {

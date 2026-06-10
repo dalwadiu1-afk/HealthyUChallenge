@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
-
+import analytics from '@react-native-firebase/analytics';
 import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
 import { useSelector } from 'react-redux';
@@ -141,6 +141,18 @@ export default function Leaderboard({ navigation }) {
 
       setLeaderboardData(ranked);
       setLoading(false);
+
+      // 👇 ADD ANALYTICS HERE
+      const me = ranked?.find(i => i?.uid === userId);
+
+      if (me) {
+        analytics().logEvent('leaderboard_view', {
+          uid: userId,
+          rank: me?.currentRank,
+          score: me?.totalPoints,
+          total_users: ranked?.length,
+        });
+      }
     });
 
     return () => leaderboardRef.off('value', onValueChange);

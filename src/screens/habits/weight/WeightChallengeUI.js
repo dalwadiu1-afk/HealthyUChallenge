@@ -21,8 +21,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const USER_ID = auth().currentUser?.uid;
 
-const MONTH_KEY = moment().format('MMM_YYYY');
-
 const LABELS = [
   { key: 'week1', label: 'Start Weight' },
   { key: 'week2', label: 'Week 2' },
@@ -31,7 +29,11 @@ const LABELS = [
 ];
 
 const parseWeight = val => {
-  const num = parseFloat(val);
+  if (val === null || val === undefined) return 0;
+
+  // handle both number + string
+  const num = typeof val === 'number' ? val : parseFloat(val);
+
   return isNaN(num) ? 0 : num;
 };
 
@@ -40,7 +42,15 @@ const safeToFixed = num => {
   return num.toFixed(1);
 };
 
-export default function WeightChallengeUI() {
+export default function WeightChallengeUI({ route }) {
+  const today = moment();
+
+  const CURRENT_MONTH_KEY =
+    route?.params?.monthKey ?? moment().format('MMMM_YYYY');
+
+  const selectedMonth = moment(CURRENT_MONTH_KEY, 'MMMM_YYYY');
+
+  const isPastMonth = selectedMonth.isBefore(today, 'month');
   const [step, setStep] = useState(0);
   const [goal, setGoal] = useState(2);
   const [startDate, setStartDate] = useState(null);
@@ -55,9 +65,8 @@ export default function WeightChallengeUI() {
   /* ======================================================
       FIREBASE PATHS
   ====================================================== */
-
   const habitRef = database().ref(
-    `users/${USER_ID}/habits/weightChallenge/${MONTH_KEY}`,
+    `users/${USER_ID}/habits/weightChallenge/${CURRENT_MONTH_KEY}`,
   );
 
   const goalRef = database().ref(`users/${USER_ID}/goal`);
@@ -67,6 +76,14 @@ export default function WeightChallengeUI() {
   ====================================================== */
 
   useEffect(() => {
+    const monthKey = route?.params?.monthKey ?? moment().format('MMMM_YYYY');
+
+    const habitRef = database().ref(
+      `users/${USER_ID}/habits/weightChallenge/${monthKey}`,
+    );
+
+    const goalRef = database().ref(`users/${USER_ID}/goal`);
+
     const goalListener = goalRef.on('value', snapshot => {
       const data = snapshot.val();
 
@@ -77,30 +94,41 @@ export default function WeightChallengeUI() {
 
     const listener = habitRef.on('value', snapshot => {
       const data = snapshot.val();
-
       if (!data) return;
 
-      let g = parseInt(data?.goal || 2, 10); // IMPORTANT KEY FIX
-
-      // ✅ CLAMP BETWEEN 1 - 3
+      // ✅ goal safe parsing
+      let g = parseInt(data?.goal || 2, 10);
       if (isNaN(g)) g = 1;
       g = Math.max(1, Math.min(3, g));
-
       setGoal(g);
 
-      const mappedWeights = {
-        week1: data?.weeks?.week1?.weight || '',
-        week2: data?.weeks?.week2?.weight || '',
-        week3: data?.weeks?.week3?.weight || '',
-        week4: data?.weeks?.week4?.weight || '',
+      // ✅ SAFE WEEKS (matches your dataset)
+      const weeks = data?.weeks ?? {};
+      console.log('data?.weeks :>> ', data?.weeks);
+      const normalizeWeight = val => {
+        if (val === null || val === undefined) return '';
+        return String(val);
       };
+
+      const mappedWeights = {
+        week1: weeks?.week1?.weight ?? '',
+        week2: weeks?.week2?.weight ?? '',
+        week3: weeks?.week3?.weight ?? '',
+        week4: weeks?.week4?.weight ?? '',
+      };
+      console.log('RAW weeks:', weeks);
+      console.log('mappedWeights:', weeks?.week2?.weight);
 
       setWeights(mappedWeights);
 
+      // ✅ STEP CALC (robust)
       let nextStep = 0;
 
       for (let i = 0; i < LABELS.length; i++) {
-        if (!mappedWeights[LABELS[i].key]) {
+        const key = LABELS[i].key;
+        const val = mappedWeights[key];
+
+        if (val === '') {
           nextStep = i;
           break;
         }
@@ -114,7 +142,7 @@ export default function WeightChallengeUI() {
       goalRef.off('value', goalListener);
       habitRef.off('value', listener);
     };
-  }, []);
+  }, [route?.params?.monthKey]);
 
   useEffect(() => {
     setStep(prev => Math.min(prev, allowedStep));
@@ -125,6 +153,7 @@ export default function WeightChallengeUI() {
   ====================================================== */
 
   const getAllowedStepByDate = () => {
+    if (isPastMonth) return 3;
     if (!startDate) return 0;
 
     const start = new Date(startDate);
@@ -141,6 +170,7 @@ export default function WeightChallengeUI() {
 
     return 3; // End unlocked after week 3+
   };
+
   const allowedStep = getAllowedStepByDate();
 
   /* ======================================================
@@ -169,7 +199,7 @@ export default function WeightChallengeUI() {
     labels: ['Start', 'W2', 'W3', 'End'],
     datasets: [
       {
-        data: weightArray.map(v => v || 0.01),
+        data: weightArray.map(v => (v > 0 ? v : 0)),
       },
     ],
   };
@@ -315,7 +345,7 @@ export default function WeightChallengeUI() {
 
         <View style={styles.chartCard}>
           <Text style={styles.chartTitle}>Weight Progress</Text>
-
+          {console.log('chartData >> ', chartData)}
           <LineChart
             data={chartData}
             width={SCREEN_WIDTH - 64}
@@ -367,52 +397,54 @@ export default function WeightChallengeUI() {
 
         {/* INPUT */}
 
-        <View style={styles.inputCard}>
-          <View style={styles.inputCardHeader}>
-            <Text style={styles.inputCardTitle}>{LABELS[step].label}</Text>
+        {!isPastMonth ? (
+          <View style={styles.inputCard}>
+            <View style={styles.inputCardHeader}>
+              <Text style={styles.inputCardTitle}>{LABELS[step].label}</Text>
 
-            <Text style={styles.inputCardStep}>
-              {step + 1} / {LABELS.length}
+              <Text style={styles.inputCardStep}>
+                {step + 1} / {LABELS.length}
+              </Text>
+            </View>
+
+            <TextInput
+              value={weights[LABELS[step].key]}
+              onChangeText={val => {
+                if (!canEdit) return;
+
+                setWeights(prev => ({
+                  ...prev,
+                  [LABELS[step].key]: val,
+                }));
+              }}
+              editable={canEdit}
+              keyboardType="numeric"
+              style={styles.input}
+              placeholder={`Enter ${LABELS[step].label}`}
+              placeholderTextColor="rgba(255,255,255,0.25)"
+            />
+
+            <TouchableOpacity
+              style={[styles.nextBtn, isLocked && { opacity: 0.5 }]}
+              disabled={!canEdit}
+              onPress={saveWeight}
+            >
+              <Text style={styles.nextBtnText}>
+                {!canEdit
+                  ? '🔒 Locked'
+                  : step === LABELS.length - 1
+                  ? 'Done ✓'
+                  : 'Save & Continue'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.inputCard}>
+            <Text style={{ color: colors.grey }}>
+              This month is archived. Editing is disabled.
             </Text>
           </View>
-
-          <TextInput
-            value={weights[LABELS[step].key]}
-            onChangeText={val => {
-              if (!canEdit) return;
-
-              setWeights(prev => ({
-                ...prev,
-                [LABELS[step].key]: val,
-              }));
-            }}
-            editable={canEdit}
-            keyboardType="numeric"
-            style={styles.input}
-            placeholder={`Enter ${LABELS[step].label}`}
-            placeholderTextColor="rgba(255,255,255,0.25)"
-          />
-
-          <TouchableOpacity
-            style={[
-              styles.nextBtn,
-
-              isLocked && {
-                opacity: 0.5,
-              },
-            ]}
-            disabled={!canEdit}
-            onPress={saveWeight}
-          >
-            <Text style={styles.nextBtnText}>
-              {!canEdit
-                ? '🔒 Locked'
-                : step === LABELS.length - 1
-                ? 'Done ✓'
-                : 'Save & Continue'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        )}
       </Wrapper>
     </View>
   );

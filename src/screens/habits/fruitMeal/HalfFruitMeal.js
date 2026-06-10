@@ -7,8 +7,10 @@ import {
   StyleSheet,
   StatusBar,
   Dimensions,
+  Alert,
 } from 'react-native';
-import { launchCamera } from 'react-native-image-picker';
+import Modal from 'react-native-modal';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import Svg, { Path } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
@@ -22,7 +24,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const USER_ID = auth().currentUser?.uid;
 
 const today = moment();
-const todayMoment = moment().format('YYYY-MM-DD');
 
 const CARD_SIZE = (SCREEN_WIDTH - 18 * 2 - 10) / 2;
 
@@ -31,22 +32,86 @@ const HalfPlateFruitsVeggies = ({ navigation, route }) => {
     ? route?.params?.monthKey
     : today.format('MMMM_YYYY');
   const [habitData, setHabitData] = useState({});
+  const [imagePickerVisible, setImagePickerVisible] = useState(false);
+  const [selectedDayKey, setSelectedDayKey] = useState(null);
   const [startDate, setStartDate] = useState(null);
+  const showImagePicker = dayKey => {
+    if (route?.params?.monthKey) {
+      Alert.alert(
+        'Delete Not Allowed',
+        'Photos can only be uploaded during the current month.',
+      );
+    } else {
+      setSelectedDayKey(dayKey);
+      setImagePickerVisible(true);
+    }
+  };
+
+  const openCamera = async () => {
+    setImagePickerVisible(false);
+
+    const granted = await requestCameraPermission();
+    if (!granted) return;
+
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.7,
+      },
+      async res => {
+        if (res.didCancel || res.errorCode) return;
+
+        const uri = res?.assets?.[0]?.uri;
+        if (!uri) return;
+
+        await saveDay(selectedDayKey, uri);
+      },
+    );
+  };
+
+  const openGallery = async () => {
+    setImagePickerVisible(false);
+
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        quality: 0.7,
+        selectionLimit: 1,
+      },
+      async res => {
+        if (res.didCancel || res.errorCode) return;
+
+        const uri = res?.assets?.[0]?.uri;
+        if (!uri) return;
+
+        await saveDay(selectedDayKey, uri);
+      },
+    );
+  };
 
   useEffect(() => {
     if (!USER_ID) return;
 
     const ref = database().ref(`users/${USER_ID}/goal`);
+    const userProfile = database().ref(`users/${USER_ID}/profile`);
+    if (route?.params?.monthKey) {
+      const listener = userProfile.on('value', snapshot => {
+        const data = snapshot.val();
+        if (data?.memberSince) {
+          setStartDate(moment(data?.memberSince).format('YYYY-MM-DD')); // "2026-05-10"
+        }
+      });
+      return () => ref.off('value', listener);
+    } else {
+      const listener = ref.on('value', snapshot => {
+        const data = snapshot.val();
 
-    const listener = ref.on('value', snapshot => {
-      const data = snapshot.val();
-
-      if (data?.startDate) {
-        setStartDate(data.startDate); // "2026-05-10"
-      }
-    });
-
-    return () => ref.off('value', listener);
+        if (data?.startDate) {
+          setStartDate(data.startDate); // "2026-05-10"
+        }
+      });
+      return () => ref.off('value', listener);
+    }
   }, []);
 
   useEffect(() => {
@@ -58,7 +123,6 @@ const HalfPlateFruitsVeggies = ({ navigation, route }) => {
 
     const listener = ref.on('value', snapshot => {
       const data = snapshot.val();
-      console.log('data :>> ', data);
       if (data) {
         setHabitData(data);
       } else {
@@ -106,78 +170,78 @@ const HalfPlateFruitsVeggies = ({ navigation, route }) => {
   };
 
   const saveDay = async (dayKey, localUri) => {
-    try {
-      const uploadResult = await uploadMealPhoto(dayKey, localUri);
-
-      if (!uploadResult.success) {
-        return;
-      }
-
-      const { imageUrl, storagePath } = uploadResult;
-
-      const ref = database().ref(
-        `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}`,
+    if (route?.params?.monthKey) {
+      Alert.alert(
+        'Upload Not Allowed',
+        'Photos can only be uploaded during the current month.',
       );
+    } else {
+      try {
+        const uploadResult = await uploadMealPhoto(dayKey, localUri);
 
-      await ref.update({
-        title: 'Half Plate Fruits & Veggies',
-        target: '1 Photo',
-        startedAt: habitData?.startedAt || moment().toISOString(),
+        if (!uploadResult.success) {
+          return;
+        }
 
-        [`days/${dayKey}`]: {
-          imageUrl,
-          storagePath,
-          completed: true,
-          timestamp: moment().toISOString(),
-          uploadedAt: Date.now(),
-        },
+        const { imageUrl, storagePath } = uploadResult;
 
-        updatedAt: database.ServerValue.TIMESTAMP,
-      });
+        const ref = database().ref(
+          `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}`,
+        );
 
-      console.log('Photo saved successfully');
-    } catch (error) {
-      console.log('SAVE ERROR:', error);
+        await ref.update({
+          title: 'Half Plate Fruits & Veggies',
+          target: '1 Photo',
+          startedAt: habitData?.startedAt || moment().toISOString(),
+
+          [`days/${dayKey}`]: {
+            imageUrl,
+            storagePath,
+            completed: true,
+            timestamp: moment().toISOString(),
+            uploadedAt: Date.now(),
+          },
+
+          updatedAt: database.ServerValue.TIMESTAMP,
+        });
+
+        console.log('Photo saved successfully');
+      } catch (error) {
+        console.log('SAVE ERROR:', error);
+      }
     }
   };
 
-  const pickImage = async dayKey => {
-    const granted = await requestCameraPermission();
-    if (!granted) return;
-
-    launchCamera({ mediaType: 'photo', quality: 0.7 }, async res => {
-      if (res.didCancel || res.errorCode) return;
-
-      const uri = res?.assets?.[0]?.uri;
-      if (!uri) return;
-
-      await saveDay(dayKey, uri);
-    });
-  };
-
   const deletePhoto = async dayKey => {
-    try {
-      const snapshot = await database()
-        .ref(
-          `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}/days/${dayKey}`,
-        )
-        .once('value');
+    if (route?.params?.monthKey) {
+      Alert.alert(
+        'Delete Not Allowed',
+        'Photos can only be uploaded during the current month.',
+      );
+    } else {
+      try {
+        const snapshot = await database()
+          .ref(
+            `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}/days/${dayKey}`,
+          )
+          .once('value');
 
-      const data = snapshot.val();
+        const data = snapshot.val();
 
-      if (data?.storagePath) {
-        await storage().ref(data.storagePath).delete();
+        if (data?.storagePath) {
+          await storage().ref(data.storagePath).delete();
+        }
+
+        await database()
+          .ref(
+            `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}/days/${dayKey}`,
+          )
+          .remove();
+
+        console.log('Photo deleted');
+      } catch (error) {
+        console.log('DELETE ERROR:', error);
       }
-
-      await database()
-        .ref(
-          `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}/days/${dayKey}`,
-        )
-        .remove();
-
-      console.log('Photo deleted');
-    } catch (error) {
-      console.log('DELETE ERROR:', error);
     }
   };
 
@@ -237,9 +301,12 @@ const HalfPlateFruitsVeggies = ({ navigation, route }) => {
           )}
         </View>
 
-        {isDone ? (
+        {isDone || item?.uri || item?.imageUrl ? (
           <View style={styles.photoWrap}>
-            <Image source={{ uri: item.imageUrl }} style={styles.photo} />
+            <Image
+              source={{ uri: item?.uri || item?.imageUrl }}
+              style={styles.photo}
+            />
 
             <Text style={styles.timestamp}>
               {new Date(item.timestamp).toLocaleDateString()}
@@ -249,7 +316,7 @@ const HalfPlateFruitsVeggies = ({ navigation, route }) => {
               <View style={styles.photoActions}>
                 <TouchableOpacity
                   style={styles.retakeBtn}
-                  onPress={() => pickImage(dateKey)}
+                  onPress={() => showImagePicker(dateKey)}
                 >
                   <Text style={styles.retakeText}>Retake</Text>
                 </TouchableOpacity>
@@ -274,7 +341,7 @@ const HalfPlateFruitsVeggies = ({ navigation, route }) => {
         ) : (
           <TouchableOpacity
             style={styles.uploadBtn}
-            onPress={() => pickImage(dateKey)}
+            onPress={() => showImagePicker(dateKey)}
             activeOpacity={0.8}
           >
             <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
@@ -365,6 +432,33 @@ const HalfPlateFruitsVeggies = ({ navigation, route }) => {
             <DayCard dayNumber={pair[1]} />
           </View>
         ))}
+
+        <Modal
+          isVisible={imagePickerVisible}
+          onBackdropPress={() => setImagePickerVisible(false)}
+          onBackButtonPress={() => setImagePickerVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Choose Image</Text>
+
+              <TouchableOpacity style={styles.modalBtn} onPress={openCamera}>
+                <Text style={styles.modalBtnText}>📸 Camera</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.modalBtn} onPress={openGallery}>
+                <Text style={styles.modalBtnText}>🖼 Gallery</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setImagePickerVisible(false)}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </Wrapper>
     </View>
   );
@@ -379,6 +473,52 @@ const styles = StyleSheet.create({
     paddingTop: (StatusBar.currentHeight || 44) + 8,
     paddingHorizontal: 18,
     paddingBottom: 10,
+  },
+  modalOverlay: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalCard: {
+    width: '85%',
+    backgroundColor: colors.bubbleDark,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  modalBtn: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(143,175,120,0.12)',
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+
+  modalBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  cancelBtn: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+
+  cancelText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    fontFamily: fontFamily.montserratSemiBold,
   },
   backBtn: {
     width: 44,

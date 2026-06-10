@@ -65,7 +65,7 @@ export default function InputBox({
           {...otherProps}
         />
 
-        {textIcon && (
+        {textIcon ? (
           <TouchableOpacity
             onPress={onRightIconPress}
             style={{
@@ -81,6 +81,8 @@ export default function InputBox({
               {...otherSvgProps}
             />
           </TouchableOpacity>
+        ) : (
+          <View style={{ height: 45, width: 45 }} />
         )}
       </View>
       {errorMessage ? (

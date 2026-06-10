@@ -29,19 +29,6 @@ import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import storage from '@react-native-firebase/storage';
 import moment from 'moment';
-const user = auth().currentUser;
-const USER_ID = user?.uid;
-const getMonthKey = () => {
-  const date = new Date();
-
-  const month = date.toLocaleString('default', {
-    month: 'long',
-  });
-
-  const year = date.getFullYear();
-
-  return `${month}_${year}`;
-};
 
 const normalizeGoal = value => {
   const num = Number(value) || 4;
@@ -77,19 +64,23 @@ const uploadImageToFirebase = async uri => {
     const fileName = `friendWorkout/${USER_ID}/${Date.now()}.jpg`;
 
     const reference = storage().ref(fileName);
-
     await reference.putFile(uri);
 
-    const downloadURL = await reference.getDownloadURL();
-
-    return downloadURL;
+    return await reference.getDownloadURL();
   } catch (error) {
     console.log('UPLOAD ERROR:', error);
     throw error;
   }
 };
 
-export default function FriendWorkoutChallenge({ navigation }) {
+export default function FriendWorkoutChallenge({ navigation, route }) {
+  const today = moment();
+  const CURRENT_MONTH_KEY =
+    route?.params?.monthKey ?? today.format('MMMM_YYYY');
+  const user = auth().currentUser;
+  const USER_ID = user?.uid;
+  const isCurrentMonth = CURRENT_MONTH_KEY === today.format('MMMM_YYYY');
+
   const TOTAL_WEEKS = 4;
   const [startDate, setStartDate] = useState(null);
   const [weekError, setWeekError] = useState({});
@@ -107,8 +98,6 @@ export default function FriendWorkoutChallenge({ navigation }) {
   useEffect(() => {
     if (!USER_ID) return;
 
-    const monthKey = getMonthKey();
-
     const ref = database().ref(`users/${USER_ID}`);
 
     const listener = ref.on('value', snapshot => {
@@ -118,6 +107,7 @@ export default function FriendWorkoutChallenge({ navigation }) {
       // START DATE
       // ------------------------
       const startDateRaw = data?.goal?.startDate;
+      console.log('startDateRaw :>> ', startDateRaw);
       if (startDateRaw) {
         setStartDate(moment(startDateRaw));
       }
@@ -125,8 +115,10 @@ export default function FriendWorkoutChallenge({ navigation }) {
       // ------------------------
       // WEEKS DATA
       // ------------------------
-      const weeksData = data?.habits?.exWithFriend?.[monthKey]?.weeks || {};
-      const goalFromDb = data?.habits?.exWithFriend?.[monthKey]?.goal || 4;
+      const weeksData =
+        data?.habits?.exWithFriend?.[CURRENT_MONTH_KEY]?.weeks || {};
+      const goalFromDb =
+        data?.habits?.exWithFriend?.[CURRENT_MONTH_KEY]?.goal || 4;
 
       const formattedWeeks = Array.from({ length: TOTAL_WEEKS }, (_, i) => {
         const weekData = weeksData[`week${i + 1}`] || {};
@@ -144,77 +136,6 @@ export default function FriendWorkoutChallenge({ navigation }) {
 
     return () => ref.off('value', listener);
   }, []);
-
-  const handleCamera = async weekNumber => {
-    const week = weeks.find(w => w.week === weekNumber);
-
-    if (!week) return;
-
-    const weekIndex = week.week - 1;
-
-    if (weekIndex !== currentWeekIndex) {
-      setWeekError(prev => ({
-        ...prev,
-        [week.week]: '🔒 Only current week is accessible',
-      }));
-
-      return;
-    }
-
-    if (week.workoutPhotos.length >= workoutsPerWeek) {
-      setWeekError(prev => ({
-        ...prev,
-        [week.week]: '✅ Week already completed',
-      }));
-
-      return;
-    }
-
-    setWeekError(prev => ({
-      ...prev,
-      [week.week]: '',
-    }));
-
-    const granted = await requestCameraPermission();
-
-    if (!granted) return;
-
-    launchCamera(
-      {
-        mediaType: 'photo',
-        quality: 0.7,
-      },
-      async response => {
-        if (response.didCancel || response.errorCode) return;
-
-        const uri = response?.assets?.[0]?.uri;
-
-        if (!uri) return;
-
-        const newWorkout = {
-          uri,
-          friend: '',
-          timestamp: moment().toISOString(),
-        };
-
-        const updatedPhotos = [...week.workoutPhotos, newWorkout];
-
-        const updatedWeek = {
-          ...week,
-          workoutPhotos: updatedPhotos,
-          completed: updatedPhotos.length === workoutsPerWeek,
-        };
-
-        const updatedWeeks = weeks.map(w =>
-          w.week === week.week ? updatedWeek : w,
-        );
-
-        setWeeks(updatedWeeks);
-
-        await saveWeek(week.week, updatedWeek);
-      },
-    );
-  };
 
   const savePhoto = async localUri => {
     const week = weeks.find(w => w.week === selectedWeek);
@@ -323,6 +244,7 @@ export default function FriendWorkoutChallenge({ navigation }) {
 
     return Math.min(diffWeeks, TOTAL_WEEKS - 1);
   };
+  const currentWeekIndex = getCurrentWeekIndex();
 
   const updateFriendLocal = (weekNumber, photoIndex, text) => {
     const updatedWeeks = weeks.map(week => {
@@ -345,6 +267,7 @@ export default function FriendWorkoutChallenge({ navigation }) {
   };
 
   const updateFriendName = async (weekNumber, photoIndex, name) => {
+    if (!isCurrentMonth || weekNumber - 1 !== currentWeekIndex) return;
     const updatedWeeks = weeks.map(week => {
       if (week.week !== weekNumber) return week;
 
@@ -370,11 +293,11 @@ export default function FriendWorkoutChallenge({ navigation }) {
 
   const saveWeek = async (weekNumber, weekData) => {
     try {
-      const monthKey = getMonthKey();
+      const CURRENT_MONTH_KEY = CURRENT_MONTH_KEY;
 
       await database()
         .ref(
-          `users/${USER_ID}/habits/exWithFriend/${monthKey}/weeks/week${weekNumber}`,
+          `users/${USER_ID}/habits/exWithFriend/${CURRENT_MONTH_KEY}/weeks/week${weekNumber}`,
         )
         .update({
           completed: weekData.completed,
@@ -387,6 +310,12 @@ export default function FriendWorkoutChallenge({ navigation }) {
   };
 
   const deletePhoto = async (weekNumber, photoIndex) => {
+    const weekIndex = weekNumber - 1;
+
+    if (!isCurrentMonth || weekNumber - 1 !== currentWeekIndex) {
+      Alert.alert('Locked', 'Only current week can be edited.');
+      return;
+    }
     const updatedWeeks = weeks.map(w => {
       if (w.week !== weekNumber) return w;
 
@@ -406,6 +335,12 @@ export default function FriendWorkoutChallenge({ navigation }) {
   };
 
   const retakePhoto = async (weekNumber, photoIndex) => {
+    const weekIndex = weekNumber - 1;
+
+    if (!isCurrentMonth || weekIndex !== currentWeekIndex) {
+      Alert.alert('Locked', 'Only current week can be edited.');
+      return;
+    }
     const granted = await requestCameraPermission();
     if (!granted) return;
 
@@ -486,19 +421,29 @@ export default function FriendWorkoutChallenge({ navigation }) {
   );
 
   const activeWeek = activeWeekIndex === -1 ? null : weeks[activeWeekIndex];
-  const currentWeekIndex = getCurrentWeekIndex();
 
   const isWeekMissed = weekIndex => {
-    if (!startDate) return false;
+    const week = weeks[weekIndex];
 
-    const now = moment();
+    const hasWorkouts = (week?.workoutPhotos?.length || 0) > 0;
+
+    const isComplete = (week?.workoutPhotos?.length || 0) >= workoutsPerWeek;
+
+    // ❌ completed = never missed
+    if (isComplete) return false;
+
+    // 🔥 OLD MONTH (Feb, Mar etc.)
+    if (!isCurrentMonth) {
+      return true; // everything incomplete = missed
+    }
+
+    // 🔥 CURRENT MONTH ONLY
+    if (!startDate) return false;
 
     const weekEnd = moment(startDate).add(weekIndex + 1, 'weeks');
 
-    return (
-      now.isAfter(weekEnd) &&
-      weeks[weekIndex]?.workoutPhotos?.length < workoutsPerWeek
-    );
+    // past time + not completed = missed
+    return moment().isAfter(weekEnd);
   };
 
   return (
@@ -536,9 +481,16 @@ export default function FriendWorkoutChallenge({ navigation }) {
         {weeks.map((weekItem, weekIndex) => {
           const missed = isWeekMissed(weekIndex);
 
-          const isLocked = weekIndex > currentWeekIndex || missed;
+          let isLocked = false;
 
-          const isEditableWeek = weekIndex === currentWeekIndex && !missed;
+          // past month → never lock (just show history)
+          if (isCurrentMonth) {
+            isLocked = weekIndex > currentWeekIndex || isWeekMissed(weekIndex);
+          }
+          const isEditableWeek =
+            isCurrentMonth &&
+            weekIndex === currentWeekIndex &&
+            !isWeekMissed(weekIndex);
           return (
             <View
               key={weekIndex}
@@ -546,7 +498,9 @@ export default function FriendWorkoutChallenge({ navigation }) {
             >
               {isLocked && (
                 <View style={styles.lockOverlay}>
-                  <Text style={styles.lockText}>🔒 Future Week</Text>
+                  <Text style={styles.lockText}>
+                    {missed ? '❌ Missed Week' : '🔒 Future Week'}
+                  </Text>
                 </View>
               )}
               {missed && (
@@ -677,17 +631,19 @@ export default function FriendWorkoutChallenge({ navigation }) {
                 </View>
               ))}
 
-              {!isLocked && weekItem.workoutPhotos.length < workoutsPerWeek && (
-                <TouchableOpacity
-                  style={styles.shareBtn}
-                  onPress={() => {
-                    setSelectedWeek(weekItem.week);
-                    setPickerVisible(true);
-                  }}
-                >
-                  <Text style={styles.shareText}>Add Workout</Text>
-                </TouchableOpacity>
-              )}
+              {!isLocked &&
+                weekItem.workoutPhotos.length < workoutsPerWeek &&
+                !route?.params?.monthKey && (
+                  <TouchableOpacity
+                    style={styles.shareBtn}
+                    onPress={() => {
+                      setSelectedWeek(weekItem.week);
+                      setPickerVisible(true);
+                    }}
+                  >
+                    <Text style={styles.shareText}>Add Workout</Text>
+                  </TouchableOpacity>
+                )}
             </View>
           );
         })}

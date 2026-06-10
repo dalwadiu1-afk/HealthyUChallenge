@@ -616,7 +616,6 @@ export default function SnackSystemUI({ navigation }) {
             )}
           </>
         )}
-
         {/* ── APPROVED TAB ── */}
         {activeTab === 'approved' && (
           <>
@@ -669,7 +668,7 @@ export default function SnackSystemUI({ navigation }) {
             )}
           </>
         )}
-
+        Make to show all the re in admin for all usersa
         {/* ── ADMIN TAB ── */}
         {activeTab === 'admin' && (
           <>

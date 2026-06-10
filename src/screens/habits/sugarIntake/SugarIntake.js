@@ -35,7 +35,11 @@ const getDateKey = (date = moment()) => {
   return moment(date).format('YYYY-MM-DD');
 };
 
-export default function SugarChart30Days() {
+export default function SugarChart30Days({ route }) {
+  const today = moment();
+  const CURRENT_MONTH_KEY =
+    route?.params?.monthKey ?? today.format('MMMM_YYYY');
+
   const [product, setProduct] = useState('');
   const [sugarInput, setSugarInput] = useState('');
   const [selected, setSelected] = useState(10);
@@ -58,22 +62,47 @@ export default function SugarChart30Days() {
   }, [startDate]);
 
   const rawData = useMemo(() => {
-    const baseData = Array.from({ length: 30 }, (_, i) => {
-      const date = moment(cycleStart).add(i, 'days').toDate();
+    const monthStart = moment(CURRENT_MONTH_KEY, 'MMMM_YYYY').startOf('month');
+
+    console.log('CURRENT_MONTH_KEY =>', CURRENT_MONTH_KEY);
+    console.log('habitDays =>', habitDays);
+
+    const daysInMonth = monthStart.daysInMonth();
+
+    const baseData = Array.from({ length: daysInMonth }, (_, i) => {
+      const date = monthStart.clone().add(i, 'days');
 
       return {
-        key: getDateKey(date),
-        date,
+        key: date.format('YYYY-MM-DD'),
+        date: date.toDate(),
         sugar: 0,
       };
     });
 
-    return baseData.map(item => ({
-      ...item,
-      items: habitDays?.[item.key]?.items || [],
-      sugar: Number(habitDays?.[item.key]?.progress || 0),
-    }));
-  }, [cycleStart, habitDays]);
+    console.log(
+      'Matching day sample =>',
+      baseData[0]?.key,
+      habitDays?.[baseData[0]?.key],
+    );
+
+    return baseData.map(item => {
+      const day = habitDays?.[item.key] || {};
+
+      const items = Array.isArray(day.items)
+        ? day.items
+        : Object.values(day.items || {});
+
+      const totalSugar =
+        day.progress ??
+        items.reduce((sum, i) => sum + Number(i?.sugar || 0), 0);
+
+      return {
+        ...item,
+        items,
+        sugar: Number(totalSugar),
+      };
+    });
+  }, [CURRENT_MONTH_KEY, habitDays]);
 
   useEffect(() => {
     if (!rawData.length) return;
@@ -114,29 +143,14 @@ export default function SugarChart30Days() {
       setStartDate(dbStartDate);
 
       const habits = data?.habits?.sugarIntake || {};
+
       const gen = data?.profile?.gender;
       setGender(gen);
 
-      // const goal = gender === 'female' ? 24 : 36;
+      // 👇 Add this here
+      const monthData = habits?.[CURRENT_MONTH_KEY];
 
-      // 👉 create 30 day base
-      const habitEntries = Object.entries(habits || {});
-
-      if (!habitEntries.length) {
-        setHabitDays({});
-        return;
-      }
-
-      const latestHabit = habitEntries
-        .sort((a, b) => {
-          const dateA = moment(a[0], 'MMMM_YYYY');
-          const dateB = moment(b[0], 'MMMM_YYYY');
-
-          return dateA.valueOf() - dateB.valueOf();
-        })
-        .at(-1);
-
-      const days = latestHabit?.[1]?.days || {};
+      const days = monthData?.days || monthData?.Days || {};
 
       setHabitDays(days);
     };
@@ -144,10 +158,11 @@ export default function SugarChart30Days() {
     userRef.on('value', onValueChange);
 
     return () => userRef.off('value', onValueChange);
-  }, []);
+  }, [CURRENT_MONTH_KEY]);
 
   const formatDate = date => moment(date).format('D');
   const data = useMemo(() => {
+    console.log('rawData :>> ', rawData);
     return rawData.map(d => ({
       ...d,
       sugar: Number(d.sugar || 0),

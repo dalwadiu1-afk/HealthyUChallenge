@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 
 import firestore from '@react-native-firebase/firestore';
-
+import analytics from '@react-native-firebase/analytics';
 import { Wrapper, Header } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
 import moment from 'moment';
@@ -28,6 +28,10 @@ export default function QuizStart({ navigation, route }) {
   const { isBonus, isCombine } = route?.params || {};
 
   useEffect(() => {
+    analytics().logEvent('quiz_screen_view', {
+      type: isBonus ? 'bonus' : 'normal',
+    });
+
     Animated.parallel([
       Animated.timing(fade, {
         toValue: 1,
@@ -40,6 +44,7 @@ export default function QuizStart({ navigation, route }) {
         useNativeDriver: true,
       }),
     ]).start();
+
     fetchQuiz();
   }, []);
 
@@ -85,7 +90,11 @@ export default function QuizStart({ navigation, route }) {
     }
   };
 
-  const startQuiz = () => {
+  const startQuiz = async () => {
+    await analytics().logEvent('quiz_started', {
+      type: isBonus ? 'bonus' : 'normal',
+      total_questions: quizData?.totalQuestions,
+    });
     navigation.replace('Quiz', {
       isBonus: isBonus,
       showQues: quizData?.totalQuestions,

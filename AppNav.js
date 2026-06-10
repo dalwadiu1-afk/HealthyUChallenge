@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
-
+import analytics from '@react-native-firebase/analytics';
 import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
 import BootSplash from 'react-native-bootsplash';
@@ -12,6 +12,7 @@ import BottomNavigation from './src/navigation/BottomNavigation';
 import SplashScreen from './src/screens/authentication/splashScreen';
 
 import { setUserData, clearUser } from './src/redux/slices/userSlice';
+import moment from 'moment';
 
 const Stack = createNativeStackNavigator();
 
@@ -43,9 +44,30 @@ export default function AppNav() {
   // AUTH LISTENER
   // =========================
   useEffect(() => {
-    const unsubscribe = auth().onAuthStateChanged(authUser => {
+    const unsubscribe = auth().onAuthStateChanged(async authUser => {
       if (authUser) {
         setUser(authUser);
+
+        if (authUser) {
+          const uid = authUser?.uid;
+          const today = moment().format('YYYY-MM-DD');
+
+          await database()
+            .ref(`/analytics/activeUsers/${today}/${uid}`)
+            .update({
+              active: true,
+              lastSeen: moment().valueOf(),
+            });
+
+          await analytics().setAnalyticsCollectionEnabled(true);
+
+          await analytics().logEvent('app_open', {
+            uid,
+            time: moment().valueOf(),
+          });
+
+          await database().ref(`/users/${uid}/lastSeen`).set(Date.now());
+        }
       } else {
         setUser(null);
         setUserDataLoaded(true); // allow navigation to auth stack

@@ -15,6 +15,7 @@ import auth from '@react-native-firebase/auth';
 import { generateUserChallengeData } from '../../../utils/helper';
 import database from '@react-native-firebase/database';
 import moment from 'moment';
+import analytics from '@react-native-firebase/analytics';
 
 const RING_SIZE = 110;
 const RING_STROKE = 9;
@@ -172,6 +173,9 @@ export default function QuizResult({ navigation, route }) {
   const userData = useSelector(state => state.user);
   const profile = userData?.profile;
   const goal = userData?.goal;
+  const today = moment().format('YYYY-MM-DD');
+  const week = moment().format('YYYY-[W]WW');
+  const month = moment().format('YYYY-MM');
 
   const correct = questions.reduce(
     (acc, q, i) => acc + (answers[i] === q.answer ? 1 : 0),
@@ -189,6 +193,22 @@ export default function QuizResult({ navigation, route }) {
     if (!userId) return;
 
     try {
+      await analytics().logEvent('quiz_active_user', {
+        date: moment().format('YYYY-MM-DD'),
+      });
+
+      analytics().logEvent('quiz_completed', {
+        type: isBonus ? 'bonus' : 'normal',
+        correct_answers: correct,
+        total_questions: total,
+        percentage: Math.round((correct / total) * 100),
+        passed: correct / total >= 0.6,
+
+        // time grouping (for later BigQuery / admin dashboard)
+        date: today,
+        week,
+        month,
+      });
       const today = moment().format('YYYY-MM-DD');
 
       const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;

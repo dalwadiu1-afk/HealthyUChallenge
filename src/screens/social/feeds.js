@@ -183,7 +183,9 @@ export default function Feeds({ navigation }) {
         <ProfileHeader
           userData={userData?.profile}
           startDate={
-            moment(userData?.goal?.startDate)?.format('YYYY-MM-DD') || ''
+            moment(
+              userData?.profile?.memberSince || userData?.goal?.startDate,
+            )?.format('YYYY-MM-DD') || ''
           }
           streakData={mergedQuiz}
         />

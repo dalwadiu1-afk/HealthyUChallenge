@@ -7,6 +7,7 @@ import {
   Image,
   Linking,
   Dimensions,
+  Alert,
 } from 'react-native';
 
 import { colors, fontFamily } from '../../constant/index';
@@ -20,17 +21,42 @@ export default function Social() {
 
   const openLink = async url => {
     try {
-      await Linking.openURL(url);
-    } catch (e) {
-      console.log('Primary failed, trying fallback browser');
-      try {
-        await Linking.openURL(`googlechrome:${url}`);
-      } catch (err) {
-        console.log('Fallback failed:', err);
+      const supported = await Linking.canOpenURL(url);
+      console.log('supported :>> ', supported);
+      if (!supported) {
+        Alert.alert(
+          'Unable to Open',
+          'No application found to handle this link.',
+        );
+        return;
       }
+
+      await Linking.openURL(url);
+    } catch (error) {
+      console.log('Open URL Error:', error);
+      Alert.alert('Error', 'Something went wrong while opening the link.');
     }
   };
 
+  const openEmail = async (email, subject = '') => {
+    try {
+      const url = `${email}?subject=${encodeURIComponent(subject)}`;
+
+      const supported = await Linking.canOpenURL(url);
+
+      if (!supported) {
+        Alert.alert(
+          'No Email App',
+          'No email application is installed on this device.',
+        );
+        return;
+      }
+
+      await Linking.openURL(url);
+    } catch (error) {
+      console.log(error);
+    }
+  };
   const { height } = Dimensions.get('window');
 
   return (
@@ -49,7 +75,7 @@ export default function Social() {
 
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => openLink('mailto:jbostedo@gourmetdiningllc.com')}
+            onPress={() => openEmail('mailto:jbostedo@gourmetdiningllc.com')}
           >
             <Text style={styles.contactText}>
               ✉️ jbostedo@gourmetdiningllc.com
@@ -58,7 +84,7 @@ export default function Social() {
 
           {/* <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => openLink('tel:+19736554414')}
+            onPress={() => openEmail('tel:+19736554414')}
           >
             <Text style={styles.contactText}>📞 (973) 655-4414</Text>
           </TouchableOpacity> */}
@@ -73,7 +99,7 @@ export default function Social() {
 
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => openLink('mailto:jbostedo@gourmetdiningllc.com')}
+            onPress={() => openEmail('mailto:jbostedo@gourmetdiningllc.com')}
           >
             <Text style={styles.contactText}>
               ✉️ swheeler@gourmetdiningllc.com
@@ -82,7 +108,7 @@ export default function Social() {
 
           {/* <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => openLink('tel:+19736554414')}
+            onPress={() => openEmail('tel:+19736554414')}
           >
             <Text style={styles.contactText}>📞 (973) 655-4414</Text>
           </TouchableOpacity> */}
@@ -97,7 +123,7 @@ export default function Social() {
 
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => openLink('mailto:jcarr@gourmetdiningllc.com')}
+            onPress={() => openEmail('mailto:jcarr@gourmetdiningllc.com')}
           >
             <Text style={styles.contactText}>
               ✉️ jcarr@gourmetdiningllc.com
@@ -127,7 +153,9 @@ export default function Social() {
           <TouchableOpacity
             style={styles.actionButton}
             activeOpacity={0.8}
-            onPress={() => openLink(`mailto:${EMAIL}`)}
+            onPress={() =>
+              openEmail(`mailto:${EMAIL}`, 'Nutrition Consultation Request')
+            }
           >
             <Text style={styles.actionText}>📧 Contact Dietitian</Text>
           </TouchableOpacity>
@@ -209,6 +237,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 8,
     fontFamily: fontFamily.montserratSemiBold,
+    textAlign: 'center',
   },
 
   profileCard: {
@@ -234,6 +263,7 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 20,
     fontFamily: fontFamily.montserratBold,
+    textAlign: 'center',
   },
 
   role: {
@@ -241,6 +271,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 4,
     fontFamily: fontFamily.montserratSemiBold,
+    textAlign: 'center',
   },
 
   bio: {

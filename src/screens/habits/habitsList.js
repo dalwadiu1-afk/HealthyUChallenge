@@ -666,6 +666,8 @@ export default function HabitsList({ navigation }) {
 
     setSelectedGoals(tempSelected);
 
+    const currentMonth = moment().format('MMMM_YYYY');
+
     await database()
       .ref(`/users/${uid}/goal`)
       .set({
@@ -674,6 +676,19 @@ export default function HabitsList({ navigation }) {
         startDate: moment().format('YYYY-MM-DD'),
         goalNotes: {},
       });
+
+    const habitUpdates = {};
+
+    tempSelected.forEach(goal => {
+      if (goal.goalText) {
+        habitUpdates[`${goal.key}/${currentMonth}`] = {
+          goal: goal.goalText,
+          title: goal.title,
+        };
+      }
+    });
+
+    await database().ref(`/users/${uid}/habits`).update(habitUpdates);
 
     setSelectionMode(false);
     setConfirmVisible(false);

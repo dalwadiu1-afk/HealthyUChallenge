@@ -34,7 +34,6 @@ const USER_ID = auth().currentUser?.uid;
 
 const today = moment();
 
-const CURRENT_MONTH_KEY = today.format('MMMM_YYYY');
 function GradientBg({ id, c1, c2, r = 20, horizontal = false }) {
   const x2 = horizontal ? '1' : '1';
   const y2 = horizontal ? '0' : '1';
@@ -72,13 +71,18 @@ function CameraIcon() {
   );
 }
 
-const FermentedFoodChallenge = ({ navigation }) => {
+const FermentedFoodChallenge = ({ navigation, route }) => {
+  const isArchive = !!route?.params?.monthKey;
+  const CURRENT_MONTH_KEY =
+    route?.params?.monthKey ?? today.format('MMMM_YYYY');
   const [weeks, setWeeks] = useState(
     Array(TOTAL_WEEKS)
       .fill(null)
       .map(() => Array(TOTAL_DAYS).fill(null)),
   );
-  const [currentWeek, setCurrentWeek] = useState(0);
+  const [currentWeek, setCurrentWeek] = useState(
+    route?.params?.monthKey ? 4 : 0,
+  );
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const [startDate, setStartDate] = useState(null);
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -204,6 +208,13 @@ const FermentedFoodChallenge = ({ navigation }) => {
   };
 
   const openCamera = async () => {
+    const { canUpload } = getDayAccess(
+      currentWeek,
+      dayIndex,
+      weeks[currentWeek][dayIndex],
+    );
+
+    if (!canUpload) return;
     setPickerVisible(false);
 
     const dayIndex = selectedDay;
@@ -271,6 +282,13 @@ const FermentedFoodChallenge = ({ navigation }) => {
   };
 
   const openGallery = async () => {
+    const { canUpload } = getDayAccess(
+      currentWeek,
+      dayIndex,
+      weeks[currentWeek][dayIndex],
+    );
+
+    if (!canUpload) return;
     setPickerVisible(false);
 
     const dayIndex = selectedDay;
@@ -349,31 +367,46 @@ const FermentedFoodChallenge = ({ navigation }) => {
   };
 
   const getDayAccess = (week, day, item) => {
-    if (!startDate) {
+    const isDone = !!item;
+
+    // 🔥 ARCHIVE MODE (NO UPLOAD ALLOWED)
+    if (isArchive) {
       return {
         isPast: true,
-        isFuture: true,
+        isFuture: false,
         isToday: false,
-        isDone: !!item,
+        isDone,
+        isMissed: !isDone, // 🔥 KEY FIX
+        isLocked: true,
+        canUpload: false,
+        canEditLabel: false,
+      };
+    }
+
+    // NORMAL MODE (ACTIVE MONTH)
+    if (!startDate) {
+      return {
+        isPast: false,
+        isFuture: false,
+        isToday: false,
+        isDone,
         isMissed: false,
         isLocked: true,
         canUpload: false,
         canEditLabel: false,
       };
     }
-    const start = moment(startDate).startOf('day');
 
+    const start = moment(startDate).startOf('day');
     const today = moment().startOf('day');
 
     const diffDays = today.diff(start, 'days');
-
     const globalIndex = week * TOTAL_DAYS + day;
 
     const isPast = globalIndex < diffDays;
     const isFuture = globalIndex > diffDays;
     const isToday = globalIndex === diffDays;
 
-    const isDone = !!item;
     const isMissed = isPast && !isDone;
 
     return {
@@ -382,7 +415,7 @@ const FermentedFoodChallenge = ({ navigation }) => {
       isToday,
       isDone,
       isMissed,
-      isLocked: isPast || isFuture,
+      isLocked: isFuture,
       canUpload: isToday && !isDone,
       canEditLabel: isToday && isDone,
     };
@@ -489,7 +522,7 @@ const FermentedFoodChallenge = ({ navigation }) => {
               Week {currentWeek + 1} Progress
             </Text>
             <Text style={styles.weekProgressCount}>
-              {weeks[currentWeek].filter(Boolean).length}/{TOTAL_DAYS} days
+              {weeks[currentWeek]?.filter(Boolean).length}/{TOTAL_DAYS} days
             </Text>
           </View>
           <View style={styles.dayDots}>
@@ -498,9 +531,9 @@ const FermentedFoodChallenge = ({ navigation }) => {
                 key={i}
                 style={[
                   styles.dayDot,
-                  weeks[currentWeek][i] && styles.dayDotDone,
+                  weeks?.[currentWeek]?.[i] && styles.dayDotDone,
                   i === currentDayIndex &&
-                    !weeks[currentWeek][i] &&
+                    !weeks?.[currentWeek]?.[i] &&
                     styles.dayDotCurrent,
                 ]}
               />
@@ -510,7 +543,7 @@ const FermentedFoodChallenge = ({ navigation }) => {
 
         {/* Day cards */}
         {Array.from({ length: TOTAL_DAYS }).map((_, dayIndex) => {
-          const item = weeks[currentWeek][dayIndex];
+          const item = weeks?.[currentWeek]?.[dayIndex];
           const {
             isPast,
             isFuture,
@@ -610,7 +643,17 @@ const FermentedFoodChallenge = ({ navigation }) => {
                   <View style={styles.actionRow}>
                     <TouchableOpacity
                       style={styles.retakeBtn}
-                      onPress={() => showImagePicker(dayIndex)}
+                      onPress={() => {
+                        const { canUpload } = getDayAccess(
+                          currentWeek,
+                          dayIndex,
+                          item,
+                        );
+
+                        if (!canUpload) return; // 🔥 BLOCKS archived + future
+
+                        showImagePicker(dayIndex);
+                      }}
                     >
                       <Text style={styles.retakeText}>Retake</Text>
                     </TouchableOpacity>
@@ -625,8 +668,8 @@ const FermentedFoodChallenge = ({ navigation }) => {
                     </TouchableOpacity>
                   </View>
                 </View>
-              ) : isPast ? (
-                <View style={styles.lockedBox}>
+              ) : isMissed ? (
+                <View style={styles.missedBox}>
                   <Text style={styles.lockEmoji}>❌</Text>
                   <Text style={styles.lockedSub}>Missed Day</Text>
                 </View>
@@ -638,7 +681,17 @@ const FermentedFoodChallenge = ({ navigation }) => {
               ) : (
                 <TouchableOpacity
                   style={styles.uploadBtn}
-                  onPress={() => showImagePicker(dayIndex)}
+                  onPress={() => {
+                    const { canUpload } = getDayAccess(
+                      currentWeek,
+                      dayIndex,
+                      item,
+                    );
+
+                    if (!canUpload) return; // 🔥 BLOCKS archived + future
+
+                    showImagePicker(dayIndex);
+                  }}
                 >
                   <CameraIcon />
                   <Text style={styles.uploadText}>Upload Photo</Text>
@@ -684,7 +737,16 @@ const FermentedFoodChallenge = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.dark },
-
+  missedBox: {
+    height: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,0,0,0.05)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,0,0,0.2)',
+  },
   heroBg: { paddingBottom: 20, overflow: 'hidden' },
   header: {
     flexDirection: 'row',

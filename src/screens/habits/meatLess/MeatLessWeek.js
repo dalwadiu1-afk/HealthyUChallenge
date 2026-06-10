@@ -18,7 +18,6 @@ import Svg, {
   Rect,
   Circle,
 } from 'react-native-svg';
-import { launchCamera } from 'react-native-image-picker';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
@@ -26,6 +25,8 @@ import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import storage from '@react-native-firebase/storage';
 import moment from 'moment';
+import Modal from 'react-native-modal';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 
 const user = auth().currentUser;
 const USER_ID = user?.uid || 'USER_UID';
@@ -34,8 +35,6 @@ const TOTAL_WEEKS = 4;
 const DEFAULT_MAX_MEALS = 4;
 
 const today = moment();
-
-const CURRENT_MONTH_KEY = today.format('MMMM_YYYY');
 
 const getClosestMealGoal = value => {
   const num = Number(value) || 4;
@@ -81,17 +80,99 @@ function CameraIcon() {
   );
 }
 
-export default function MeatlessChallenge({ navigation }) {
+export default function MeatlessChallenge({ navigation, route }) {
   const [habitData, setHabitData] = useState({
     title: 'Meatless Challenge',
     target: '4 Meals Per Week',
     weeks: {},
   });
+  const CURRENT_MONTH_KEY = route?.params?.monthKey
+    ? route?.params?.monthKey
+    : today.format('MMMM_YYYY');
 
   const [startDate, setStartDate] = useState(null);
   const [labels, setLabels] = useState({});
-
+  const [imagePickerVisible, setImagePickerVisible] = useState(false);
+  const [selectedWeekKey, setSelectedWeekKey] = useState(null);
   const weeks = habitData?.weeks || {};
+
+  const showImagePicker = dayKey => {
+    if (route?.params?.monthKey) {
+      Alert.alert(
+        'Upload Not Allowed',
+        'Photos can only be uploaded during the current month.',
+      );
+    } else {
+      setSelectedWeekKey(dayKey);
+      setImagePickerVisible(true);
+    }
+  };
+
+  const processMealUpload = async (weekKey, localUri) => {
+    try {
+      const { downloadURL, storagePath } = await uploadMealImage(
+        localUri,
+        weekKey,
+      );
+
+      await saveMeal(weekKey, {
+        imageUrl: downloadURL,
+        storagePath,
+        label: '',
+        timestamp: moment().toISOString(),
+        uploadedAt: Date.now(),
+      });
+    } catch (error) {
+      console.log(error);
+      Alert.alert('Error', 'Failed to upload image');
+    }
+  };
+
+  const openCamera = async () => {
+    setImagePickerVisible(false);
+
+    const granted = await requestCameraPermission();
+
+    if (!granted) return;
+
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.7,
+        saveToPhotos: true,
+      },
+      async res => {
+        if (res.didCancel || res.errorCode) return;
+
+        const localUri = res?.assets?.[0]?.uri;
+
+        if (!localUri) return;
+
+        await processMealUpload(selectedWeekKey, localUri);
+      },
+    );
+  };
+
+  const openGallery = async () => {
+    setImagePickerVisible(false);
+
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        quality: 0.7,
+        selectionLimit: 1,
+      },
+      async res => {
+        if (res.didCancel || res.errorCode) return;
+
+        const localUri = res?.assets?.[0]?.uri;
+
+        if (!localUri) return;
+
+        await processMealUpload(selectedWeekKey, localUri);
+      },
+    );
+  };
 
   const totalMeals = Object.values(weeks).reduce((sum, week) => {
     return sum + Object.keys(week || {}).length;
@@ -123,8 +204,13 @@ export default function MeatlessChallenge({ navigation }) {
       }
 
       // HABIT DATA
-      const challenge = data?.habits?.meatLess?.[CURRENT_MONTH_KEY];
+      const monthData = data?.habits?.meatLess?.[CURRENT_MONTH_KEY];
+
+      const challenge = monthData?.[CURRENT_MONTH_KEY] || monthData;
       const rawGoal = challenge?.goal || 4;
+      console.log('CURRENT_MONTH_KEY', CURRENT_MONTH_KEY);
+      console.log('meatLess data', data?.habits?.meatLess);
+      console.log('challenge', challenge);
 
       const weeklyGoal = getClosestMealGoal(rawGoal);
       console.log('challenge :>> ', challenge?.weeks);
@@ -197,58 +283,6 @@ export default function MeatlessChallenge({ navigation }) {
       });
   };
 
-  const addMeal = async weekKey => {
-    const weekNumber = Number(weekKey.replace('week', ''));
-
-    if (weekNumber !== CURRENT_WEEK) return;
-
-    const meals = weeks?.[weekKey] || {};
-
-    if (Object.keys(meals).length >= MAX_MEALS) {
-      Alert.alert(
-        'Limit reached',
-        `Maximum ${MAX_MEALS} meals allowed this week`,
-      );
-      return;
-    }
-
-    const granted = await requestCameraPermission();
-
-    if (!granted) return;
-
-    launchCamera(
-      {
-        mediaType: 'photo',
-        quality: 0.7,
-        saveToPhotos: true,
-      },
-      async res => {
-        try {
-          if (res.didCancel || res.errorCode) return;
-
-          const localUri = res?.assets?.[0]?.uri;
-
-          if (!localUri) return;
-
-          const { downloadURL, storagePath } = await uploadMealImage(
-            localUri,
-            weekKey,
-          );
-
-          await saveMeal(weekKey, {
-            imageUrl: downloadURL,
-            storagePath,
-            label: '',
-            timestamp: moment().toISOString(),
-            uploadedAt: Date.now(),
-          });
-        } catch (error) {
-          console.log(error);
-          Alert.alert('Error', 'Failed to upload image');
-        }
-      },
-    );
-  };
   const updateLabel = async (weekKey, mealIndex, text) => {
     const currentMeals = Array.isArray(weeks?.[weekKey])
       ? [...weeks[weekKey]]
@@ -328,15 +362,20 @@ export default function MeatlessChallenge({ navigation }) {
           const weekKey = `week${wi + 1}`;
           const weekNumber = wi + 1;
 
-          const isPast = weekNumber < CURRENT_WEEK;
-          const isCurrent = weekNumber === CURRENT_WEEK;
-          const isLocked = weekNumber > CURRENT_WEEK;
+          const selectedMonth = moment(CURRENT_MONTH_KEY, 'MMMM_YYYY');
+          const currentMonth = moment();
+          const isPastMonth = selectedMonth.isBefore(currentMonth, 'month');
 
+          const isPast = isPastMonth || weekNumber < CURRENT_WEEK;
+          const isCurrent = !isPastMonth && weekNumber === CURRENT_WEEK;
+          const isLocked = !isPastMonth && weekNumber > CURRENT_WEEK;
           const mealsObject = weeks?.[weekKey] || {};
 
           const mealsArray = Array.isArray(mealsObject)
-            ? mealsObject.map((item, index) => [index, item])
-            : [];
+            ? mealsObject
+                .filter(Boolean)
+                .map((item, index) => [`meal${index + 1}`, item])
+            : Object.entries(mealsObject).filter(([_, meal]) => meal);
 
           const weekDone = mealsArray.length >= MAX_MEALS;
 
@@ -494,7 +533,7 @@ export default function MeatlessChallenge({ navigation }) {
                   {isCurrent && mealsArray?.length < MAX_MEALS && (
                     <TouchableOpacity
                       style={styles.uploadBtn}
-                      onPress={() => addMeal(weekKey)}
+                      onPress={() => showImagePicker(weekKey)}
                       activeOpacity={0.8}
                     >
                       <CameraIcon />
@@ -520,6 +559,33 @@ export default function MeatlessChallenge({ navigation }) {
           );
         })}
       </Wrapper>
+      <Modal
+        isVisible={imagePickerVisible}
+        style={{ margin: 0 }}
+        onBackdropPress={() => setImagePickerVisible(false)}
+        onBackButtonPress={() => setImagePickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Choose Image</Text>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openCamera}>
+              <Text style={styles.modalBtnText}>📸 Camera</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openGallery}>
+              <Text style={styles.modalBtnText}>🖼 Gallery</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setImagePickerVisible(false)}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -539,6 +605,53 @@ const styles = StyleSheet.create({
     paddingTop: (StatusBar.currentHeight || 44) + 8,
     // paddingHorizontal: 18,
     paddingBottom: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+
+  modalCard: {
+    backgroundColor: colors.bubbleDark,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 30,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  modalBtn: {
+    paddingVertical: 16,
+    borderRadius: 14,
+    backgroundColor: 'rgba(143,175,120,0.12)',
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+
+  modalBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  cancelBtn: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+
+  cancelText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    fontFamily: fontFamily.montserratSemiBold,
   },
   backBtn: {
     width: 44,

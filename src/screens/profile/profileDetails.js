@@ -32,7 +32,7 @@ import { Header, Wrapper } from '../../components';
 import moment from 'moment';
 
 const userId = auth().currentUser?.uid;
-const currentMonthKey = moment().format('MMM_YYYY');
+const currentMonthKey = moment().format('MMMM_YYYY');
 const { height, width } = Dimensions.get('window');
 const SHEET_MIN = height * 0.62;
 const SHEET_MAX = height * 0.86;

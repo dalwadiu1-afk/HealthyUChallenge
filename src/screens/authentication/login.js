@@ -13,6 +13,7 @@ import { eyeIcon } from '../../assets/images';
 import InputBox from '../../components/common/InputBox';
 import { AuthBtn } from '../../components/common/authBtn';
 import auth from '@react-native-firebase/auth';
+import analytics from '@react-native-firebase/analytics';
 
 const { height, width } = Dimensions.get('window');
 
@@ -84,20 +85,20 @@ export default function Login({ navigation }) {
     let valid = true;
 
     // EMAIL VALIDATION
-    // if (!email) {
-    //   setError(prev => ({
-    //     ...prev,
-    //     email: 'Email is required.',
-    //   }));
-    //   valid = false;
-    // } else if (!isValidEmail(email)) {
-    //   setError(prev => ({
-    //     ...prev,
-    //     email:
-    //       'Only users with a montclair.edu email address can access this feature!',
-    //   }));
-    //   valid = false;
-    // }
+    if (!email) {
+      setError(prev => ({
+        ...prev,
+        email: 'Email is required.',
+      }));
+      valid = false;
+    } else if (!isValidEmail(email)) {
+      setError(prev => ({
+        ...prev,
+        email:
+          'Only users with a montclair.edu email address can access this feature!',
+      }));
+      valid = false;
+    }
 
     // PASSWORD VALIDATION
     if (!password) {
@@ -119,14 +120,37 @@ export default function Login({ navigation }) {
     try {
       setLoading(true);
 
+      // 🔥 LOGIN ATTEMPT EVENT
+      await analytics().logEvent('login_attempt', {
+        method: 'email',
+      });
+
       const userCredential = await auth().signInWithEmailAndPassword(
         email.trim(),
         password,
       );
 
-      console.log('User signed in:', userCredential.user);
+      const user = userCredential.user;
+
+      // 🔥 LOGIN SUCCESS EVENT (IMPORTANT KPI)
+      await analytics().logLogin({
+        method: 'email',
+      });
+
+      // 🔥 SET USER ID (CRITICAL - links all activity to user)
+      await analytics().setUserId(user.uid);
+
+      // Optional: tag user
+      await analytics().setUserProperties({
+        user_type: 'student',
+      });
+
+      console.log('User signed in:', user);
     } catch (err) {
       console.log(err);
+      await analytics().logEvent('login_failed', {
+        error_code: err.code,
+      });
 
       switch (err.code) {
         case 'auth/user-not-found':

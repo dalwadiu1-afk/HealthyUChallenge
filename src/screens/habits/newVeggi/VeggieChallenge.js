@@ -20,25 +20,7 @@ import moment from 'moment';
 import Modal from 'react-native-modal';
 import storage from '@react-native-firebase/storage';
 
-const user = auth().currentUser;
-const CURRENT_MONTH_KEY = moment().format('MMMM_YYYY');
-const USER_ID = user?.uid;
-const DAYS_PER_WEEK = 1;
-const MAX_WEEKS = 5;
-const defaultWeeks = {
-  week1: {
-    uri: '',
-    label: '',
-    timestamp: null,
-    locked: false,
-  },
-  week2: {
-    uri: '',
-    label: '',
-    timestamp: null,
-    locked: true,
-  },
-};
+const MAX_WEEKS = 4;
 
 function CameraIcon() {
   return (
@@ -78,7 +60,7 @@ const uploadImageToFirebase = async localUri => {
 
     const fileName = `veggie_${Date.now()}.${extension}`;
 
-    const storagePath = `users/${USER_ID}/veggieChallenge/${CURRENT_MONTH_KEY}/${fileName}`;
+    const storagePath = `users/${userId}/veggieChallenge/${CURRENT_MONTH_KEY}/${fileName}`;
 
     const reference = storage().ref(storagePath);
 
@@ -91,7 +73,12 @@ const uploadImageToFirebase = async localUri => {
   }
 };
 
-const VeggieChallenge = ({ navigation }) => {
+const VeggieChallenge = ({ navigation, route }) => {
+  const CURRENT_MONTH_KEY =
+    route?.params?.monthKey ?? moment().format('MMMM_YYYY');
+  const isArchivedMonth = CURRENT_MONTH_KEY !== moment().format('MMMM_YYYY');
+  const userId = auth().currentUser?.uid;
+
   const [goalStartDate, setGoalStartDate] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [weeks, setWeeks] = useState({});
@@ -100,11 +87,11 @@ const VeggieChallenge = ({ navigation }) => {
   const [selectedWeek, setSelectedWeek] = useState(null);
 
   useEffect(() => {
-    if (!USER_ID) return;
+    if (!userId) return;
 
-    const goalRef = database().ref(`/users/${USER_ID}/goal`);
+    const goalRef = database().ref(`/users/${userId}/goal`);
     const veggieRef = database().ref(
-      `/users/${USER_ID}/habits/newVeggie/${CURRENT_MONTH_KEY}`,
+      `/users/${userId}/habits/newVeggie/${CURRENT_MONTH_KEY}`,
     );
 
     goalRef.once('value').then(snap => {
@@ -147,6 +134,17 @@ const VeggieChallenge = ({ navigation }) => {
       for (let i = 1; i <= MAX_WEEKS; i++) {
         const existingWeek = normalized[`week${i}`];
 
+        if (isArchivedMonth) {
+          generatedWeeks[`week${i}`] = {
+            uri: existingWeek?.uri || '',
+            label: existingWeek?.label || '',
+            timestamp: existingWeek?.timestamp || null,
+            locked: false,
+          };
+
+          continue;
+        }
+
         const { unlocked, unlockDate } = getWeekUnlockData(
           goalStartDate || moment().valueOf(),
           i,
@@ -156,9 +154,7 @@ const VeggieChallenge = ({ navigation }) => {
           uri: existingWeek?.uri || '',
           label: existingWeek?.label || '',
           timestamp: existingWeek?.timestamp || null,
-
           locked: !unlocked,
-
           unlockDate: unlockDate.valueOf(),
         };
       }
@@ -171,7 +167,7 @@ const VeggieChallenge = ({ navigation }) => {
   const updateWeeks = async newWeeks => {
     try {
       await database()
-        .ref(`/users/${USER_ID}/habits/newVeggie/${CURRENT_MONTH_KEY}`)
+        .ref(`/users/${userId}/habits/newVeggie/${CURRENT_MONTH_KEY}`)
         .update({
           weeks: newWeeks,
           updatedAt: moment().valueOf(),
@@ -296,7 +292,6 @@ const VeggieChallenge = ({ navigation }) => {
     setPickerVisible(false);
 
     const granted = await requestCameraPermission();
-    console.log('requestCameraPermission :>> ', granted);
     if (!granted) return;
 
     launchCamera(
@@ -352,16 +347,16 @@ const VeggieChallenge = ({ navigation }) => {
             />
           </View>
           <Text style={styles.progressLabel}>
-            {completedWeeks}/{safeWeeks.length} weeks
+            {completedWeeks}/{MAX_WEEKS} weeks
           </Text>
         </View>
         <View style={{ marginBottom: 120 }}>
           {Object.entries(weeks)
             .filter(([weekKey, week], index) => {
-              // always show first 2 cards
+              if (isArchivedMonth) return true;
+
               if (index < 2) return true;
 
-              // show card only after unlock
               return !week?.locked;
             })
             .sort(([a], [b]) => {
@@ -437,6 +432,14 @@ const VeggieChallenge = ({ navigation }) => {
                         </TouchableOpacity>
                       </View>
                     </>
+                  ) : isArchivedMonth ? (
+                    <View style={styles.missedBox}>
+                      <Text style={styles.missedEmoji}>❌</Text>
+                      <Text style={styles.missedTitle}>Missed Week</Text>
+                      <Text style={styles.missedSub}>
+                        No veggie meal uploaded
+                      </Text>
+                    </View>
                   ) : (
                     <TouchableOpacity
                       style={styles.uploadBtn}
@@ -494,7 +497,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingBottom: 16,
   },
+  missedBox: {
+    height: 100,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,107,107,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,107,107,0.25)',
+  },
 
+  missedEmoji: {
+    fontSize: 22,
+  },
+
+  missedTitle: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    fontFamily: fontFamily.montserratSemiBold,
+    marginTop: 4,
+  },
+
+  missedSub: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 11,
+    marginTop: 2,
+  },
   backBtn: {
     width: 44,
     height: 44,

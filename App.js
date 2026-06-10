@@ -7,11 +7,12 @@ import AppNav from './AppNav';
 
 import messaging from '@react-native-firebase/messaging';
 import notifee, { EventType, AndroidImportance } from '@notifee/react-native';
-
+import analytics from '@react-native-firebase/analytics';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 
 import { navigate, navigationRef } from './src/utils/navigationService';
+import { StatusBar } from 'react-native';
 
 export async function createNotificationChannel() {
   await notifee.requestPermission();
@@ -87,6 +88,11 @@ export default function App() {
           pressAction: { id: 'default' },
         },
       });
+
+      await analytics().logEvent('notification_received', {
+        title,
+        screen: remoteMessage?.data?.screen || 'unknown',
+      });
     });
     return unsubscribe;
   }, []);
@@ -98,6 +104,11 @@ export default function App() {
     return notifee.onForegroundEvent(({ type, detail }) => {
       if (type === EventType.PRESS) {
         const screen = detail?.notification?.data?.screen;
+
+        analytics().logEvent('notification_clicked', {
+          screen: detail?.notification?.data?.screen || 'unknown',
+          source: 'foreground',
+        });
 
         if (screen === 'QuizBoard') {
           navigationRef.current?.navigate('QuizBoard');
@@ -112,7 +123,10 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = messaging().onNotificationOpenedApp(remoteMessage => {
       const screen = remoteMessage?.data?.screen;
-
+      analytics().logEvent('notification_clicked', {
+        screen: remoteMessage?.data?.screen || 'unknown',
+        source: 'background',
+      });
       if (screen === 'QuizBoard') {
         setTimeout(() => {
           navigationRef.current?.navigate('QuizBoard');
@@ -127,11 +141,18 @@ export default function App() {
   // APP OPENED FROM KILLED STATE
   // =========================
   useEffect(() => {
+    StatusBar.setBackgroundColor('transparent');
+    StatusBar.setBarStyle('light-content');
     async function checkInitialNotification() {
       const remoteMessage = await messaging().getInitialNotification();
 
       if (remoteMessage) {
         const screen = remoteMessage?.data?.screen;
+
+        analytics().logEvent('notification_clicked', {
+          screen: screen || 'unknown',
+          source: 'quit_state',
+        });
 
         if (screen === 'QuizBoard') {
           setTimeout(() => {

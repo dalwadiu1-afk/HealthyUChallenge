@@ -18,11 +18,13 @@ import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
 import { getDynamicWeekId } from '../../../utils/helper';
 import moment from 'moment';
+import analytics from '@react-native-firebase/analytics';
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 const { height } = Dimensions.get('window');
 
 export default function Quiz({ navigation, route }) {
+  const userId = auth()?.currentUser?.uid;
   const [quizData, setQuizData] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [index, setIndex] = useState(0);
@@ -41,8 +43,6 @@ export default function Quiz({ navigation, route }) {
   const hasSubmittedRef = useRef(false);
   const fetchQuiz = async () => {
     try {
-      const userId = auth().currentUser.uid;
-
       let allQuestions = [];
       let mergedQuizData = {};
 
@@ -202,6 +202,10 @@ export default function Quiz({ navigation, route }) {
   useEffect(() => {
     const submitQuizSafely = async () => {
       try {
+        await analytics().logEvent('quiz_submitted', {
+          type: 'quiz_abandoned',
+          uid: userId,
+        });
         if (hasSubmittedRef.current) return;
 
         await finish(true);

@@ -7,6 +7,8 @@ import {
   Dimensions,
   TouchableOpacity,
   Animated,
+  Alert,
+  TextInput,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
@@ -14,8 +16,14 @@ import { colors, fontFamily } from '../../constant';
 import { Wrapper } from '../../components';
 import { useSelector } from 'react-redux';
 import moment from 'moment';
+import analytics from '@react-native-firebase/analytics';
 
+import Modal from 'react-native-modal';
 const { width, height } = Dimensions.get('window');
+
+const generateRandomCode = () => {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+};
 
 function MenuItem({ item, onPress, index }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -61,7 +69,7 @@ function MenuItem({ item, onPress, index }) {
               styles.badge,
               {
                 backgroundColor:
-                  item.badge === 'New'
+                  item.badge === 'New' || 'Admin' || 'Live'
                     ? 'rgba(143,175,120,0.2)'
                     : 'rgba(192,108,91,0.2)',
               },
@@ -72,7 +80,9 @@ function MenuItem({ item, onPress, index }) {
                 styles.badgeText,
                 {
                   color:
-                    item.badge === 'New' ? colors.secondary : colors.danger,
+                    item.badge === 'New' || 'Admin' || 'Live'
+                      ? colors.secondary
+                      : colors.danger,
                 },
               ]}
             >
@@ -94,56 +104,104 @@ export default function Profile({ navigation }) {
   const [profileData, setProfileData] = useState(null);
   const [leaderboardData, setLeaderboardData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const MENU_ITEMS = [
-    {
-      emoji: '🪪',
-      title: 'Profile Details',
-      subtitle: 'Your personalized health overview',
-      screenName: 'ProfileDetails',
-      badge: 'Active',
-    },
-    {
-      emoji: '🏋️',
-      title: 'Workout History',
-      subtitle: 'View completed workouts and progress',
-      screenName: 'ArchivedGoals',
-      badge: 'New',
-    },
-    {
-      emoji: '🧠',
-      title: 'Quiz Hub',
-      subtitle: 'Track quizzes, streaks & performance',
-      screenName: 'QuizBoard',
-      badge: 'Live',
-    },
-    {
-      emoji: '🏆',
-      title: 'Quiz Leaderboard',
-      subtitle: 'See how you rank with others',
-      screenName: 'Leaderboard',
-      badge: null,
-    },
+  const profile = profileData?.profile || {};
 
-    profileData?.profile?.role === 'admin' && {
-      emoji: '📊',
-      title: 'Quiz Analytics',
-      subtitle: 'View quiz performance insights',
-      screenName: 'QuizAnalytics',
-      badge: 'Admin',
-    },
+  const [verifyModalVisible, setVerifyModalVisible] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
 
-    {
-      emoji: '👥',
-      title: 'Social',
-      subtitle: 'Connect with our dietitian',
-      screenName: 'Social',
-      badge: 'New',
-    },
-    // { // emoji: '🎯', // title: 'Goals', // subtitle: 'View & edit your health goals', // screenName: 'ProfileDetails', // badge: null, // },
-    // { // emoji: '💪', // title: 'My Body', // subtitle: 'BMI, weight, body measurements', // screenName: 'ProfileDetails', // badge: 'Missing Info', // },
-    // { // emoji: '📋', // title: 'Instructions', // subtitle: 'App guide and how-to tips', // screenName: 'Instructions', // badge: 'New', // },
-    // { // emoji: '⚙️', // title: 'Settings', // subtitle: 'Notifications, privacy & more', // screenName: 'ProfileDetails', // badge: null, // },
-  ].filter(Boolean);
+  const challengeCode = profile?.verificationCode?.code || 'Generating...';
+
+  const generateCodeIfNeeded = async () => {
+    try {
+      if (profile?.role !== 'admin') return;
+
+      const ref = database().ref(`users/${userId}/profile/verificationCode`);
+
+      const snap = await ref.once('value');
+
+      const data = snap.val();
+
+      if (!data || data.used === true) {
+        const newCode = Math.random()
+          .toString(36)
+          .substring(2, 8)
+          .toUpperCase();
+
+        await ref.set({
+          code: newCode,
+          used: false,
+          createdAt: moment().format('YYYY-MM-DD HH:mm:ss'),
+        });
+      }
+    } catch (error) {
+      console.log('Generate Code Error:', error);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    try {
+      const adminUsers = await database()
+        .ref('/users')
+        .orderByChild('profile/role')
+        .equalTo('admin')
+        .once('value');
+
+      let validCode = null;
+      let adminUid = null;
+
+      adminUsers.forEach(child => {
+        const codeData = child.val()?.profile?.verificationCode;
+
+        if (
+          codeData?.code === verificationCode.trim().toUpperCase() &&
+          !codeData?.used
+        ) {
+          validCode = codeData;
+          adminUid = child.key;
+        }
+      });
+
+      if (!validCode) {
+        Alert.alert('Invalid Code', 'Please enter a valid code.');
+        return;
+      }
+
+      const uid = auth().currentUser?.uid;
+
+      // VERIFY USER
+      await database()
+        .ref(`/users/${uid}/profile`)
+        .update({
+          challengeVerified: true,
+          challengeVerifiedAt: moment().format('YYYY-MM-DD HH:mm:ss'),
+        });
+
+      // GENERATE NEW ADMIN CODE
+      const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+      await database()
+        .ref(`/users/${adminUid}/profile/verificationCode`)
+        .set({
+          code: newCode,
+          used: false,
+          createdAt: moment().format('YYYY-MM-DD HH:mm:ss'),
+        });
+
+      setVerifyModalVisible(false);
+      setVerificationCode('');
+
+      Alert.alert(
+        '🎉 Challenge Completed',
+        'Your challenge completion has been verified.',
+      );
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  useEffect(() => {
+    generateCodeIfNeeded();
+  }, [profile?.role]);
 
   useEffect(() => {
     Animated.parallel([
@@ -199,7 +257,6 @@ export default function Profile({ navigation }) {
   // DYNAMIC VALUES
   // ----------------------
 
-  const profile = profileData?.profile || {};
   const challenge = leaderboardData?.challenge || {};
   const status = leaderboardData?.status || {};
 
@@ -262,12 +319,74 @@ export default function Profile({ navigation }) {
       ?.filter(Boolean)
       ?.join(' • ') || 'No goals selected';
 
-  console.log('PROFILE DATA => ', profileData);
-  console.log('LEADERBOARD DATA => ', leaderboardData);
+  const MENU_ITEMS = [
+    {
+      emoji: '🪪',
+      title: 'Profile Details',
+      subtitle: 'Your personalized health overview',
+      screenName: 'ProfileDetails',
+    },
+    profile?.role === 'admin'
+      ? {
+          emoji: '🔑',
+          title: 'Challenge Verification Code',
+          subtitle: challengeCode || 'Generate code',
+          screenName: 'VerificationAdmin',
+          badge: 'Admin',
+        }
+      : {
+          emoji: '✅',
+          title: 'Challenge Verification',
+          subtitle: 'Verify completion of your challenge',
+          screenName: 'ChallengeVerification',
+          badge: profileData?.profile?.challengeVerified
+            ? 'Verified'
+            : 'Pending',
+        },
+    {
+      emoji: '🏋️',
+      title: 'Workout History',
+      subtitle: 'View completed workouts and progress',
+      screenName: 'ArchivedGoals',
+    },
+    {
+      emoji: '🧠',
+      title: 'Quiz Hub',
+      subtitle: 'Track quizzes, streaks & performance',
+      screenName: 'QuizBoard',
+      badge: 'Live',
+    },
+    {
+      emoji: '🏆',
+      title: 'Quiz Leaderboard',
+      subtitle: 'See how you rank with others',
+      screenName: 'Leaderboard',
+      badge: null,
+    },
+
+    profileData?.profile?.role === 'admin' && {
+      emoji: '📊',
+      title: 'Quiz Analytics',
+      subtitle: 'View quiz performance insights',
+      screenName: 'QuizAnalytics',
+      badge: 'Admin',
+    },
+
+    {
+      emoji: '👥',
+      title: 'Social',
+      subtitle: 'Connect with our dietitian',
+      screenName: 'Social',
+    },
+    // { // emoji: '🎯', // title: 'Goals', // subtitle: 'View & edit your health goals', // screenName: 'ProfileDetails', // badge: null, // },
+    // { // emoji: '💪', // title: 'My Body', // subtitle: 'BMI, weight, body measurements', // screenName: 'ProfileDetails', // badge: 'Missing Info', // },
+    // { // emoji: '📋', // title: 'Instructions', // subtitle: 'App guide and how-to tips', // screenName: 'Instructions', // badge: 'New', // },
+    // { // emoji: '⚙️', // title: 'Settings', // subtitle: 'Notifications, privacy & more', // screenName: 'ProfileDetails', // badge: null, // },
+  ].filter(Boolean);
 
   return (
     <View style={styles.container}>
-      <Wrapper>
+      <Wrapper containerStyle={{ paddingBottom: height / 6 }}>
         {/* Hero section */}
         <Animated.View style={[styles.hero, { opacity: headerAnim }]}>
           {/* Top row */}
@@ -339,7 +458,18 @@ export default function Profile({ navigation }) {
               key={index}
               item={item}
               index={index}
-              onPress={() => navigation.navigate(item.screenName)}
+              onPress={() => {
+                // NON ADMIN VERIFICATION
+                if (
+                  item.title === 'Challenge Verification' &&
+                  profile?.role !== 'admin'
+                ) {
+                  setVerifyModalVisible(true);
+                  return;
+                } else {
+                  navigation.navigate(item.screenName);
+                }
+              }}
             />
           ))}
         </View>
@@ -353,6 +483,44 @@ export default function Profile({ navigation }) {
           <Text style={styles.logoutIcon}>🚪</Text>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
+        <Modal
+          isVisible={verifyModalVisible}
+          onBackdropPress={() => setVerifyModalVisible(false)}
+          backdropOpacity={0.8}
+          animationIn="zoomIn"
+          animationOut="zoomOut"
+          useNativeDriver
+        >
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalEmoji}>🏆</Text>
+
+            <Text style={styles.modalTitle}>Verify Challenge</Text>
+
+            <Text style={styles.modalSubtitle}>
+              Enter the verification code provided by your administrator.
+            </Text>
+
+            <TextInput
+              value={verificationCode}
+              onChangeText={text => setVerificationCode(text.toUpperCase())}
+              placeholder="ENTER CODE"
+              placeholderTextColor="rgba(255,255,255,0.35)"
+              style={styles.codeInput}
+              autoCapitalize="characters"
+            />
+
+            <TouchableOpacity
+              style={styles.verifyBtn}
+              onPress={handleVerifyCode}
+            >
+              <Text style={styles.verifyBtnText}>Verify Completion</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => setVerifyModalVisible(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
       </Wrapper>
     </View>
   );
@@ -454,6 +622,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: fontFamily.montserratMedium,
     marginTop: 2,
+    textAlign: 'center',
   },
   menuSection: {},
   menuHeader: {
@@ -520,13 +689,101 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(192,108,91,0.25)',
     backgroundColor: 'rgba(192,108,91,0.08)',
-    gap: 8,
-    marginBottom: height / 12,
+    // gap: 8,
   },
   logoutIcon: { fontSize: 16 },
   logoutText: {
     color: colors.danger,
     fontSize: 15,
     fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalContainer: {
+    width: '88%',
+    backgroundColor: '#151515',
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+  },
+
+  modalEmoji: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 22,
+    fontFamily: fontFamily.montserratBold,
+    marginBottom: 8,
+  },
+
+  modalSubtitle: {
+    color: 'rgba(255,255,255,0.55)',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+
+  codeInput: {
+    width: '100%',
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    color: colors.white,
+    textAlign: 'center',
+    letterSpacing: 4,
+    fontSize: 20,
+    fontFamily: fontFamily.montserratBold,
+    marginBottom: 20,
+  },
+
+  verifyBtn: {
+    width: '100%',
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: colors.secondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  verifyBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  cancelText: {
+    color: 'rgba(255,255,255,0.45)',
+    marginTop: 18,
+  },
+
+  codeDisplay: {
+    width: '100%',
+    paddingVertical: 20,
+    borderRadius: 18,
+    backgroundColor: 'rgba(143,175,120,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.35)',
+    marginBottom: 20,
+  },
+
+  codeDisplayText: {
+    color: colors.secondary,
+    textAlign: 'center',
+    fontSize: 28,
+    letterSpacing: 6,
+    fontFamily: fontFamily.montserratBold,
   },
 });

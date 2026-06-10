@@ -24,7 +24,6 @@ import moment from 'moment';
 const DEFAULT_WEEKLY_TARGET = 2;
 
 const USER_ID = auth().currentUser?.uid;
-const monthKey = moment().format('MMMM_YYYY');
 
 function CameraIcon() {
   return (
@@ -61,9 +60,17 @@ function CheckIcon() {
   );
 }
 
-export default function WeightTrainingUI() {
+export default function WeightTrainingUI({ route }) {
   const [weeklyTarget, setWeeklyTarget] = useState(DEFAULT_WEEKLY_TARGET);
-  const TOTAL_WEEKS = 4;
+  const CURRENT_MONTH_KEY = route?.params?.monthKey
+    ? route.params.monthKey
+    : moment().format('MMMM_YYYY');
+
+  const selectedMonth = moment(CURRENT_MONTH_KEY, 'MMMM_YYYY');
+
+  const isPastMonth = selectedMonth.isBefore(moment(), 'month');
+
+  let TOTAL_WEEKS = Number(route?.params?.archivedGoal?.weeks) || 4;
   const TOTAL = weeklyTarget * 4;
   const [sessions, setSessions] = useState(
     Array.from({ length: TOTAL }, () => ({
@@ -108,11 +115,11 @@ export default function WeightTrainingUI() {
       const target =
         Number(weightTrainingGoal?.goalText) || DEFAULT_WEEKLY_TARGET;
 
-      setWeeklyTarget(Math.max(target, 2));
+      setWeeklyTarget(target);
     });
 
     return () => ref.off('value', listener);
-  }, []);
+  }, [weeklyTarget, CURRENT_MONTH_KEY]);
 
   /* =========================================
       WEEK UNLOCK LOGIC
@@ -124,11 +131,14 @@ export default function WeightTrainingUI() {
 
   let currentUnlockedWeek = 0;
 
-  if (startDate) {
+  if (isPastMonth) {
+    currentUnlockedWeek = TOTAL_WEEKS - 1;
+  } else if (startDate) {
     const start = moment(startDate).startOf('day');
     const now = moment().startOf('day');
 
     const diffDays = now.diff(start, 'days');
+
     currentUnlockedWeek = Math.floor(diffDays / 7);
 
     if (currentUnlockedWeek < 0) {
@@ -145,13 +155,11 @@ export default function WeightTrainingUI() {
   ========================================= */
   useEffect(() => {
     const ref = database().ref(
-      `users/${USER_ID}/habits/weightTraining/${monthKey}`,
+      `users/${USER_ID}/habits/weightTraining/${CURRENT_MONTH_KEY}`,
     );
 
     const listener = ref.on('value', snapshot => {
       const data = snapshot.val();
-
-      if (!data?.weeks) return;
 
       const restored = [];
 
@@ -159,11 +167,11 @@ export default function WeightTrainingUI() {
         const weekData = data?.weeks?.[`week${week}`];
 
         const photosObj = weekData?.workoutPhotos || {};
+
         const photosArray = Array.isArray(photosObj)
           ? photosObj
           : Object.values(photosObj);
 
-        console.log('photosArray :>> ', photosArray);
         for (let i = 0; i < weeklyTarget; i++) {
           restored.push({
             photo: photosArray?.[i]?.imageUrl || null,
@@ -172,18 +180,11 @@ export default function WeightTrainingUI() {
         }
       }
 
-      while (restored.length < TOTAL) {
-        restored.push({
-          photo: null,
-          timestamp: null,
-        });
-      }
-
       setSessions(restored);
     });
 
     return () => ref.off('value', listener);
-  }, []);
+  }, [weeklyTarget, CURRENT_MONTH_KEY]);
 
   /* =========================================
       HEADER ANIMATION
@@ -241,6 +242,8 @@ export default function WeightTrainingUI() {
       SAVE TO FIREBASE
   ========================================= */
   const handleDone = async index => {
+    if (isPastMonth) return;
+
     try {
       const photoData = tempPhotos.current[index];
 
@@ -251,7 +254,7 @@ export default function WeightTrainingUI() {
       const positionInsideWeek = index % weeklyTarget;
 
       // STORAGE PATH
-      const storagePath = `weightTraining/${USER_ID}/${monthKey}/week${weekNumber}/${positionInsideWeek}.jpg`;
+      const storagePath = `weightTraining/${USER_ID}/${CURRENT_MONTH_KEY}/week${weekNumber}/${positionInsideWeek}.jpg`;
       const reference = storage().ref(storagePath);
 
       // Upload local image
@@ -262,7 +265,7 @@ export default function WeightTrainingUI() {
 
       // Database Path
       const ref = database().ref(
-        `users/${USER_ID}/habits/weightTraining/${monthKey}/weeks/week${weekNumber}`,
+        `users/${USER_ID}/habits/weightTraining/${CURRENT_MONTH_KEY}/weeks/week${weekNumber}`,
       );
 
       const snapshot = await ref.once('value');
@@ -319,8 +322,19 @@ export default function WeightTrainingUI() {
 
     const sessionNum = (index % weeklyTarget) + 1;
 
-    const isLocked = weekNum - 1 !== currentUnlockedWeek;
+    const isLocked = isPastMonth ? false : weekNum - 1 !== currentUnlockedWeek;
 
+    // Week is already over and user didn't upload
+    const isMissed =
+      !done && (isPastMonth || weekNum - 1 < currentUnlockedWeek);
+
+    console.log({
+      weekNum,
+      currentUnlockedWeek,
+      done,
+      isMissed,
+      isLocked,
+    });
     return (
       <Animated.View
         style={{
@@ -335,7 +349,13 @@ export default function WeightTrainingUI() {
           ],
         }}
       >
-        <View style={[styles.card, done && styles.cardDone]}>
+        <View
+          style={[
+            styles.card,
+            done && styles.cardDone,
+            isMissed && styles.cardMissed,
+          ]}
+        >
           <View style={styles.cardHeader}>
             <View style={[styles.numBadge, done && styles.numBadgeDone]}>
               {done ? (
@@ -350,15 +370,17 @@ export default function WeightTrainingUI() {
 
               <Text style={styles.cardSub}>
                 Week {weekNum} · Session {sessionNum}{' '}
-                {isLocked
+                {isMissed
+                  ? 'Missed ❌'
+                  : isLocked
                   ? 'Locked 🔒'
                   : done
-                  ? 'Photo uploaded ✓'
+                  ? 'Completed ✓'
                   : 'Tap to upload proof'}
               </Text>
             </View>
 
-            {done && !isLocked && (
+            {done && !isLocked && !isPastMonth && (
               <TouchableOpacity
                 onPress={() => handleDone(index)}
                 style={styles.donePill}
@@ -371,7 +393,7 @@ export default function WeightTrainingUI() {
           <TouchableOpacity
             style={[styles.uploadBox, done && styles.uploadBoxDone]}
             onPress={() => {
-              if (!isLocked) {
+              if (!isLocked && !isPastMonth && !isMissed) {
                 handleUpload(index);
               }
             }}
@@ -467,7 +489,7 @@ export default function WeightTrainingUI() {
               {Array.from({
                 length: TOTAL_WEEKS,
               }).map((_, i) => {
-                const unlocked = i <= currentUnlockedWeek;
+                const unlocked = isPastMonth ? true : i <= currentUnlockedWeek;
 
                 return (
                   <View
@@ -622,6 +644,10 @@ const styles = StyleSheet.create({
 
   weekChipTextDone: {
     color: colors.secondary,
+  },
+  cardMissed: {
+    borderColor: 'rgba(255, 80, 80, 0.4)',
+    backgroundColor: 'rgba(255, 80, 80, 0.08)',
   },
 
   card: {

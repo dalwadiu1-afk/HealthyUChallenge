@@ -21,19 +21,6 @@ const PADDING = 20;
 const BAR_WIDTH = 14;
 const ITEM_WIDTH = 30;
 
-const buildFiberTemplate = startDate => {
-  const start = moment(startDate).startOf('day');
-
-  return Array.from({ length: 30 }, (_, i) => {
-    const d = moment(start).add(i, 'days');
-
-    return {
-      key: d.format('YYYY-MM-DD'),
-      fiber: 0,
-      date: d,
-    };
-  });
-};
 // Fix this screen that data is not shoing even it saved in the db and also
 function StatRow({ emoji, label, value, last }) {
   return (
@@ -54,7 +41,7 @@ export const getDateKey = (date = new Date()) => {
   return moment(date).format('YYYY-MM-DD');
 };
 
-export default function FiberChartDays({ navigation }) {
+export default function FiberChartDays({ navigation, route }) {
   const [tips, setTips] = useState([]);
   const [input, setInput] = useState('');
   const [selected, setSelected] = useState(0);
@@ -64,15 +51,37 @@ export default function FiberChartDays({ navigation }) {
     max: 38,
   });
 
+  const today = moment();
+  const TODAY_KEY = today.format('YYYY-MM-DD');
+
+  const CURRENT_MONTH_KEY = route?.params?.monthKey
+    ? route.params.monthKey
+    : today.format('MMMM_YYYY');
+
+  const IS_CURRENT_MONTH = CURRENT_MONTH_KEY === today.format('MMMM_YYYY');
+
+  const buildFiberTemplate = startDate => {
+    const start = moment(startDate).startOf('month');
+
+    const daysInMonth = start.daysInMonth();
+
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const d = moment(start).add(i, 'days');
+
+      return {
+        key: d.format('YYYY-MM-DD'),
+        fiber: 0,
+        date: d,
+      };
+    });
+  };
+
   /* ───────── FIRESTORE LIVE DATA ───────── */
   useEffect(() => {
     let userRef = null;
 
     const unsubscribeAuth = auth().onAuthStateChanged(user => {
-      if (!user) {
-        setFiberData(buildFiberTemplate('2026-04-15'));
-        return;
-      }
+      if (!user) return;
 
       const uid = user.uid;
       userRef = database().ref(`/users/${uid}`);
@@ -80,39 +89,19 @@ export default function FiberChartDays({ navigation }) {
       userRef.on('value', snapshot => {
         const data = snapshot.val() || {};
 
-        const startDate = data?.goal?.startDate || '2026-04-15';
+        const habits = data?.habits?.fiber || {};
 
-        // FIXED
-        const fiberHabits = data?.habits?.fiber || {};
+        const monthData = habits?.[CURRENT_MONTH_KEY] || {};
 
-        const gender = data?.profile?.gender;
+        const days = monthData?.days || {};
 
-        const goal =
-          gender === 'male' ? { min: 30, max: 38 } : { min: 21, max: 25 };
-
-        setGoalRange(goal);
+        const startDate =
+          monthData?.startDate ||
+          moment(CURRENT_MONTH_KEY, 'MMMM_YYYY')
+            .startOf('month')
+            .format('YYYY-MM-DD');
 
         const baseData = buildFiberTemplate(startDate);
-
-        const keys = Object.keys(fiberHabits || {});
-
-        if (!keys.length) {
-          setFiberData(baseData);
-          setTips(getSmartTips(baseData));
-          return;
-        }
-
-        // latest month key
-        const latestKey = keys.sort((a, b) => {
-          const [, yA] = a.split('_').reverse();
-          const [, yB] = b.split('_').reverse();
-
-          return (
-            new Date(a.replace('_', ' 1, ')) - new Date(b.replace('_', ' 1, '))
-          );
-        })[keys.length - 1];
-
-        const days = fiberHabits?.[latestKey]?.days || {};
 
         const formatted = baseData.map(item => ({
           ...item,
@@ -121,9 +110,6 @@ export default function FiberChartDays({ navigation }) {
 
         setFiberData(formatted);
         setTips(getSmartTips(formatted));
-
-        // optional debug
-        console.log('FIBER DAYS => ', days);
       });
     });
 
@@ -131,7 +117,7 @@ export default function FiberChartDays({ navigation }) {
       if (userRef) userRef.off();
       unsubscribeAuth();
     };
-  }, []);
+  }, [CURRENT_MONTH_KEY]);
 
   const max = fiberData.length
     ? Math.max(...fiberData.map(d => d.fiber), 40)
@@ -146,6 +132,12 @@ export default function FiberChartDays({ navigation }) {
 
   /* ───────── ADD FIBER ───────── */
   const addFiber = async () => {
+    if (!IS_CURRENT_MONTH) return;
+
+    const selectedDay = fiberData[selected]?.key;
+
+    if (selectedDay !== TODAY_KEY) return; // 🔒 block past days
+
     const val = Number(input || 0);
     if (!val) return;
 
@@ -153,36 +145,32 @@ export default function FiberChartDays({ navigation }) {
 
     const uid = auth().currentUser?.uid;
     const today = moment();
+    const day = today.format('YYYY-MM-DD');
 
-    const day = moment().format('YYYY-MM-DD');
-    const monthName = today.format('MMMM');
-    const year = today.format('YYYY');
-
-    const habitKey = `${monthName}_${year}`;
-
-    // find existing value
-    const current = fiberData.find(
-      d => moment(d.date).format('YYYY-MM-DD') === today.format('YYYY-MM-DD'),
-    );
-    const newFiber = (current?.fiber || 0) + val;
+    const refPath = `users/${uid}/habits/fiber/${CURRENT_MONTH_KEY}/days/${day}`;
 
     try {
-      await database()
-        .ref(`users/${uid}/habits/fiber/${habitKey}/days/${day}`)
-        .update({
-          progress: String(newFiber),
-          completed: newFiber >= goalRange.min,
-        });
+      const dayRef = database().ref(refPath);
+      const snapshot = await dayRef.once('value');
+      const existing = snapshot.val();
 
-      // optional: set meta (only once)
-      await database().ref(`users/${uid}/habits/fiber/${habitKey}`).update({
-        title: 'Fiber Intake',
-        target: '25-38g',
+      const newFiber = (Number(existing?.progress) || 0) + val;
+
+      await dayRef.update({
+        progress: String(newFiber),
+        completed: newFiber >= goalRange.min,
       });
+
+      await database()
+        .ref(`users/${uid}/habits/fiber/${CURRENT_MONTH_KEY}`)
+        .update({
+          title: 'Fiber Intake',
+          target: '25-38g',
+        });
 
       setFiberData(prev =>
         prev.map(d =>
-          moment(d.date).format('YYYY-MM-DD') === today.format('YYYY-MM-DD')
+          moment(d.date).format('YYYY-MM-DD') === day
             ? { ...d, fiber: newFiber }
             : d,
         ),
@@ -342,9 +330,12 @@ export default function FiberChartDays({ navigation }) {
         </View>
 
         {/* Add */}
-        {selected !== null ? (
+        {IS_CURRENT_MONTH &&
+        selected !== null &&
+        fiberData[selected]?.key === TODAY_KEY ? (
           <View style={styles.addCard}>
             <Text style={styles.addLabel}>🍽 Add Fiber (g)</Text>
+
             <TextInput
               style={styles.addInput}
               value={input}
@@ -359,12 +350,16 @@ export default function FiberChartDays({ navigation }) {
             </TouchableOpacity>
           </View>
         ) : (
-          <View />
+          <View style={styles.readOnlyBox}>
+            <Text style={{ color: 'rgba(255,255,255,0.4)' }}>
+              📊 View-only (past day / month locked)
+            </Text>
+          </View>
         )}
 
-        <TouchableOpacity style={styles.shareBtn}>
+        {/* <TouchableOpacity style={styles.shareBtn}>
           <Text style={styles.shareBtnText}>Share Progress</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </Wrapper>
     </View>
   );
@@ -402,7 +397,29 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.montserratBold,
   },
   headerRight: { width: 44 },
+  readOnlyBox: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
 
+    // subtle shadow (optional but makes it feel like a card)
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+
+  readOnlyText: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 13,
+    fontFamily: fontFamily.montserratMedium,
+  },
   scroll: {
     paddingHorizontal: 18,
     paddingBottom: 48,

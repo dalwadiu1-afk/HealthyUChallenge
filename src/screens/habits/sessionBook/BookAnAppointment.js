@@ -92,19 +92,27 @@ export default function BookAnAppointment({ navigation, route }) {
           setLoading(false);
           return;
         }
-        const latest = Object.values(data).reduce((latest, current) => {
-          console.log('object :>> ', latest, current);
-          return current.createdAt > latest.createdAt ? current : latest;
-        });
+        const allBookings = Object.values(data || {}).flatMap(month =>
+          Object.values(month || {}),
+        );
+
+        const latest =
+          allBookings.length > 0
+            ? allBookings.reduce((latest, current) =>
+                current.createdAt > latest.createdAt ? current : latest,
+              )
+            : null;
+
+        console.log('Latest booking:', latest);
         console.log('latest?.status :>> ', data, latest?.status);
-        // if (latest?.status === 'requested') {
-        navigation.replace('ConfirmationCode', {
-          doctor: {
-            ...latest,
-            ...doctorData,
-          },
-        });
-        // }
+        if (latest?.status === 'requested') {
+          navigation.replace('ConfirmationCode', {
+            doctor: {
+              ...latest,
+              ...doctorData,
+            },
+          });
+        }
 
         setLoading(false);
       });

@@ -93,7 +93,14 @@ export function StreakCalendar({
   streakData,
   container,
 }) {
-  const [cycle, setCycle] = useState(0);
+  const [cycle, setCycle] = useState(() => {
+    const start = moment(startDate);
+    const today = moment();
+
+    const daysDiff = today.diff(start, 'days');
+
+    return Math.max(0, Math.floor(daysDiff / 30));
+  });
 
   const completedDates = useMemo(() => {
     if (!streakData) return [];
