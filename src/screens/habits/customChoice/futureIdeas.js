@@ -31,7 +31,6 @@ import moment from 'moment';
 
 const user = auth().currentUser;
 const USER_ID = user?.uid;
-const CURRENT_MONTH_KEY = moment().format('MMMM_YYYY');
 
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   return (
@@ -59,8 +58,10 @@ export default function FutureIdeasUI({ navigation, route }) {
   const [goals, setGoals] = useState([]);
   const [imagePickerVisible, setImagePickerVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
-
+  const today = moment();
   const goalTitle = route?.params?.goalTitle || 'Custom Goal';
+  const CURRENT_MONTH_KEY =
+    route?.params?.monthKey ?? today.format('MMMM_YYYY');
 
   const uploadImageToFirebase = async imageUri => {
     try {
@@ -284,95 +285,97 @@ export default function FutureIdeasUI({ navigation, route }) {
         contentContainerStyle={styles.scroll}
       >
         {/* Input Card */}
-        <View style={styles.inputCard}>
-          <Text style={styles.inputCardTitle}>New Goal</Text>
+        {!route?.params?.monthKey && (
+          <View style={styles.inputCard}>
+            <Text style={styles.inputCardTitle}>New Goal</Text>
 
-          <Text style={styles.inputCardSub}>
-            What health habit do you want to build?
-          </Text>
-
-          <TextInput
-            placeholder="e.g. Drink 8 glasses of water daily..."
-            value={goalText}
-            onChangeText={setGoalText}
-            placeholderTextColor="rgba(255,255,255,0.2)"
-            style={styles.textArea}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-
-          {/* PHOTO */}
-          <TouchableOpacity
-            style={[styles.photoBtn, photo && styles.photoBtnFilled]}
-            onPress={() => setImagePickerVisible(true)}
-            activeOpacity={0.8}
-          >
-            {uploading ? (
-              <View style={styles.photoBtnInner}>
-                <Text style={styles.photoBtnText}>Uploading...</Text>
-              </View>
-            ) : photo ? (
-              <>
-                <Image source={{ uri: photo }} style={styles.photoImg} />
-
-                <View style={styles.retakeOverlay}>
-                  <Text style={styles.retakeText}>Tap to change</Text>
-                </View>
-              </>
-            ) : (
-              <View style={styles.photoBtnInner}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                  <Path
-                    d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
-                    stroke="rgba(143,175,120,0.5)"
-                    strokeWidth={1.8}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <Circle
-                    cx={12}
-                    cy={13}
-                    r={4}
-                    stroke="rgba(143,175,120,0.5)"
-                    strokeWidth={1.8}
-                  />
-                </Svg>
-
-                <Text style={styles.photoBtnText}>Add Inspiration Photo</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          {/* SUBMIT */}
-          <TouchableOpacity
-            style={[
-              styles.submitBtn,
-              !goalText.trim() && styles.submitBtnDisabled,
-            ]}
-            onPress={submitGoal}
-            activeOpacity={0.85}
-          >
-            {goalText.trim() && (
-              <GradientBg
-                id="submitGrad"
-                c1="#6A9455"
-                c2="#3A5A2A"
-                r={14}
-                horizontal
-              />
-            )}
-
-            <Text
-              style={[
-                styles.submitBtnText,
-                !goalText.trim() && styles.submitBtnTextDisabled,
-              ]}
-            >
-              Add Goal
+            <Text style={styles.inputCardSub}>
+              What health habit do you want to build?
             </Text>
-          </TouchableOpacity>
-        </View>
+
+            <TextInput
+              placeholder="e.g. Drink 8 glasses of water daily..."
+              value={goalText}
+              onChangeText={setGoalText}
+              placeholderTextColor="rgba(255,255,255,0.2)"
+              style={styles.textArea}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+
+            {/* PHOTO */}
+            <TouchableOpacity
+              style={[styles.photoBtn, photo && styles.photoBtnFilled]}
+              onPress={() => setImagePickerVisible(true)}
+              activeOpacity={0.8}
+            >
+              {uploading ? (
+                <View style={styles.photoBtnInner}>
+                  <Text style={styles.photoBtnText}>Uploading...</Text>
+                </View>
+              ) : photo ? (
+                <>
+                  <Image source={{ uri: photo }} style={styles.photoImg} />
+
+                  <View style={styles.retakeOverlay}>
+                    <Text style={styles.retakeText}>Tap to change</Text>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.photoBtnInner}>
+                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
+                      stroke="rgba(143,175,120,0.5)"
+                      strokeWidth={1.8}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <Circle
+                      cx={12}
+                      cy={13}
+                      r={4}
+                      stroke="rgba(143,175,120,0.5)"
+                      strokeWidth={1.8}
+                    />
+                  </Svg>
+
+                  <Text style={styles.photoBtnText}>Add Inspiration Photo</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* SUBMIT */}
+            <TouchableOpacity
+              style={[
+                styles.submitBtn,
+                !goalText.trim() && styles.submitBtnDisabled,
+              ]}
+              onPress={submitGoal}
+              activeOpacity={0.85}
+            >
+              {goalText.trim() && (
+                <GradientBg
+                  id="submitGrad"
+                  c1="#6A9455"
+                  c2="#3A5A2A"
+                  r={14}
+                  horizontal
+                />
+              )}
+
+              <Text
+                style={[
+                  styles.submitBtnText,
+                  !goalText.trim() && styles.submitBtnTextDisabled,
+                ]}
+              >
+                Add Goal
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* GOALS */}
         {goals.length > 0 ? (

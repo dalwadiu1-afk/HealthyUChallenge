@@ -396,7 +396,6 @@ export default function HabitsList({ navigation }) {
       category: 'Nutrition',
       key: 'booking',
     },
-
     {
       id: 2,
       title: 'Daily Steps',
@@ -406,7 +405,6 @@ export default function HabitsList({ navigation }) {
       key: 'steps',
       showInput: 'Enter daily steps target (max 30000)',
     },
-
     {
       id: 3,
       title: 'Fiber Goal',
@@ -416,7 +414,6 @@ export default function HabitsList({ navigation }) {
       key: 'fiber',
       showInput: 'Enter daily fiber goal in grams (max 50g)',
     },
-
     {
       id: 4,
       title: 'Sleep Well',
@@ -426,7 +423,6 @@ export default function HabitsList({ navigation }) {
       key: 'sleep',
       showInput: 'Enter sleep goal in hours (max 15)',
     },
-
     {
       id: 5,
       title: 'Fitness Class',
@@ -436,7 +432,6 @@ export default function HabitsList({ navigation }) {
       key: 'fitness',
       showInput: 'Enter classes per week (max 9)',
     },
-
     {
       id: 6,
       title: 'Strength Training',
@@ -446,7 +441,6 @@ export default function HabitsList({ navigation }) {
       key: 'weightTraining',
       showInput: 'Enter workout days per week (2 - 6)',
     },
-
     {
       id: 7,
       title: 'Safe Weight Loss',
@@ -456,7 +450,6 @@ export default function HabitsList({ navigation }) {
       key: 'weightChallenge',
       showInput: 'Enter target weight loss (Max 1-3)',
     },
-
     {
       id: 8,
       title: 'Half Plate Veggies',
@@ -465,7 +458,6 @@ export default function HabitsList({ navigation }) {
       category: 'Nutrition',
       key: 'halfPlateChallenge',
     },
-
     {
       id: 9,
       title: 'Meatless Day',
@@ -475,7 +467,6 @@ export default function HabitsList({ navigation }) {
       key: 'meatLess',
       showInput: 'Enter meatless meals per week (4 - 6)',
     },
-
     {
       id: 10,
       title: 'Fermented Foods',
@@ -484,7 +475,6 @@ export default function HabitsList({ navigation }) {
       category: 'Nutrition',
       key: 'fermentedFood',
     },
-
     {
       id: 11,
       title: 'Body Fat Progress',
@@ -493,7 +483,6 @@ export default function HabitsList({ navigation }) {
       category: 'Wellness',
       key: 'bodyFatGoal',
     },
-
     {
       id: 12,
       title: 'Try New Veggies',
@@ -502,7 +491,6 @@ export default function HabitsList({ navigation }) {
       category: 'Nutrition',
       key: 'newVeggie',
     },
-
     {
       id: 13,
       title: 'Limit Sugar',
@@ -512,7 +500,6 @@ export default function HabitsList({ navigation }) {
       key: 'sugarIntake',
       showInput: 'Enter daily sugar limit in grams (max 50g)',
     },
-
     {
       id: 14,
       title: 'Workout Buddy',
@@ -522,7 +509,6 @@ export default function HabitsList({ navigation }) {
       key: 'exWithFriend',
       showInput: 'Enter workout days with friend (4 - 6) times',
     },
-
     {
       id: 15,
       title: 'Cardio Progress',
@@ -532,7 +518,6 @@ export default function HabitsList({ navigation }) {
       key: 'cardio',
       showInput: 'Enter cardio minutes per week (max 120 min)',
     },
-
     {
       id: 16,
       title: 'Healthy Drinks',
@@ -541,7 +526,6 @@ export default function HabitsList({ navigation }) {
       category: 'Nutrition',
       key: 'beverage',
     },
-
     {
       id: 17,
       title: 'Snack Planning',
@@ -550,7 +534,6 @@ export default function HabitsList({ navigation }) {
       category: 'Nutrition',
       key: 'snacks',
     },
-
     {
       id: 18,
       title: 'Daily Fruits',
@@ -559,7 +542,6 @@ export default function HabitsList({ navigation }) {
       category: 'Nutrition',
       key: 'dailyFruits',
     },
-
     {
       id: 19,
       title: 'Personalized Goal 1',
@@ -568,7 +550,6 @@ export default function HabitsList({ navigation }) {
       category: 'Wellness',
       key: 'Personalized Goal 1',
     },
-
     {
       id: 20,
       title: 'Personalized Goal 2',
@@ -577,7 +558,6 @@ export default function HabitsList({ navigation }) {
       category: 'Wellness',
       key: 'Personalized Goal 2',
     },
-
     {
       id: 21,
       title: 'Personalized Goal 3',

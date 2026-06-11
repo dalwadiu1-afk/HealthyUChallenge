@@ -9,7 +9,7 @@ import {
   Platform,
   UIManager,
 } from 'react-native';
-
+import Modal from 'react-native-modal';
 import { Wrapper, Header } from '../../components/index';
 import { colors, fontFamily } from '../../constant/index';
 import auth from '@react-native-firebase/auth';
@@ -63,9 +63,13 @@ const getGoalColor = category => {
   }
 };
 
+const skipHabits = ['booking', 'sleep', 'bodyFatGoal', 'beverage'];
+
 export default function ArchivedGoals({ navigation }) {
   const [archiveData, setArchiveData] = useState({});
   const [loading, setLoading] = useState(true);
+  const [showBlockedModal, setShowBlockedModal] = useState(false);
+  const [blockedGoal, setBlockedGoal] = useState(null);
   const [expandedMonths, setExpandedMonths] = useState({});
 
   const fetchArchivedGoals = async () => {
@@ -199,16 +203,24 @@ export default function ArchivedGoals({ navigation }) {
                           backgroundColor: `${color}15`,
                         },
                       ]}
-                      onPress={() =>
+                      onPress={() => {
+                        if (skipHabits.includes(goal?.key)) {
+                          setBlockedGoal(goal);
+                          setShowBlockedModal(true);
+                          return;
+                        }
+
                         navigation.navigate('Habits', {
                           screen: goal?.screenName,
                           params: {
                             readOnly: true,
                             archivedGoal: goal,
                             monthKey: month,
+                            goalTitle: goal?.title || '',
+                            ...goal,
                           },
-                        })
-                      }
+                        });
+                      }}
                     >
                       <View style={styles.goalTop}>
                         <Text style={styles.goalEmoji}>{icon}</Text>
@@ -268,6 +280,36 @@ export default function ArchivedGoals({ navigation }) {
           );
         })}
       </ScrollView>
+      <Modal
+        isVisible={showBlockedModal}
+        backdropOpacity={0.85}
+        animationIn="zoomIn"
+        animationOut="zoomOut"
+        onBackdropPress={() => false}
+        onBackButtonPress={() => false}
+      >
+        <View style={styles.modalCard}>
+          <Text style={styles.modalEmoji}>📦</Text>
+
+          <Text style={styles.modalTitle}>Archived Goal</Text>
+
+          <Text style={styles.modalSubtitle}>
+            History for{' '}
+            <Text style={styles.goalName}>{blockedGoal?.title}</Text>
+            {'\n'}
+            is no longer available because this goal does not store
+            month-by-month activity data.
+          </Text>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.modalButton}
+            onPress={() => setShowBlockedModal(false)}
+          >
+            <Text style={styles.modalButtonText}>Understood</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </Wrapper>
   );
 }
@@ -421,5 +463,55 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     fontSize: 12,
     fontFamily: fontFamily.montserratSemiBold,
+  },
+  modalCard: {
+    backgroundColor: '#171A1F',
+    borderRadius: 28,
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.25)',
+  },
+
+  modalEmoji: {
+    fontSize: 54,
+    marginBottom: 14,
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 22,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  modalSubtitle: {
+    marginTop: 12,
+    textAlign: 'center',
+    color: 'rgba(255,255,255,0.65)',
+    lineHeight: 22,
+    fontSize: 14,
+    fontFamily: fontFamily.montserratMedium,
+  },
+
+  goalName: {
+    color: colors.secondary,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  modalButton: {
+    marginTop: 26,
+    width: '100%',
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: colors.secondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontFamily: fontFamily.montserratBold,
   },
 });

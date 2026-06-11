@@ -79,7 +79,11 @@ const uploadImageToFirebase = async (imageUri, type = 'photo') => {
   }
 };
 
-export default function CardioTrackerUI({ navigation }) {
+export default function CardioTrackerUI({ navigation, route }) {
+  const today = moment();
+
+  const CURRENT_MONTH_KEY =
+    route?.params?.monthKey ?? today.format('MMMM_YYYY');
   const [activeTab, setActiveTab] = useState('timer');
   const [sessionStarted, setSessionStarted] = useState(false);
   const [startTime, setStartTime] = useState(null);
@@ -122,11 +126,10 @@ export default function CardioTrackerUI({ navigation }) {
   };
 
   const getWeekRef = () => {
-    const monthKey = getMonthKey();
-    const week = getWeekIndex(startDate);
+    const week = getWeekIndex(startDate || today);
 
     return database().ref(
-      `users/${USER_ID}/habits/cardio/${monthKey}/weeks/week${week}`,
+      `users/${USER_ID}/habits/cardio/${CURRENT_MONTH_KEY}/weeks/week${week}`,
     );
   };
 
@@ -148,9 +151,8 @@ export default function CardioTrackerUI({ navigation }) {
       }
 
       // cardio weeks
-      const monthKey = moment().format('MMMM_YYYY');
-      const weeks = data?.habits?.cardio?.[monthKey]?.weeks || {};
-      const goals = data?.habits?.cardio?.[monthKey] || {};
+      const weeks = data?.habits?.cardio?.[CURRENT_MONTH_KEY]?.weeks || {};
+      const goals = data?.habits?.cardio?.[CURRENT_MONTH_KEY] || {};
       setGoal({ goal: goals, title: goals?.title } || null);
 
       setWeeksData(weeks);
@@ -212,7 +214,7 @@ export default function CardioTrackerUI({ navigation }) {
         createdAt: moment().toISOString(),
       };
 
-      const weekRef = getWeekRef();
+      const weekRef = getWeekRef(CURRENT_MONTH_KEY);
 
       if (!weekRef) {
         console.log('Invalid weekRef');
@@ -353,12 +355,10 @@ export default function CardioTrackerUI({ navigation }) {
       // save to firebase database...
 
       const dateKey = end.format('YYYY-MM-DD');
-      const monthKey = end.format('MMMM_YYYY');
-      const week = getWeekIndex(startDate);
-
       const weekRef = database().ref(
-        `users/${USER_ID}/habits/cardio/${monthKey}/weeks/week${week}`,
+        `users/${USER_ID}/habits/cardio/${CURRENT_MONTH_KEY}/weeks/week${week}`,
       );
+      const week = getWeekIndex(startDate);
 
       const snapshot = await weekRef.once('value');
       const prev = snapshot.val() || {};
@@ -399,181 +399,195 @@ export default function CardioTrackerUI({ navigation }) {
       <Text style={styles.heroSub}>Track your workout time and intensity</Text>
 
       {/* Tab switcher */}
-      <View style={styles.tabWrap}>
-        {[
-          { key: 'timer', label: '⏱ Time Tracker' },
-          { key: 'manual', label: '✏️ Manual Entry' },
-        ].map(t => (
-          <TouchableOpacity
-            key={t.key}
-            style={[styles.tabBtn, activeTab === t.key && styles.tabBtnActive]}
-            onPress={() => setActiveTab(t.key)}
-          >
-            {activeTab === t.key && (
-              <View style={[StyleSheet.absoluteFill, { zIndex: 0 }]}>
-                <GradientBg
-                  id={`ct${t.key}`}
-                  c1="#6A9455"
-                  c2="#3A5A2A"
-                  r={12}
-                  horizontal
-                />
-              </View>
-            )}
-
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === t.key && styles.tabTextActive,
-              ]}
-            >
-              {t.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <Wrapper orbsRight safeAreaPops={{ edges: ['bottom'] }}>
-        {activeTab === 'timer' ? (
-          <>
-            {/* Session card */}
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Cardio Session</Text>
-
-              {/* Start / Stop */}
-              <TouchableOpacity
-                style={[
-                  styles.sessionBtn,
-                  sessionStarted && styles.sessionBtnStop,
-                ]}
-                onPress={sessionStarted ? handleStop : handleStart}
-                activeOpacity={0.85}
-              >
-                {!sessionStarted && (
-                  <GradientBg
-                    id="startGrad"
-                    c1="#22c55e"
-                    c2="#15803d"
-                    r={14}
-                    horizontal
-                  />
-                )}
-                {sessionStarted && (
-                  <GradientBg
-                    id="stopGrad"
-                    c1="#ef4444"
-                    c2="#b91c1c"
-                    r={14}
-                    horizontal
-                  />
-                )}
-                <Text style={styles.sessionBtnText}>
-                  {sessionStarted ? '⏹  Stop Session' : '▶  Start Session'}
-                </Text>
-              </TouchableOpacity>
-
-              {/* Times */}
-              {startTime && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Start</Text>
-                  <Text style={styles.infoValue}>
-                    {moment(startTime).format('hh:mm A')}
-                  </Text>
-                </View>
-              )}
-              {endTime && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>End</Text>
-                  <Text style={styles.infoValue}>
-                    {moment(endTime).format('hh:mm A')}
-                  </Text>
-                </View>
-              )}
-
-              {/* Duration & Intensity */}
-              {duration > 0 && (
-                <View style={styles.statsStrip}>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statVal}>{duration}</Text>
-                    <Text style={styles.statLbl}>Minutes</Text>
-                  </View>
-                  <View style={styles.statDivider} />
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statVal, { color: intensity.color }]}>
-                      {intensity.label}
-                    </Text>
-                    <Text style={styles.statLbl}>Intensity</Text>
-                  </View>
-                  <View style={styles.statDivider} />
-                  <View style={styles.statItem}>
-                    <Text style={styles.statVal}>
-                      {duration >= 30 ? '🔥' : duration >= 15 ? '💪' : '🐢'}
-                    </Text>
-                    <Text style={styles.statLbl}>Status</Text>
-                  </View>
-                </View>
-              )}
-            </View>
-
-            {/* Proof photos */}
-            {(startPhoto || endPhoto) && (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Proof Photos</Text>
-                <View style={styles.photosRow}>
-                  {startPhoto && (
-                    <View style={styles.photoWrap}>
-                      <Image
-                        source={{ uri: startPhoto }}
-                        style={styles.photo}
-                      />
-                      <Text style={styles.photoLabel}>Start</Text>
-                    </View>
-                  )}
-                  {endPhoto && (
-                    <View style={styles.photoWrap}>
-                      <Image source={{ uri: endPhoto }} style={styles.photo} />
-                      <Text style={styles.photoLabel}>End</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            )}
-          </>
-        ) : (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Manual Entry</Text>
-            <Text style={styles.cardSub}>
-              Didn't use the timer? Log your session manually.
-            </Text>
-            <TextInput
-              placeholder="Duration (minutes)"
-              keyboardType="numeric"
-              value={manualTime}
-              onChangeText={setManualTime}
-              placeholderTextColor="rgba(255,255,255,0.25)"
-              style={styles.input}
-            />
-            <CustomDropdown
-              value={manualIntensity}
-              onSelect={setManualIntensity}
-              placeholder="Select Intensity"
-              options={['Low', 'Medium', 'High']}
-            />
+      {!route?.params?.monthKey && (
+        <View style={styles.tabWrap}>
+          {[
+            { key: 'timer', label: '⏱ Time Tracker' },
+            { key: 'manual', label: '✏️ Manual Entry' },
+          ].map(t => (
             <TouchableOpacity
-              style={styles.saveBtn}
-              onPress={saveManual}
-              activeOpacity={0.85}
+              key={t.key}
+              style={[
+                styles.tabBtn,
+                activeTab === t.key && styles.tabBtnActive,
+              ]}
+              onPress={() => setActiveTab(t.key)}
             >
-              <GradientBg
-                id="manualSave"
-                c1="#6A9455"
-                c2="#3A5A2A"
-                r={14}
-                horizontal
-              />
-              <Text style={styles.saveBtnText}>
-                {manualSaved ? '✓ Saved!' : 'Save Entry'}
+              {activeTab === t.key && (
+                <View style={[StyleSheet.absoluteFill, { zIndex: 0 }]}>
+                  <GradientBg
+                    id={`ct${t.key}`}
+                    c1="#6A9455"
+                    c2="#3A5A2A"
+                    r={12}
+                    horizontal
+                  />
+                </View>
+              )}
+
+              <Text
+                style={[
+                  styles.tabText,
+                  activeTab === t.key && styles.tabTextActive,
+                ]}
+              >
+                {t.label}
               </Text>
             </TouchableOpacity>
+          ))}
+        </View>
+      )}
+      <Wrapper orbsRight safeAreaPops={{ edges: ['bottom'] }}>
+        {!route?.params?.monthKey && (
+          <View>
+            {activeTab === 'timer' ? (
+              <>
+                {/* Session card */}
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Cardio Session</Text>
+
+                  {/* Start / Stop */}
+                  <TouchableOpacity
+                    style={[
+                      styles.sessionBtn,
+                      sessionStarted && styles.sessionBtnStop,
+                    ]}
+                    onPress={sessionStarted ? handleStop : handleStart}
+                    activeOpacity={0.85}
+                  >
+                    {!sessionStarted && (
+                      <GradientBg
+                        id="startGrad"
+                        c1="#22c55e"
+                        c2="#15803d"
+                        r={14}
+                        horizontal
+                      />
+                    )}
+                    {sessionStarted && (
+                      <GradientBg
+                        id="stopGrad"
+                        c1="#ef4444"
+                        c2="#b91c1c"
+                        r={14}
+                        horizontal
+                      />
+                    )}
+                    <Text style={styles.sessionBtnText}>
+                      {sessionStarted ? '⏹  Stop Session' : '▶  Start Session'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Times */}
+                  {startTime && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Start</Text>
+                      <Text style={styles.infoValue}>
+                        {moment(startTime).format('hh:mm A')}
+                      </Text>
+                    </View>
+                  )}
+                  {endTime && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>End</Text>
+                      <Text style={styles.infoValue}>
+                        {moment(endTime).format('hh:mm A')}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Duration & Intensity */}
+                  {duration > 0 && (
+                    <View style={styles.statsStrip}>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statVal}>{duration}</Text>
+                        <Text style={styles.statLbl}>Minutes</Text>
+                      </View>
+                      <View style={styles.statDivider} />
+                      <View style={styles.statItem}>
+                        <Text
+                          style={[styles.statVal, { color: intensity.color }]}
+                        >
+                          {intensity.label}
+                        </Text>
+                        <Text style={styles.statLbl}>Intensity</Text>
+                      </View>
+                      <View style={styles.statDivider} />
+                      <View style={styles.statItem}>
+                        <Text style={styles.statVal}>
+                          {duration >= 30 ? '🔥' : duration >= 15 ? '💪' : '🐢'}
+                        </Text>
+                        <Text style={styles.statLbl}>Status</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+
+                {/* Proof photos */}
+                {(startPhoto || endPhoto) && (
+                  <View style={styles.card}>
+                    <Text style={styles.cardTitle}>Proof Photos</Text>
+                    <View style={styles.photosRow}>
+                      {startPhoto && (
+                        <View style={styles.photoWrap}>
+                          <Image
+                            source={{ uri: startPhoto }}
+                            style={styles.photo}
+                          />
+                          <Text style={styles.photoLabel}>Start</Text>
+                        </View>
+                      )}
+                      {endPhoto && (
+                        <View style={styles.photoWrap}>
+                          <Image
+                            source={{ uri: endPhoto }}
+                            style={styles.photo}
+                          />
+                          <Text style={styles.photoLabel}>End</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
+              </>
+            ) : (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Manual Entry</Text>
+                <Text style={styles.cardSub}>
+                  Didn't use the timer? Log your session manually.
+                </Text>
+                <TextInput
+                  placeholder="Duration (minutes)"
+                  keyboardType="numeric"
+                  value={manualTime}
+                  onChangeText={setManualTime}
+                  placeholderTextColor="rgba(255,255,255,0.25)"
+                  style={styles.input}
+                />
+                <CustomDropdown
+                  value={manualIntensity}
+                  onSelect={setManualIntensity}
+                  placeholder="Select Intensity"
+                  options={['Low', 'Medium', 'High']}
+                />
+                <TouchableOpacity
+                  style={styles.saveBtn}
+                  onPress={saveManual}
+                  activeOpacity={0.85}
+                >
+                  <GradientBg
+                    id="manualSave"
+                    c1="#6A9455"
+                    c2="#3A5A2A"
+                    r={14}
+                    horizontal
+                  />
+                  <Text style={styles.saveBtnText}>
+                    {manualSaved ? '✓ Saved!' : 'Save Entry'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
         <View style={{ ...styles.card, marginBottom: 110 }}>

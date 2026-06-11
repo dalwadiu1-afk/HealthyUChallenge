@@ -107,7 +107,10 @@ const uploadImageToFirebase = async uri => {
   }
 };
 
-export default function FruitTrackerUI({ navigation }) {
+export default function FruitTrackerUI({ navigation, route }) {
+  const today = moment();
+  const CURRENT_MONTH_KEY =
+    route?.params?.monthKey ?? today.format('MMMM_YYYY');
   const [selectedFruit, setSelectedFruit] = useState(null);
   const [photo, setPhoto] = useState(null);
   const [startDate, setStartDate] = useState(null);
@@ -117,11 +120,28 @@ export default function FruitTrackerUI({ navigation }) {
   const [customServing, setCustomServing] = useState('');
   const [weeksData, setWeeksData] = useState({});
   const [fruits, setFruits] = useState(FRUITS);
-  const [showList, setShowList] = useState(false);
+  const [expandedWeeks, setExpandedWeeks] = useState({});
+  const [expandedDays, setExpandedDays] = useState({});
   const [dayMeta, setDayMeta] = useState({
     total: 0,
     completed: false,
   });
+
+  const toggleWeek = weekKey => {
+    setExpandedWeeks(prev => ({
+      ...prev,
+      [weekKey]: !prev[weekKey],
+    }));
+  };
+
+  const toggleDay = (weekKey, date) => {
+    const key = `${weekKey}_${date}`;
+
+    setExpandedDays(prev => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
 
   useEffect(() => {
     if (!USER_ID) return;
@@ -167,13 +187,10 @@ export default function FruitTrackerUI({ navigation }) {
   useEffect(() => {
     if (!USER_ID || !startDate) return;
 
-    const monthKey = getMonthKey(startDate);
-    const weekKey = getWeekKey(startDate);
-
     const dateKey = getDateKey(startDate);
 
     const ref = database().ref(
-      `users/${USER_ID}/habits/dailyFruits/${monthKey}/${weekKey}`,
+      `users/${USER_ID}/habits/dailyFruits/${CURRENT_MONTH_KEY}`,
     );
 
     const listener = ref.on('value', snapshot => {
@@ -279,12 +296,11 @@ export default function FruitTrackerUI({ navigation }) {
     }
 
     try {
-      const monthKey = getMonthKey(startDate);
       const weekKey = getWeekKey(startDate);
       const dateKey = getDateKey(startDate);
 
       const dayRef = database().ref(
-        `users/${USER_ID}/habits/dailyFruits/${monthKey}/${weekKey}/${dateKey}`,
+        `users/${USER_ID}/habits/dailyFruits/${CURRENT_MONTH_KEY}/${weekKey}/${dateKey}`,
       );
 
       const entryRef = dayRef.child('entries').push();
@@ -327,46 +343,59 @@ export default function FruitTrackerUI({ navigation }) {
   const renderWeeks = () => {
     if (!weeksData) return null;
 
-    const dates = Object.entries(weeksData);
+    const weeks = Object.entries(weeksData || {}).sort((a, b) => {
+      return (
+        parseInt(b[0].replace('week', '')) - parseInt(a[0].replace('week', ''))
+      );
+    });
 
-    return dates.map(([date, day]) => {
-      const entries = day?.entries ? Object.values(day.entries) : [];
+    return weeks.map(([weekKey, weekDays]) => {
+      const isWeekOpen = expandedWeeks[weekKey];
 
       return (
-        <View key={date} style={styles.card}>
-          <TouchableOpacity
-            onPress={() =>
-              setShowList(prev => ({
-                ...prev,
-                [date]: !prev?.[date],
-              }))
-            }
-          >
-            <Text style={styles.cardDate}>
-              📅{' '}
-              {moment(date).isSame(moment(), 'day')
-                ? 'Today'
-                : moment(date).format('DD MMM YYYY')}
-            </Text>
-
-            <Text style={styles.cardSub}>
-              🍎 Total: {day?.total || 0} servings
-              {day?.completed ? ' • 🎉 Goal met' : ' • ⏳ In progress'}
-            </Text>
+        <View key={weekKey} style={styles.card}>
+          {/* WEEK HEADER */}
+          <TouchableOpacity onPress={() => toggleWeek(weekKey)}>
+            <View style={styles.weekHeader}>
+              <Text style={styles.cardDate}>📅 {weekKey.toUpperCase()}</Text>
+              <Text style={styles.expandIcon}>{isWeekOpen ? '▲' : '▼'}</Text>
+            </View>
           </TouchableOpacity>
 
-          {entries.length > 0 && showList?.[date] ? (
-            entries.map((item, i) => (
-              <View key={i} style={styles.entryRow}>
-                <Text style={styles.entryLeft}>
-                  {item.emoji} {item.fruit}
-                </Text>
-                <Text style={styles.entryRight}>{item.serving}</Text>
-              </View>
-            ))
-          ) : entries.length === 0 ? (
-            <Text style={styles.emptyText}>No entries</Text>
-          ) : null}
+          {/* WEEK CONTENT */}
+          {isWeekOpen &&
+            Object.entries(weekDays || {})
+              .sort((a, b) => moment(b[0]).valueOf() - moment(a[0]).valueOf())
+              .map(([date, day]) => {
+                const dayKey = `${weekKey}_${date}`;
+                const isDayOpen = expandedDays[dayKey];
+
+                const entries = day?.entries ? Object.values(day.entries) : [];
+
+                return (
+                  <View key={date} style={{ marginTop: 10 }}>
+                    {/* DAY HEADER (CLICKABLE) */}
+                    <TouchableOpacity onPress={() => toggleDay(weekKey, date)}>
+                      <Text style={styles.cardSub}>
+                        {moment(date).format('DD MMM YYYY')} • {day?.total || 0}{' '}
+                        servings
+                        {isDayOpen ? ' ▲' : ' ▼'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* DAY DETAILS */}
+                    {isDayOpen &&
+                      entries.map((item, i) => (
+                        <View key={i} style={styles.entryRow}>
+                          <Text style={styles.entryLeft}>
+                            {item.emoji} {item.fruit}
+                          </Text>
+                          <Text style={styles.entryRight}>{item.serving}</Text>
+                        </View>
+                      ))}
+                  </View>
+                );
+              })}
         </View>
       );
     });
@@ -390,162 +419,172 @@ export default function FruitTrackerUI({ navigation }) {
       <Text style={styles.heroSub}>Eat 2–3 servings of fruit every day</Text>
 
       {/* Progress bar */}
-      <View style={styles.progressRow}>
-        <View style={styles.progressBg}>
-          <View
-            style={[
-              styles.progressFill,
-              {
-                width: `${progress * 100}%`,
-                backgroundColor: goalMet ? '#22c55e' : colors.secondary,
-              },
-            ]}
-          />
+      {!route?.params?.monthKey && (
+        <View style={styles.progressRow}>
+          <View style={styles.progressBg}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${progress * 100}%`,
+                  backgroundColor: goalMet ? '#22c55e' : colors.secondary,
+                },
+              ]}
+            />
+          </View>
+          <Text style={[styles.progressLabel, goalMet && { color: '#22c55e' }]}>
+            {todayCount}/{DAILY_GOAL} {goalMet ? '✓' : 'servings'}
+          </Text>
         </View>
-        <Text style={[styles.progressLabel, goalMet && { color: '#22c55e' }]}>
-          {todayCount}/{DAILY_GOAL} {goalMet ? '✓' : 'servings'}
-        </Text>
-      </View>
+      )}
       <Wrapper safeAreaPops={{ edges: ['bottom'] }}>
         {/* Goal banner */}
-        {goalMet && (
-          <View style={styles.goalBanner}>
-            <GradientBg
-              id="goalBanner"
-              c1="rgba(34,197,94,0.2)"
-              c2="rgba(21,128,61,0.1)"
-              r={14}
-              horizontal
-            />
-            <Text style={styles.goalBannerText}>
-              🎉 Daily goal reached! Great job!
-            </Text>
-          </View>
-        )}
+        {!route?.params?.monthKey && (
+          <>
+            {goalMet && (
+              <View style={styles.goalBanner}>
+                <GradientBg
+                  id="goalBanner"
+                  c1="rgba(34,197,94,0.2)"
+                  c2="rgba(21,128,61,0.1)"
+                  r={14}
+                  horizontal
+                />
+                <Text style={styles.goalBannerText}>
+                  🎉 Daily goal reached! Great job!
+                </Text>
+              </View>
+            )}
 
-        {/* Add card */}
-        <View style={styles.addCard}>
-          <Text style={styles.addTitle}>Log a Serving</Text>
+            {/* Add card */}
 
-          {/* Fruit picker */}
-          <Text style={styles.sectionLabel}>Select Fruit</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.fruitRow}
-          >
-            {fruits.map(f => (
+            <View style={styles.addCard}>
+              <Text style={styles.addTitle}>Log a Serving</Text>
+
+              {/* Fruit picker */}
+              <Text style={styles.sectionLabel}>Select Fruit</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.fruitRow}
+              >
+                {fruits.map(f => (
+                  <TouchableOpacity
+                    key={f.name}
+                    style={[
+                      styles.fruitChip,
+                      selectedFruit?.name === f.name && styles.fruitChipActive,
+                    ]}
+                    onPress={() => setSelectedFruit(f)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.fruitEmoji}>{f.emoji || '🍏'}</Text>
+                    <Text
+                      style={[
+                        styles.fruitName,
+                        selectedFruit?.name === f.name &&
+                          styles.fruitNameActive,
+                      ]}
+                    >
+                      {f.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Serving info */}
+              {/* Serving info */}
+              {selectedFruit && (
+                <>
+                  <View style={styles.servingRow}>
+                    <Text style={styles.servingLabel}>1 Serving =</Text>
+
+                    {selectedFruit.name === 'Other' ? (
+                      <TextInput
+                        value={customServing}
+                        onChangeText={text => {
+                          // numbers only + max 3 digits
+                          const cleaned = text
+                            .replace(/[^0-9]/g, '')
+                            .slice(0, 3);
+                          setCustomServing(cleaned);
+                        }}
+                        placeholder="Enter grams"
+                        placeholderTextColor="rgba(255,255,255,0.3)"
+                        keyboardType="number-pad"
+                        maxLength={3}
+                        style={styles.customInput}
+                      />
+                    ) : (
+                      <Text style={styles.servingValue}>
+                        {selectedFruit.serving}
+                      </Text>
+                    )}
+                  </View>
+                </>
+              )}
+
+              {/* Photo */}
               <TouchableOpacity
-                key={f.name}
-                style={[
-                  styles.fruitChip,
-                  selectedFruit?.name === f.name && styles.fruitChipActive,
-                ]}
-                onPress={() => setSelectedFruit(f)}
+                style={[styles.photoBtn, photo && styles.photoBtnFilled]}
+                onPress={() => setImagePickerVisible(true)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.fruitEmoji}>{f.emoji || '🍏'}</Text>
+                {uploading ? (
+                  <View style={styles.photoBtnInner}>
+                    <Text style={styles.photoBtnText}>Uploading...</Text>
+                  </View>
+                ) : photo ? (
+                  <Image source={{ uri: photo }} style={styles.photoImg} />
+                ) : (
+                  <View style={styles.photoBtnInner}>
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                      <Path
+                        d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
+                        stroke="rgba(143,175,120,0.6)"
+                        strokeWidth={1.8}
+                      />
+                      <Circle
+                        cx={12}
+                        cy={13}
+                        r={4}
+                        stroke="rgba(143,175,120,0.6)"
+                        strokeWidth={1.8}
+                      />
+                    </Svg>
+
+                    <Text style={styles.photoBtnText}>Add Photo</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* Log button */}
+              <TouchableOpacity
+                style={[styles.logBtn, !selectedFruit && styles.logBtnDisabled]}
+                onPress={addLog}
+                activeOpacity={0.85}
+              >
+                {selectedFruit && (
+                  <GradientBg
+                    id="logBtnGrad"
+                    c1="#6A9455"
+                    c2="#3A5A2A"
+                    r={14}
+                    horizontal
+                  />
+                )}
                 <Text
                   style={[
-                    styles.fruitName,
-                    selectedFruit?.name === f.name && styles.fruitNameActive,
+                    styles.logBtnText,
+                    !selectedFruit && styles.logBtnTextDisabled,
                   ]}
                 >
-                  {f.name}
+                  Log Serving
                 </Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Serving info */}
-          {/* Serving info */}
-          {selectedFruit && (
-            <>
-              <View style={styles.servingRow}>
-                <Text style={styles.servingLabel}>1 Serving =</Text>
-
-                {selectedFruit.name === 'Other' ? (
-                  <TextInput
-                    value={customServing}
-                    onChangeText={text => {
-                      // numbers only + max 3 digits
-                      const cleaned = text.replace(/[^0-9]/g, '').slice(0, 3);
-                      setCustomServing(cleaned);
-                    }}
-                    placeholder="Enter grams"
-                    placeholderTextColor="rgba(255,255,255,0.3)"
-                    keyboardType="number-pad"
-                    maxLength={3}
-                    style={styles.customInput}
-                  />
-                ) : (
-                  <Text style={styles.servingValue}>
-                    {selectedFruit.serving}
-                  </Text>
-                )}
-              </View>
-            </>
-          )}
-
-          {/* Photo */}
-          <TouchableOpacity
-            style={[styles.photoBtn, photo && styles.photoBtnFilled]}
-            onPress={() => setImagePickerVisible(true)}
-            activeOpacity={0.8}
-          >
-            {uploading ? (
-              <View style={styles.photoBtnInner}>
-                <Text style={styles.photoBtnText}>Uploading...</Text>
-              </View>
-            ) : photo ? (
-              <Image source={{ uri: photo }} style={styles.photoImg} />
-            ) : (
-              <View style={styles.photoBtnInner}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                  <Path
-                    d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
-                    stroke="rgba(143,175,120,0.6)"
-                    strokeWidth={1.8}
-                  />
-                  <Circle
-                    cx={12}
-                    cy={13}
-                    r={4}
-                    stroke="rgba(143,175,120,0.6)"
-                    strokeWidth={1.8}
-                  />
-                </Svg>
-
-                <Text style={styles.photoBtnText}>Add Photo</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          {/* Log button */}
-          <TouchableOpacity
-            style={[styles.logBtn, !selectedFruit && styles.logBtnDisabled]}
-            onPress={addLog}
-            activeOpacity={0.85}
-          >
-            {selectedFruit && (
-              <GradientBg
-                id="logBtnGrad"
-                c1="#6A9455"
-                c2="#3A5A2A"
-                r={14}
-                horizontal
-              />
-            )}
-            <Text
-              style={[
-                styles.logBtnText,
-                !selectedFruit && styles.logBtnTextDisabled,
-              ]}
-            >
-              Log Serving
-            </Text>
-          </TouchableOpacity>
-        </View>
+            </View>
+          </>
+        )}
 
         {/* Today's log */}
         <View style={{ ...styles.card, marginBottom: 110 }}>
@@ -646,6 +685,17 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: 'rgba(255,255,255,0.1)',
     overflow: 'hidden',
+  },
+  weekHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  expandIcon: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 14,
+    fontFamily: fontFamily.montserratBold,
   },
   progressFill: { height: '100%', borderRadius: 6 },
   progressLabel: {

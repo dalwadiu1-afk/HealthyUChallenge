@@ -36,30 +36,60 @@ export default function App() {
   // SAVE FCM TOKEN + TIMEZONE
   // =========================
   useEffect(() => {
-    async function setupFCM() {
+    let unsubscribeTokenRefresh;
+
+    const setupFCM = async () => {
       try {
-        // REQUEST PERMISSION
         await messaging().requestPermission();
 
-        // GET TOKEN
+        const uid = auth().currentUser?.uid;
+
+        if (!uid) {
+          return;
+        }
+
         const token = await messaging().getToken();
 
-        const uid = auth()?.currentUser?.uid;
+        const tokenRef = database().ref(`/users/${uid}/fcmToken`);
 
-        if (uid && token) {
+        const snapshot = await tokenRef.once('value');
+        const existingToken = snapshot.val();
+
+        if (existingToken !== token) {
           await database().ref(`/users/${uid}`).update({
             fcmToken: token,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            fcmUpdatedAt: Date.now(),
           });
 
-          // OPTIONAL
+          console.log('FCM Token Saved:', token);
         }
-      } catch (e) {
-        console.log('FCM SETUP ERROR:', e);
+
+        unsubscribeTokenRefresh = messaging().onTokenRefresh(async newToken => {
+          try {
+            await database().ref(`/users/${uid}`).update({
+              fcmToken: newToken,
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              fcmUpdatedAt: Date.now(),
+            });
+
+            console.log('FCM Token Refreshed:', newToken);
+          } catch (error) {
+            console.log('TOKEN REFRESH ERROR:', error);
+          }
+        });
+      } catch (error) {
+        console.log('FCM SETUP ERROR:', error);
       }
-    }
+    };
 
     setupFCM();
+
+    return () => {
+      if (unsubscribeTokenRefresh) {
+        unsubscribeTokenRefresh();
+      }
+    };
   }, []);
 
   // =========================
@@ -111,7 +141,10 @@ export default function App() {
         });
 
         if (screen === 'QuizBoard') {
-          navigationRef.current?.navigate('QuizBoard');
+          navigationRef.current?.navigate('Profile', {
+            screen: 'QuizBoard',
+            params: {},
+          });
         }
       }
     });
@@ -129,7 +162,10 @@ export default function App() {
       });
       if (screen === 'QuizBoard') {
         setTimeout(() => {
-          navigationRef.current?.navigate('QuizBoard');
+          navigationRef.current?.navigate('Profile', {
+            screen: 'QuizBoard',
+            params: {},
+          });
         }, 1000);
       }
     });
@@ -156,7 +192,10 @@ export default function App() {
 
         if (screen === 'QuizBoard') {
           setTimeout(() => {
-            navigationRef.current?.navigate('QuizBoard');
+            navigationRef.current?.navigate('Profile', {
+              screen: 'QuizBoard',
+              params: {},
+            });
           }, 1500);
         }
       }
@@ -186,16 +225,11 @@ export default function App() {
   }, []);
   const linking = {
     prefixes: ['yourapp://'],
-
     config: {
       screens: {
-        bottomTab: {
+        Profile: {
           screens: {
-            ProfileStack: {
-              screens: {
-                QuizBoard: 'quizboard',
-              },
-            },
+            QuizBoard: 'quizboard',
           },
         },
       },

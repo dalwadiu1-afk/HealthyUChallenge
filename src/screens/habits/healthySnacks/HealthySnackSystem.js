@@ -100,7 +100,10 @@ const STATUS_COLORS = {
   },
 };
 
-export default function SnackSystemUI({ navigation }) {
+export default function SnackSystemUI({ navigation, route }) {
+  const today = moment();
+  const CURRENT_MONTH_KEY =
+    route?.params?.monthKey ?? today.format('MMMM_YYYY');
   const [activeTab, setActiveTab] = useState('request');
   const [snackName, setSnackName] = useState('');
   const [qty, setQty] = useState('');
@@ -110,15 +113,20 @@ export default function SnackSystemUI({ navigation }) {
   const [imagePickerVisible, setImagePickerVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
   const profile = useSelector(state => state?.user?.profile);
-
+  console.log('CURRENT_MONTH_KEY :>> ', CURRENT_MONTH_KEY);
   useEffect(() => {
     if (!USER_ID) return;
 
-    const ref = database().ref(`users/${USER_ID}/snacks/requests`);
+    const ref =
+      profile?.role === 'admin'
+        ? database().ref(`admin/adminSnackRequests/${CURRENT_MONTH_KEY}`)
+        : database().ref(
+            `users/${USER_ID}/habits/snacks/${CURRENT_MONTH_KEY}/requests`,
+          );
 
     const listener = ref.on('value', snapshot => {
       const data = snapshot.val();
-
+      console.log('data :>> ', data);
       if (!data) {
         setRequests([]);
         return;
@@ -129,12 +137,13 @@ export default function SnackSystemUI({ navigation }) {
         ...data[key],
       }));
 
-      // newest first
-      setRequests(list.reverse());
+      list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+      setRequests(list);
     });
 
     return () => ref.off('value', listener);
-  }, []);
+  }, [CURRENT_MONTH_KEY, profile?.role, USER_ID]);
 
   const handleCamera = async () => {
     const granted = await requestCameraPermission();
@@ -232,15 +241,31 @@ export default function SnackSystemUI({ navigation }) {
     if (!snackName.trim() || !qty.trim()) return;
 
     try {
-      const ref = database().ref(`users/${userId}/snacks/requests`).push();
-      await ref.set({
+      const requestRef = database()
+        .ref(`users/${userId}/habits/snacks/${CURRENT_MONTH_KEY}/requests`)
+        .push();
+
+      const requestId = requestRef.key;
+
+      const requestData = {
+        requestId,
+        userId,
+        monthKey: CURRENT_MONTH_KEY,
         name: snackName.trim(),
         qty: qty.trim(),
-        image: image || '', // Firebase Storage URL
+        image: image || '',
         status: 'pending',
         createdAt: moment().valueOf(),
         type: 'snack',
-      });
+      };
+
+      // User-specific copy
+      await requestRef.set(requestData);
+
+      // Global admin copy grouped by month
+      await database()
+        .ref(`admin/adminSnackRequests/${CURRENT_MONTH_KEY}/${requestId}`)
+        .set(requestData);
 
       setSnackName('');
       setQty('');
@@ -250,11 +275,24 @@ export default function SnackSystemUI({ navigation }) {
 
   const updateStatus = async (item, status) => {
     try {
-      // ✅ UPDATE STATUS IN FIREBASE
+      const ownerId = item.userId;
+
+      // Update user's request
       await database()
-        .ref(`users/${USER_ID}/snacks/requests/${item.id}`)
+        .ref(
+          `users/${ownerId}/habits/snacks/${CURRENT_MONTH_KEY}/requests/${item.id}`,
+        )
         .update({
           status,
+          updatedAt: moment().valueOf(),
+        });
+
+      // Update admin collection
+      await database()
+        .ref(`admin/adminSnackRequests/${CURRENT_MONTH_KEY}/${item.id}`)
+        .update({
+          status,
+          approvedBy: auth().currentUser.uid,
           updatedAt: moment().valueOf(),
         });
 
@@ -262,38 +300,6 @@ export default function SnackSystemUI({ navigation }) {
       // APPROVED FLOW
       // =========================
       if (status === 'approved') {
-        const monthKey = getMonthKey();
-        const dateKey = getDateKey();
-
-        const habitRef = database().ref(
-          `users/${USER_ID}/habits/snacks/${monthKey}/days/${dateKey}`,
-        );
-
-        const snapshot = await habitRef.once('value');
-
-        const existing = snapshot.val();
-
-        let snackList = existing?.snacks || [];
-
-        // prevent duplicates
-        const alreadyExists = snackList.find(s => s.requestId === item.id);
-
-        if (!alreadyExists) {
-          snackList.push({
-            requestId: item.id,
-            name: item.name,
-            qty: item.qty,
-            image: item.image || '',
-            approvedAt: moment().valueOf(),
-            status: 'approved',
-          });
-
-          await habitRef.update({
-            snacks: snackList,
-            updatedAt: moment().valueOf(),
-          });
-        }
-
         Alert.alert(
           'Post to Social Feed',
           'Do you want to post this approved snack?',
@@ -306,18 +312,15 @@ export default function SnackSystemUI({ navigation }) {
               text: 'Post',
               onPress: async () => {
                 try {
-                  const currentUser = auth().currentUser;
-
                   const postRef = database().ref('posts').push();
-
                   const postId = postRef.key;
 
                   await postRef.set({
                     postId,
-                    userId: USER_ID,
+                    userId: ownerId,
 
-                    avatar: profile?.avatar || profile?.image || '',
-                    name: profile?.name || 'Admin',
+                    avatar: item.userAvatar || '',
+                    name: item.userName || 'User',
 
                     requestId: item.id,
 
@@ -335,8 +338,9 @@ export default function SnackSystemUI({ navigation }) {
                     comments: {},
                   });
 
+                  // Link post to snack owner
                   await database()
-                    .ref(`users/${USER_ID}/posts/${postId}`)
+                    .ref(`users/${ownerId}/posts/${postId}`)
                     .set(true);
 
                   console.log('Posted successfully');
@@ -367,7 +371,7 @@ export default function SnackSystemUI({ navigation }) {
               await database().ref(`posts/${postKey}`).remove();
 
               await database()
-                .ref(`users/${USER_ID}/posts/${postKey}`)
+                .ref(`users/${ownerId}/posts/${postKey}`)
                 .remove();
             }),
           );
@@ -377,7 +381,6 @@ export default function SnackSystemUI({ navigation }) {
       console.log('Update error:', e);
     }
   };
-
   const deleteRequest = async item => {
     try {
       if (item.image) {
@@ -386,7 +389,7 @@ export default function SnackSystemUI({ navigation }) {
       }
 
       await database()
-        .ref(`users/${USER_ID}/snacks/requests/${item.id}`)
+        .ref(`users/${USER_ID}/snacks/${CURRENT_MONTH_KEY}/requests/${item.id}`)
         .remove();
     } catch (e) {
       console.log(e);
@@ -452,159 +455,181 @@ export default function SnackSystemUI({ navigation }) {
       >
         {/* ── REQUEST TAB ── */}
         {activeTab === 'request' && (
-          <>
-            <View style={styles.formCard}>
-              <Text style={styles.formTitle}>Add Snack Request</Text>
+          <View>
+            {!route?.params?.monthKey && (
+              <>
+                <View style={styles.formCard}>
+                  <Text style={styles.formTitle}>Add Snack Request</Text>
 
-              <TextInput
-                placeholder="Snack name (e.g. Mixed Nuts)"
-                value={snackName}
-                onChangeText={setSnackName}
-                placeholderTextColor="rgba(255,255,255,0.25)"
-                style={styles.input}
-              />
-              <TextInput
-                placeholder="Quantity (e.g. 1 pack, 200g)"
-                value={qty}
-                onChangeText={setQty}
-                placeholderTextColor="rgba(255,255,255,0.25)"
-                style={styles.input}
-              />
+                  <TextInput
+                    placeholder="Snack name (e.g. Mixed Nuts)"
+                    value={snackName}
+                    onChangeText={setSnackName}
+                    placeholderTextColor="rgba(255,255,255,0.25)"
+                    style={styles.input}
+                  />
 
-              {/* Image upload */}
-              {!showImagePicker ? (
-                <TouchableOpacity
-                  style={[styles.uploadBtn, image && styles.uploadBtnFilled]}
-                  onPress={() => setImagePickerVisible(true)}
-                  activeOpacity={0.8}
-                >
-                  {uploading ? (
-                    <View style={styles.uploadInner}>
-                      <Text style={styles.uploadText}>Uploading...</Text>
-                    </View>
-                  ) : image ? (
-                    <Image source={{ uri: image }} style={styles.uploadImg} />
+                  <TextInput
+                    placeholder="Quantity (e.g. 1 pack, 200g)"
+                    value={qty}
+                    onChangeText={setQty}
+                    placeholderTextColor="rgba(255,255,255,0.25)"
+                    style={styles.input}
+                  />
+
+                  {/* Image upload */}
+                  {!showImagePicker ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.uploadBtn,
+                        image && styles.uploadBtnFilled,
+                      ]}
+                      onPress={() => setImagePickerVisible(true)}
+                      activeOpacity={0.8}
+                    >
+                      {uploading ? (
+                        <View style={styles.uploadInner}>
+                          <Text style={styles.uploadText}>Uploading...</Text>
+                        </View>
+                      ) : image ? (
+                        <Image
+                          source={{ uri: image }}
+                          style={styles.uploadImg}
+                        />
+                      ) : (
+                        <View style={styles.uploadInner}>
+                          <Svg
+                            width={20}
+                            height={20}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                          >
+                            <Path
+                              d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
+                              stroke="rgba(143,175,120,0.5)"
+                              strokeWidth={1.8}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <Circle
+                              cx={12}
+                              cy={13}
+                              r={4}
+                              stroke="rgba(143,175,120,0.5)"
+                              strokeWidth={1.8}
+                            />
+                          </Svg>
+                          <Text style={styles.uploadText}>
+                            Add Photo (optional)
+                          </Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
                   ) : (
-                    <View style={styles.uploadInner}>
-                      <Svg
-                        width={20}
-                        height={20}
-                        viewBox="0 0 24 24"
-                        fill="none"
+                    <View style={styles.pickerRow}>
+                      <TouchableOpacity
+                        style={styles.pickerBtn}
+                        onPress={handleCamera}
+                        activeOpacity={0.8}
                       >
-                        <Path
-                          d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
-                          stroke="rgba(143,175,120,0.5)"
-                          strokeWidth={1.8}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <Circle
-                          cx={12}
-                          cy={13}
-                          r={4}
-                          stroke="rgba(143,175,120,0.5)"
-                          strokeWidth={1.8}
-                        />
-                      </Svg>
-                      <Text style={styles.uploadText}>
-                        Add Photo (optional)
-                      </Text>
+                        <Text style={styles.pickerBtnText}>📸 Camera</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.pickerBtn}
+                        onPress={handleGallery}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.pickerBtnText}>🖼️ Gallery</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.pickerBtn, styles.pickerBtnCancel]}
+                        onPress={() => setShowImagePicker(false)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.pickerCancelText}>Cancel</Text>
+                      </TouchableOpacity>
                     </View>
                   )}
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.pickerRow}>
+
                   <TouchableOpacity
-                    style={styles.pickerBtn}
-                    onPress={handleCamera}
-                    activeOpacity={0.8}
+                    disabled={uploading || !snackName.trim() || !qty.trim()}
+                    onPress={addRequest}
+                    activeOpacity={0.85}
+                    style={[
+                      styles.submitBtn,
+                      (uploading || !snackName.trim() || !qty.trim()) &&
+                        styles.submitBtnDisabled,
+                    ]}
                   >
-                    <Text style={styles.pickerBtnText}>📸 Camera</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.pickerBtn}
-                    onPress={handleGallery}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.pickerBtnText}>🖼️ Gallery</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.pickerBtn, styles.pickerBtnCancel]}
-                    onPress={() => setShowImagePicker(false)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.pickerCancelText}>Cancel</Text>
+                    {snackName.trim() && qty.trim() && !uploading && (
+                      <GradientBg
+                        id="addSnack"
+                        c1="#6A9455"
+                        c2="#3A5A2A"
+                        r={14}
+                        horizontal
+                      />
+                    )}
+
+                    <Text
+                      style={[
+                        styles.submitBtnText,
+                        (uploading || !snackName.trim() || !qty.trim()) &&
+                          styles.submitBtnDisabledText,
+                      ]}
+                    >
+                      {uploading ? 'Uploading...' : 'Submit Request'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
-              )}
-
-              <TouchableOpacity
-                disabled={uploading || !snackName.trim() || !qty.trim()}
-                onPress={addRequest}
-                activeOpacity={0.85}
-                style={[
-                  styles.submitBtn,
-                  (uploading || !snackName.trim() || !qty.trim()) &&
-                    styles.submitBtnDisabled,
-                ]}
-              >
-                {snackName.trim() && qty.trim() && !uploading && (
-                  <GradientBg
-                    id="addSnack"
-                    c1="#6A9455"
-                    c2="#3A5A2A"
-                    r={14}
-                    horizontal
-                  />
-                )}
-
-                <Text
-                  style={[
-                    styles.submitBtnText,
-                    (uploading || !snackName.trim() || !qty.trim()) &&
-                      styles.submitBtnDisabledText,
-                  ]}
-                >
-                  {uploading ? 'Uploading...' : 'Submit Request'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+              </>
+            )}
 
             {requests.length > 0 && (
               <>
                 <Text style={styles.sectionLabel}>
                   My Requests ({requests.length})
                 </Text>
-                {requests.map(item => {
-                  const s = STATUS_COLORS[item.status];
-                  return (
-                    <View key={item.id} style={styles.requestCard}>
-                      {item.image && (
-                        <Image
-                          source={{ uri: item.image }}
-                          style={styles.cardImg}
-                        />
-                      )}
-                      <View style={styles.cardRow}>
-                        <View style={styles.cardInfo}>
-                          <Text style={styles.cardName}>{item.name}</Text>
-                          <Text style={styles.cardQty}>Qty: {item.qty}</Text>
-                        </View>
-                        <View
-                          style={[
-                            styles.statusPill,
-                            { backgroundColor: s.bg, borderColor: s.border },
-                          ]}
-                        >
-                          <Text style={[styles.statusText, { color: s.color }]}>
-                            {item.status.toUpperCase()}
-                          </Text>
+                {requests
+                  ?.filter(item => item.userId === USER_ID)
+                  ?.map(item => {
+                    const s = STATUS_COLORS[item.status];
+                    return (
+                      <View key={item.id} style={styles.requestCard}>
+                        {item.image && (
+                          <Image
+                            source={{ uri: item.image }}
+                            style={styles.cardImg}
+                          />
+                        )}
+                        <View style={styles.cardRow}>
+                          <View style={styles.cardInfo}>
+                            <Text style={styles.cardName}>{item.name}</Text>
+                            <Text style={styles.cardQty}>Qty: {item.qty}</Text>
+                          </View>
+                          <View
+                            style={[
+                              styles.statusPill,
+                              {
+                                backgroundColor:
+                                  s?.bg || 'rgba(239, 68, 68, 0.1)',
+                                borderColor: s?.border || 'red',
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.statusText,
+                                { color: s?.color || 'red' },
+                              ]}
+                            >
+                              {item.status.toUpperCase()}
+                            </Text>
+                          </View>
                         </View>
                       </View>
-                    </View>
-                  );
-                })}
+                    );
+                  })}
               </>
             )}
 
@@ -614,7 +639,7 @@ export default function SnackSystemUI({ navigation }) {
                 <Text style={styles.emptyText}>No snack requests yet</Text>
               </View>
             )}
-          </>
+          </View>
         )}
         {/* ── APPROVED TAB ── */}
         {activeTab === 'approved' && (
@@ -668,7 +693,6 @@ export default function SnackSystemUI({ navigation }) {
             )}
           </>
         )}
-        Make to show all the re in admin for all usersa
         {/* ── ADMIN TAB ── */}
         {activeTab === 'admin' && (
           <>

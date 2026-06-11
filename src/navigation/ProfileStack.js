@@ -14,6 +14,7 @@ import QuizReview from '../screens/profile/quiz/QuizReview';
 import QuizBoard from '../screens/profile/quiz/QuizBoard';
 import QuizAnalytics from '../screens/profile/quiz/QuizAnalytics';
 import ArchivedGoals from '../screens/profile/ArchivedGoals';
+import NotificationSettings from '../screens/profile/NotificationSettings';
 import HabitsStack from './HabitsStack';
 
 const Stack = createNativeStackNavigator();
@@ -42,6 +43,10 @@ export default function ProfileStack() {
       <Stack.Screen name="QuizBoard" component={QuizBoard} />
       <Stack.Screen name="QuizAnalytics" component={QuizAnalytics} />
       <Stack.Screen name="Habits" component={HabitsStack} />
+      <Stack.Screen
+        name="NotificationSettings"
+        component={NotificationSettings}
+      />
     </Stack.Navigator>
   );
 }

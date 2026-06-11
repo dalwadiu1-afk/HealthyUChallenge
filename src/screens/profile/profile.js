@@ -392,7 +392,11 @@ export default function Profile({ navigation }) {
           {/* Top row */}
           <View style={styles.heroTopRow}>
             <Text style={styles.heroLabel}>PROFILE</Text>
-            <TouchableOpacity style={styles.settingsBtn} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.settingsBtn}
+              activeOpacity={0.8}
+              onPress={() => navigation?.navigate('NotificationSettings')}
+            >
               <Text style={styles.settingsIcon}>⚙️</Text>
             </TouchableOpacity>
           </View>
