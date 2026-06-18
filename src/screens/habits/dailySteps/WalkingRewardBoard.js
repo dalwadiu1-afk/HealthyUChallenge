@@ -236,26 +236,26 @@ export default function WalkingRewardBoard({ navigation }) {
       });
 
       const top3 = [...(sorted || [])]
-  .sort(
-    (a, b) =>
-      (b?.challenge?.totalChallengePoints || 0) -
-      (a?.challenge?.totalChallengePoints || 0)
-  )
-  .slice(0, 3)
-  .map((u, index) => {
-    const challenge = u?.challenge || {};
-    const status = u?.status || {};
+        .sort(
+          (a, b) =>
+            (b?.challenge?.totalChallengePoints || 0) -
+            (a?.challenge?.totalChallengePoints || 0),
+        )
+        .slice(0, 3)
+        .map((u, index) => {
+          const challenge = u?.challenge || {};
+          const status = u?.status || {};
 
-    return {
-      rank: index + 1,
-      profile: u?.avatar || 'https://i.pravatar.cc/300',
-      name: u?.name || 'User',
-      streak: challenge?.streak || 0,
-      consistency: status?.consistency,
-      quizCompleted: status?.quizCompleted,
-      points: challenge?.totalChallengePoints || 0,
-    };
-  });
+          return {
+            rank: index + 1,
+            profile: u?.avatar || 'https://i.pravatar.cc/300',
+            name: u?.name || 'User',
+            streak: challenge?.streak || 0,
+            consistency: status?.consistency,
+            quizCompleted: status?.quizCompleted,
+            points: challenge?.totalChallengePoints || 0,
+          };
+        });
       const userIndex = sorted.findIndex(item => item.uid === uid);
 
       const totalUsers = sorted.length;
@@ -408,7 +408,6 @@ export default function WalkingRewardBoard({ navigation }) {
       {/* HEADER */}
       <View
         style={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 15,
           zIndex: 1,
         }}

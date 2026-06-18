@@ -337,139 +337,144 @@ export default function QuizResult({ navigation, route }) {
   const earnedPoints = Math.round(basePoints * multiplier);
 
   return (
-    <Wrapper scrollEnable={false} orbsRight>
+    <View style={{ flex: 1, backgroundColor: colors.dark }}>
       <Header header="Quiz Result" />
-
-      <Animated.View style={[styles.body, { opacity: fade }]}>
-        <View style={styles.titleCard}>
-          <Text style={styles.titleText}>Healthy Habits Challenge</Text>
-          <Text style={styles.subText}>Wellness / Mixed Habits</Text>
-        </View>
-
-        <View style={styles.scoreCard}>
-          <ScoreRing percent={percent} score={correct} total={total} />
-          <View style={styles.scoreCopy}>
-            <Text style={styles.congrats}>
-              {passed ? 'Congratulations!' : 'Nice try!'}
-            </Text>
-            <Text style={styles.scoreMsg}>
-              {passed ? (
-                <>
-                  You have <Text style={styles.passWord}>passed</Text> this test
-                  with{' '}
-                  <Text style={styles.passWord}>
-                    {Math.round(percent * 100)}%
-                  </Text>
-                  .
-                </>
-              ) : (
-                <>
-                  You scored{' '}
-                  <Text style={styles.passWord}>
-                    {Math.round(percent * 100)}%
-                  </Text>
-                  . Keep practicing!
-                </>
-              )}
-            </Text>
+      <Wrapper
+        scrollEnable={false}
+        orbsRight
+        safeAreaPops={{ edges: ['bottom'] }}
+      >
+        <Animated.View style={[styles.body, { opacity: fade }]}>
+          <View style={styles.titleCard}>
+            <Text style={styles.titleText}>Healthy Habits Challenge</Text>
+            <Text style={styles.subText}>Wellness / Mixed Habits</Text>
           </View>
-        </View>
 
-        <View style={styles.statRow}>
-          <View style={[styles.statBox, styles.statBoxGreen]}>
-            <Text style={styles.statBigNum}>{correct}</Text>
-            <Text style={styles.statBigLabel}>Correct Answers</Text>
-          </View>
-          <View style={[styles.statBox, styles.statBoxRed]}>
-            <Text style={styles.statBigNum}>{wrong}</Text>
-            <Text style={styles.statBigLabel}>Wrong Answers</Text>
-          </View>
-        </View>
-
-        <View style={styles.statRow}>
-          <View style={[styles.statBox, styles.statBoxBlue]}>
-            <Text style={styles.statTimeIcon}>⏱</Text>
-            <Text style={styles.statBigNum}>{fmt(totalSec)}</Text>
-            <Text style={styles.statBigLabel}>Total Time</Text>
-          </View>
-          <View style={[styles.statBox, styles.statBoxOrange]}>
-            <Text style={styles.statTimeIcon}>⏱</Text>
-            <Text style={styles.statBigNum}>{fmt(avgSec)}</Text>
-            <Text style={styles.statBigLabel}>Avg. time / Answer</Text>
-          </View>
-        </View>
-
-        <View style={styles.actionsRow}>
-          <TouchableOpacity
-            style={styles.actionBtnSecondary}
-            activeOpacity={0.85}
-            onPress={() =>
-              navigation.navigate('QuizReview', { questions, answers })
-            }
-          >
-            <Text style={styles.actionBtnSecondaryText}>Check Answers</Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-
-      <Modal visible={showRewardModal} transparent animationType="fade">
-        <View style={styles.rewardOverlay}>
-          <Animated.View
-            style={[
-              styles.rewardModal,
-              {
-                transform: [
-                  {
-                    scale: fade.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.92, 1],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <Text style={styles.rewardEmoji}>{isBonus ? '⚡' : '🔥'}</Text>
-
-            <Text style={styles.rewardTitle}>
-              +{earnedPoints} Points Earned
-            </Text>
-
-            <Text style={styles.rewardSub}>
-              Great work completing today’s quiz
-            </Text>
-
-            <View style={styles.rewardList}>
-              <Text style={styles.rewardItem}>
-                ✅ +{answerPoints} for {correct} correct answers
+          <View style={styles.scoreCard}>
+            <ScoreRing percent={percent} score={correct} total={total} />
+            <View style={styles.scoreCopy}>
+              <Text style={styles.congrats}>
+                {passed ? 'Congratulations!' : 'Nice try!'}
               </Text>
-
-              <Text style={styles.rewardItem}>
-                🔥 +{streakPoints} for {streak} day streak
+              <Text style={styles.scoreMsg}>
+                {passed ? (
+                  <>
+                    You have <Text style={styles.passWord}>passed</Text> this
+                    test with{' '}
+                    <Text style={styles.passWord}>
+                      {Math.round(percent * 100)}%
+                    </Text>
+                    .
+                  </>
+                ) : (
+                  <>
+                    You scored{' '}
+                    <Text style={styles.passWord}>
+                      {Math.round(percent * 100)}%
+                    </Text>
+                    . Keep practicing!
+                  </>
+                )}
               </Text>
-
-              <Text style={styles.rewardItem}>
-                ⏱ +{speedPoints} speed bonus
-              </Text>
-
-              {multiplier > 1 && (
-                <Text style={styles.rewardBoost}>
-                  {isBonus ? '⚡' : '🚀'} {multiplier}x multiplier active
-                </Text>
-              )}
             </View>
+          </View>
 
+          <View style={styles.statRow}>
+            <View style={[styles.statBox, styles.statBoxGreen]}>
+              <Text style={styles.statBigNum}>{correct}</Text>
+              <Text style={styles.statBigLabel}>Correct Answers</Text>
+            </View>
+            <View style={[styles.statBox, styles.statBoxRed]}>
+              <Text style={styles.statBigNum}>{wrong}</Text>
+              <Text style={styles.statBigLabel}>Wrong Answers</Text>
+            </View>
+          </View>
+
+          <View style={styles.statRow}>
+            <View style={[styles.statBox, styles.statBoxBlue]}>
+              <Text style={styles.statTimeIcon}>⏱</Text>
+              <Text style={styles.statBigNum}>{fmt(totalSec)}</Text>
+              <Text style={styles.statBigLabel}>Total Time</Text>
+            </View>
+            <View style={[styles.statBox, styles.statBoxOrange]}>
+              <Text style={styles.statTimeIcon}>⏱</Text>
+              <Text style={styles.statBigNum}>{fmt(avgSec)}</Text>
+              <Text style={styles.statBigLabel}>Avg. time / Answer</Text>
+            </View>
+          </View>
+
+          <View style={styles.actionsRow}>
             <TouchableOpacity
-              activeOpacity={0.9}
-              style={styles.rewardButton}
-              onPress={() => setShowRewardModal(false)}
+              style={styles.actionBtnSecondary}
+              activeOpacity={0.85}
+              onPress={() =>
+                navigation.navigate('QuizReview', { questions, answers })
+              }
             >
-              <Text style={styles.rewardButtonText}>Awesome</Text>
+              <Text style={styles.actionBtnSecondaryText}>Check Answers</Text>
             </TouchableOpacity>
-          </Animated.View>
-        </View>
-      </Modal>
-    </Wrapper>
+          </View>
+        </Animated.View>
+
+        <Modal visible={showRewardModal} transparent animationType="fade">
+          <View style={styles.rewardOverlay}>
+            <Animated.View
+              style={[
+                styles.rewardModal,
+                {
+                  transform: [
+                    {
+                      scale: fade.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.92, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Text style={styles.rewardEmoji}>{isBonus ? '⚡' : '🔥'}</Text>
+
+              <Text style={styles.rewardTitle}>
+                +{earnedPoints} Points Earned
+              </Text>
+
+              <Text style={styles.rewardSub}>
+                Great work completing today’s quiz
+              </Text>
+
+              <View style={styles.rewardList}>
+                <Text style={styles.rewardItem}>
+                  ✅ +{answerPoints} for {correct} correct answers
+                </Text>
+
+                <Text style={styles.rewardItem}>
+                  🔥 +{streakPoints} for {streak} day streak
+                </Text>
+
+                <Text style={styles.rewardItem}>
+                  ⏱ +{speedPoints} speed bonus
+                </Text>
+
+                {multiplier > 1 && (
+                  <Text style={styles.rewardBoost}>
+                    {isBonus ? '⚡' : '🚀'} {multiplier}x multiplier active
+                  </Text>
+                )}
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={styles.rewardButton}
+                onPress={() => setShowRewardModal(false)}
+              >
+                <Text style={styles.rewardButtonText}>Awesome</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        </Modal>
+      </Wrapper>
+    </View>
   );
 }
 

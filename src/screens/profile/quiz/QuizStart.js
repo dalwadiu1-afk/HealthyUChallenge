@@ -119,84 +119,90 @@ export default function QuizStart({ navigation, route }) {
   }
 
   return (
-    <Wrapper scrollEnable={false} orbsRight>
-      <Header header="Start Quiz" />
-
-      <Animated.View
-        style={[
-          styles.body,
-          { opacity: fade, transform: [{ translateY: slide }] },
-        ]}
+    <View>
+      <Wrapper
+        scrollEnable={false}
+        orbsRight
+        safeAreaPops={{ edges: ['bottom'] }}
       >
-        <Text style={styles.intro}>{quizData?.description}</Text>
+        <Header header="Start Quiz" />
 
-        <View style={styles.heroCard}>
-          <View style={styles.heroLeft}>
-            <Text style={styles.heroTitle}>{quizData?.title}</Text>
-
-            <View style={styles.heroDivider} />
-
-            <Text style={styles.heroMeta}>
-              <Text style={styles.heroMetaLabel}>Subject: </Text>
-
-              <Text style={styles.heroMetaValue}>{quizData?.subject}</Text>
-            </Text>
-
-            <Text style={styles.heroMeta}>
-              <Text style={styles.heroMetaLabel}>Chapter: </Text>
-
-              <Text style={styles.heroMetaValue}>{quizData?.chapter}</Text>
-            </Text>
-          </View>
-
-          <View style={styles.heroEmojiWrap}>
-            <Text style={styles.heroEmoji}>{quizData?.emoji}</Text>
-
-            <Text style={styles.heroEmojiSmall}>
-              {quizData?.secondaryEmoji}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Total Questions</Text>
-
-            <Text style={styles.statValue}>{quizData?.totalQuestions}</Text>
-          </View>
-
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Total Time</Text>
-
-            <Text style={styles.statValue}>{quizData?.totalMinutes} min</Text>
-          </View>
-        </View>
-
-        <Text style={styles.sectionTitle}>Instructions:</Text>
-
-        <View style={styles.instructionList}>
-          {quizData?.instructions?.map((item, index) => (
-            <InstructionRow key={index} text={item} />
-          ))}
-        </View>
-      </Animated.View>
-
-      <View style={styles.footer}>
-        <View style={styles.timerPill}>
-          <Text style={styles.timerIcon}>⏱</Text>
-
-          <Text style={styles.timerText}>{quizData?.totalMinutes}:00</Text>
-        </View>
-
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.startBtn}
-          onPress={startQuiz}
+        <Animated.View
+          style={[
+            styles.body,
+            { opacity: fade, transform: [{ translateY: slide }] },
+          ]}
         >
-          <Text style={styles.startBtnText}>Start Quiz</Text>
-        </TouchableOpacity>
-      </View>
-    </Wrapper>
+          <Text style={styles.intro}>{quizData?.description}</Text>
+
+          <View style={styles.heroCard}>
+            <View style={styles.heroLeft}>
+              <Text style={styles.heroTitle}>{quizData?.title}</Text>
+
+              <View style={styles.heroDivider} />
+
+              <Text style={styles.heroMeta}>
+                <Text style={styles.heroMetaLabel}>Subject: </Text>
+
+                <Text style={styles.heroMetaValue}>{quizData?.subject}</Text>
+              </Text>
+
+              <Text style={styles.heroMeta}>
+                <Text style={styles.heroMetaLabel}>Chapter: </Text>
+
+                <Text style={styles.heroMetaValue}>{quizData?.chapter}</Text>
+              </Text>
+            </View>
+
+            <View style={styles.heroEmojiWrap}>
+              <Text style={styles.heroEmoji}>{quizData?.emoji}</Text>
+
+              <Text style={styles.heroEmojiSmall}>
+                {quizData?.secondaryEmoji}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Total Questions</Text>
+
+              <Text style={styles.statValue}>{quizData?.totalQuestions}</Text>
+            </View>
+
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Total Time</Text>
+
+              <Text style={styles.statValue}>{quizData?.totalMinutes} min</Text>
+            </View>
+          </View>
+
+          <Text style={styles.sectionTitle}>Instructions:</Text>
+
+          <View style={styles.instructionList}>
+            {quizData?.instructions?.map((item, index) => (
+              <InstructionRow key={index} text={item} />
+            ))}
+          </View>
+        </Animated.View>
+
+        <View style={styles.footer}>
+          <View style={styles.timerPill}>
+            <Text style={styles.timerIcon}>⏱</Text>
+
+            <Text style={styles.timerText}>{quizData?.totalMinutes}:00</Text>
+          </View>
+
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={styles.startBtn}
+            onPress={startQuiz}
+          >
+            <Text style={styles.startBtnText}>Start Quiz</Text>
+          </TouchableOpacity>
+        </View>
+      </Wrapper>
+    </View>
   );
 }
 

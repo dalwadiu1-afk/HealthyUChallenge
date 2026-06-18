@@ -213,8 +213,8 @@ export default function Login({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Back button */} 
-      <Wrapper containerStyle={{ flex: 1 }}  safeAreaPops={{ edges: [''] }}>
+      {/* Back button */}
+      <Wrapper containerStyle={{ flex: 1 }} safeAreaPops={{ edges: [''] }}>
         <Header disableLeft={false} />
 
         {/* Greeting */}

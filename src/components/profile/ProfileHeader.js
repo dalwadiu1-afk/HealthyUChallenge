@@ -54,122 +54,123 @@ export default function ProfileHeader({
     ?.substring(0, 2)
     ?.toUpperCase();
   return (
-    <SafeAreaView  edges={['top']}>
-    <Animated.View
-      style={[
-        styles.header,
-        {
-          opacity: headerAnim,
-          transform: [
-            {
-              translateY: headerAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [-16, 0],
-              }),
-            },
-          ],
-        },
-      ]}
-    >
-      <View style={styles.headerAvatar}>
-        {userData?.avatar || profileData?.profile?.avatar ? (
-          <Image
-            source={{
-              uri: profileData?.profile?.avatar || userData?.avatar,
-            }}
-            style={styles.headerAvatarImage}
-          />
-        ) : (
-          <Text style={styles.headerAvatarText}>{initials}</Text>
-        )}
-      </View>
-      <View style={styles.headerText}>
-        <Text style={styles.headerGreeting}>
-          {greeting} {userData?.name || profileData?.profile?.name || 'User'} 👋
-        </Text>
-
-        <TouchableOpacity onPress={() => setShowCalender(!showCalender)}>
-          <Text style={styles.headerDate}>
-            {moment().format('dddd, DD MMMM')}
+    <SafeAreaView edges={['top']}>
+      <Animated.View
+        style={[
+          styles.header,
+          {
+            opacity: headerAnim,
+            transform: [
+              {
+                translateY: headerAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-16, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <View style={styles.headerAvatar}>
+          {userData?.avatar || profileData?.profile?.avatar ? (
+            <Image
+              source={{
+                uri: profileData?.profile?.avatar || userData?.avatar,
+              }}
+              style={styles.headerAvatarImage}
+            />
+          ) : (
+            <Text style={styles.headerAvatarText}>{initials}</Text>
+          )}
+        </View>
+        <View style={styles.headerText}>
+          <Text style={styles.headerGreeting}>
+            {greeting} {userData?.name || profileData?.profile?.name || 'User'}{' '}
+            👋
           </Text>
-        </TouchableOpacity>
-      </View>
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <TouchableOpacity
-          style={styles.infoBtn}
-          activeOpacity={0.8}
-          onPress={() => setShowInsight(!showInsight)}
-        >
-          <Text style={styles.infoIcon}>i</Text>
-        </TouchableOpacity>
 
-        {/* <TouchableOpacity
+          <TouchableOpacity onPress={() => setShowCalender(!showCalender)}>
+            <Text style={styles.headerDate}>
+              {moment().format('dddd, DD MMMM')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableOpacity
+            style={styles.infoBtn}
+            activeOpacity={0.8}
+            onPress={() => setShowInsight(!showInsight)}
+          >
+            <Text style={styles.infoIcon}>i</Text>
+          </TouchableOpacity>
+
+          {/* <TouchableOpacity
           style={styles.chatBtn}
           activeOpacity={0.8}
           onPress={onPress}
         >
           <ChatBubbleIcon />
         </TouchableOpacity> */}
-      </View>
-
-      {(showInsight || showCalender) && (
-        <View style={styles.insightBubble}>
-          <Text style={styles.insightTitle}>Quiz Ring Guide</Text>
-
-          {/* Legend */}
-          <View style={styles.legendContainer}>
-            <View style={styles.legendItem}>
-              <View
-                style={[
-                  styles.legendDot,
-                  { backgroundColor: colors.secondary },
-                ]}
-              />
-              <Text style={styles.legendText}>Correct</Text>
-            </View>
-
-            <View style={styles.legendItem}>
-              <View
-                style={[
-                  styles.legendDot,
-                  { backgroundColor: colors.bubbleDark },
-                ]}
-              />
-              <Text style={styles.legendText}>Wrong</Text>
-            </View>
-
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendDot, { backgroundColor: '#EF4444' }]}
-              />
-              <Text style={styles.legendText}>Missed</Text>
-            </View>
-          </View>
-
-          {/* Note */}
-          <View style={styles.noteBox}>
-            <Text style={styles.noteText}>
-              Your streak and insights are based on quiz activity.{'\n'}
-              Attend quizzes consistently and improve your score to build
-              stronger streaks and performance.
-            </Text>
-          </View>
         </View>
-      )}
 
-      {showCalender ? (
-        <>
-          <StreakCalendar
-            startDate={startDate}
-            streakData={streakData}
-            showInsight={showInsight}
-            setShowInsight={setShowInsight}
-          />
-        </>
-      ) : (
-        <View />
-      )}
-    </Animated.View>
+        {(showInsight || showCalender) && (
+          <View style={styles.insightBubble}>
+            <Text style={styles.insightTitle}>Quiz Ring Guide</Text>
+
+            {/* Legend */}
+            <View style={styles.legendContainer}>
+              <View style={styles.legendItem}>
+                <View
+                  style={[
+                    styles.legendDot,
+                    { backgroundColor: colors.secondary },
+                  ]}
+                />
+                <Text style={styles.legendText}>Correct</Text>
+              </View>
+
+              <View style={styles.legendItem}>
+                <View
+                  style={[
+                    styles.legendDot,
+                    { backgroundColor: colors.bubbleDark },
+                  ]}
+                />
+                <Text style={styles.legendText}>Wrong</Text>
+              </View>
+
+              <View style={styles.legendItem}>
+                <View
+                  style={[styles.legendDot, { backgroundColor: '#EF4444' }]}
+                />
+                <Text style={styles.legendText}>Missed</Text>
+              </View>
+            </View>
+
+            {/* Note */}
+            <View style={styles.noteBox}>
+              <Text style={styles.noteText}>
+                Your streak and insights are based on quiz activity.{'\n'}
+                Attend quizzes consistently and improve your score to build
+                stronger streaks and performance.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {showCalender ? (
+          <>
+            <StreakCalendar
+              startDate={startDate}
+              streakData={streakData}
+              showInsight={showInsight}
+              setShowInsight={setShowInsight}
+            />
+          </>
+        ) : (
+          <View />
+        )}
+      </Animated.View>
     </SafeAreaView>
   );
 }

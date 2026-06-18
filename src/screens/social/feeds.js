@@ -175,7 +175,6 @@ export default function Feeds({ navigation }) {
     <View style={styles.container}>
       <View
         style={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 15,
           zIndex: 1,
         }}

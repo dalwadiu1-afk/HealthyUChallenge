@@ -475,7 +475,7 @@ export default function Quiz({ navigation, route }) {
   const ss = String(secondsLeft % 60).padStart(2, '0');
 
   return (
-    <Wrapper scrollEnable={false} orbsRight>
+    <View style={{ flex: 1, backgroundColor: colors.dark }}>
       <Header
         header="Quiz"
         onLeftPress={() => {
@@ -495,106 +495,114 @@ export default function Quiz({ navigation, route }) {
           );
         }}
       />
-
-      <Text style={styles.quizTitle}>Healthy Habits Challenge</Text>
-      <View style={styles.metaRow}>
-        <Text style={styles.metaText}>Wellness / Mixed Habits</Text>
-        <View style={[styles.timerBadge, timerLow && styles.timerBadgeWarn]}>
-          <Text style={styles.timerBadgeIcon}>⏱</Text>
-          <Text
-            style={[
-              styles.timerBadgeText,
-              timerLow && { color: colors.danger },
-            ]}
-          >
-            {mm}:{ss}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.progressTrack}>
-        <Animated.View
-          style={[styles.progressFill, { width: progressWidth }]}
-        />
-      </View>
-
-      <Animated.View
-        style={[
-          styles.questionWrap,
-          { opacity: fadeAnim, transform: [{ translateX: slideAnim }] },
-        ]}
+      <Wrapper
+        scrollEnable={false}
+        orbsRight
+        safeAreaPops={{ edges: ['bottom'] }}
       >
-        <Text style={styles.qIndex}>
-          Q.{index + 1}
-          <Text style={styles.qIndexDim}> / {questions.length}</Text>
-        </Text>
-        <Text style={styles.qText}>{current.question}</Text>
+        <Text style={styles.quizTitle}>Healthy Habits Challenge</Text>
+        <View style={styles.metaRow}>
+          <Text style={styles.metaText}>Wellness / Mixed Habits</Text>
+          <View style={[styles.timerBadge, timerLow && styles.timerBadgeWarn]}>
+            <Text style={styles.timerBadgeIcon}>⏱</Text>
+            <Text
+              style={[
+                styles.timerBadgeText,
+                timerLow && { color: colors.danger },
+              ]}
+            >
+              {mm}:{ss}
+            </Text>
+          </View>
+        </View>
 
-        <View style={styles.optionsList}>
-          {(current.options || []).map((opt, i) => {
-            const isSelected = selected === i;
-            return (
-              <TouchableOpacity
-                key={i}
-                onPress={() => selectOption(i)}
-                activeOpacity={0.85}
-                style={[styles.optionRow, isSelected && styles.optionRowActive]}
-              >
-                <View
+        <View style={styles.progressTrack}>
+          <Animated.View
+            style={[styles.progressFill, { width: progressWidth }]}
+          />
+        </View>
+
+        <Animated.View
+          style={[
+            styles.questionWrap,
+            { opacity: fadeAnim, transform: [{ translateX: slideAnim }] },
+          ]}
+        >
+          <Text style={styles.qIndex}>
+            Q.{index + 1}
+            <Text style={styles.qIndexDim}> / {questions.length}</Text>
+          </Text>
+          <Text style={styles.qText}>{current.question}</Text>
+
+          <View style={styles.optionsList}>
+            {(current.options || []).map((opt, i) => {
+              const isSelected = selected === i;
+              return (
+                <TouchableOpacity
+                  key={i}
+                  onPress={() => selectOption(i)}
+                  activeOpacity={0.85}
                   style={[
-                    styles.letterBubble,
-                    isSelected && styles.letterBubbleActive,
+                    styles.optionRow,
+                    isSelected && styles.optionRowActive,
                   ]}
                 >
-                  <Text
+                  <View
                     style={[
-                      styles.letterText,
-                      isSelected && styles.letterTextActive,
+                      styles.letterBubble,
+                      isSelected && styles.letterBubbleActive,
                     ]}
                   >
-                    {OPTION_LETTERS[i]}
+                    <Text
+                      style={[
+                        styles.letterText,
+                        isSelected && styles.letterTextActive,
+                      ]}
+                    >
+                      {OPTION_LETTERS[i]}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.optionText,
+                      isSelected && styles.optionTextActive,
+                    ]}
+                  >
+                    {opt}
                   </Text>
-                </View>
-                <Text
-                  style={[
-                    styles.optionText,
-                    isSelected && styles.optionTextActive,
-                  ]}
-                >
-                  {opt}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </Animated.View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Animated.View>
 
-      <View style={styles.footer}>
-        <TouchableOpacity
-          onPress={prev}
-          disabled={index === 0}
-          activeOpacity={0.8}
-          style={[styles.prevBtn, index === 0 && styles.prevBtnDisabled]}
-        >
-          <Text
-            style={[
-              styles.prevBtnText,
-              index === 0 && { color: 'rgba(255,255,255,0.3)' },
-            ]}
+        <View style={styles.footer}>
+          <TouchableOpacity
+            onPress={prev}
+            disabled={index === 0}
+            activeOpacity={0.8}
+            style={[styles.prevBtn, index === 0 && styles.prevBtnDisabled]}
           >
-            Previous
-          </Text>
-        </TouchableOpacity>
+            <Text
+              style={[
+                styles.prevBtnText,
+                index === 0 && { color: 'rgba(255,255,255,0.3)' },
+              ]}
+            >
+              Previous
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={isLast ? finish : next}
-          activeOpacity={0.85}
-          style={styles.nextBtn}
-        >
-          <Text style={styles.nextBtnText}>{isLast ? 'Submit' : 'Next'}</Text>
-        </TouchableOpacity>
-      </View>
-    </Wrapper>
+          <TouchableOpacity
+            onPress={isLast ? finish : next}
+            activeOpacity={0.85}
+            style={styles.nextBtn}
+          >
+            <Text style={styles.nextBtnText}>{isLast ? 'Submit' : 'Next'}</Text>
+          </TouchableOpacity>
+        </View>
+      </Wrapper>
+    </View>
   );
 }
 
