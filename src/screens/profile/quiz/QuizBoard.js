@@ -537,8 +537,9 @@ export default function QuizBoard({ navigation, route }) {
 
   const bonusUnlocked = moment().isSameOrAfter(bonusDate);
   return (
-    <Wrapper orbsRight>
-      <Header header="Quiz Hub" />
+    <View style ={{flex:1, backgroundColor:colors.dark}}>
+      <Header header="Quiz Hub" headerContainer={{paddingHorizontal:23}}/>
+    <Wrapper orbsRight safeAreaPops={{ edges: ['bottom'] }}>
       {loading ? (
         <View
           style={{
@@ -1098,6 +1099,7 @@ export default function QuizBoard({ navigation, route }) {
         </Animated.View>
       )}
     </Wrapper>
+    </View>
   );
 }
 

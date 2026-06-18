@@ -359,9 +359,9 @@ export default function FitnessClassUI({ route }) {
      UI MAPPING FIX
   ========================== */
   return (
-    <Wrapper isForgot>
       <View style={styles.root}>
-        <Header header="Weekly Classes" />
+        <Header header="Weekly Classes"  headerContainer={{paddingHorizontal:23}}/>
+    <Wrapper isForgot  safeAreaPops={{ edges: ['bottom'] }}>
 
         <Animated.View style={{ opacity: headerAnim }}>
           <Text style={styles.heroTitle}>🏋️ Weekly Fitness Class</Text>
@@ -426,15 +426,15 @@ export default function FitnessClassUI({ route }) {
             monthKey={moment().format('MMMM_YYYY')}
           />
         ))}
-      </View>
     </Wrapper>
+      </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    marginBottom: height / 12,
+    backgroundColor:colors.dark
   },
   completedBadge: {
     backgroundColor: 'rgba(76,175,80,0.2)',

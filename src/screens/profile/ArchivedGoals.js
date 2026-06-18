@@ -133,8 +133,9 @@ export default function ArchivedGoals({ navigation }) {
   };
 
   return (
-    <Wrapper orbsRight>
-      <Header header="Goal Archive" />
+    <View style ={{flex:1, backgroundColor:colors.dark}}>
+      <Header header="Goal Archive" headerContainer={{paddingHorizontal:23}}/>
+    <Wrapper orbsRight safeAreaPops={{ edges: ['bottom'] }}>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -311,6 +312,7 @@ export default function ArchivedGoals({ navigation }) {
         </View>
       </Modal>
     </Wrapper>
+    </View>
   );
 }
 

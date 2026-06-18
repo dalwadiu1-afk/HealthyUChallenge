@@ -235,39 +235,27 @@ export default function WalkingRewardBoard({ navigation }) {
         return (b.challenge?.streak || 0) - (a.challenge?.streak || 0);
       });
 
-      const top3 = (sorted || []).slice(0, 3).map((u, index) => {
-        const challenge = u?.challenge || {};
-        const days = challenge?.days || {};
-        const status = u?.status || {};
+      const top3 = [...(sorted || [])]
+  .sort(
+    (a, b) =>
+      (b?.challenge?.totalChallengePoints || 0) -
+      (a?.challenge?.totalChallengePoints || 0)
+  )
+  .slice(0, 3)
+  .map((u, index) => {
+    const challenge = u?.challenge || {};
+    const status = u?.status || {};
 
-        // =========================
-        // QUIZ COMPLETED (ACCURATE)
-        // =========================
-        const quizCompleted = Object.values(days).reduce((acc, d) => {
-          const normal = d?.normalQuiz ? 1 : 0;
-          const bonus = d?.bonusQuizzes ? 1 : 0;
-          return acc + normal + bonus;
-        }, 0);
-
-        // =========================
-        // POINTS (MATCH LEADERBOARD)
-        // =========================
-        const points = challenge?.totalChallengePoints || 0;
-
-        return {
-          rank: index + 1,
-
-          profile: u?.avatar || 'https://i.pravatar.cc/300',
-          name: u?.name || 'User',
-
-          streak: challenge?.streak || 0,
-          consistency: status?.consistency,
-          quizCompleted: status?.quizCompleted,
-
-          // IMPORTANT: same source as leaderboard
-          points,
-        };
-      });
+    return {
+      rank: index + 1,
+      profile: u?.avatar || 'https://i.pravatar.cc/300',
+      name: u?.name || 'User',
+      streak: challenge?.streak || 0,
+      consistency: status?.consistency,
+      quizCompleted: status?.quizCompleted,
+      points: challenge?.totalChallengePoints || 0,
+    };
+  });
       const userIndex = sorted.findIndex(item => item.uid === uid);
 
       const totalUsers = sorted.length;

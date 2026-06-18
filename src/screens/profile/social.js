@@ -60,8 +60,10 @@ export default function Social() {
   const { height } = Dimensions.get('window');
 
   return (
-    <Wrapper>
-      <Header header="Info" />
+    <View style ={{flex:1, backgroundColor:colors.dark}}>
+    <Header header="Info" headerContainer={{paddingHorizontal:23}}/>
+  <Wrapper orbsRight safeAreaPops={{ edges: ['bottom'] }}>
+
       <View style={styles.container}>
         {/* Hero Card */}
         <View style={styles.profileCard}>
@@ -224,6 +226,7 @@ export default function Social() {
         </View>
       </View>
     </Wrapper>
+    </View>
   );
 }
 

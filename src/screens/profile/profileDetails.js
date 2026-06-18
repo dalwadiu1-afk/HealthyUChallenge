@@ -34,7 +34,7 @@ import moment from 'moment';
 const userId = auth().currentUser?.uid;
 const currentMonthKey = moment().format('MMMM_YYYY');
 const { height, width } = Dimensions.get('window');
-const SHEET_MIN = height * 0.62;
+const SHEET_MIN = height * 0.60;
 const SHEET_MAX = height * 0.86;
 
 const TAB_OPTIONS = ['Feeds', 'Stats', 'Progress'];
@@ -1753,12 +1753,7 @@ export default function ProfileDetails({ navigation }) {
   };
 
   return (
-    <Wrapper
-      safeAreaPops={{ edges: ['top'] }}
-      scrollEnable={false}
-      disableLayout
-      containerStyle={{ flex: 1 }}
-    >
+   
       <GestureHandlerRootView style={styles.root}>
         <Header
           header={'Profile Details'}
@@ -1768,6 +1763,7 @@ export default function ProfileDetails({ navigation }) {
           textStyle={[styles.navTitle, navTitleStyle]}
           showRightBtn
         />
+ 
         <View style={styles.heroContent}>
           {/* ================================================= */}
           {/* AVATAR */}
@@ -1855,7 +1851,12 @@ export default function ProfileDetails({ navigation }) {
         {/* ================================================= */}
         {/* BOTTOM SHEET */}
         {/* ================================================= */}
-
+        <Wrapper
+      safeAreaPops={{ edges: ['top'] }}
+      scrollEnable={false}
+      disableLayout
+      containerStyle={{ flex: 1 }}
+    >
         <Animated.View style={[styles.sheet, sheetStyle]}>
           {/* ================================================= */}
           {/* HANDLE */}
@@ -1948,8 +1949,8 @@ export default function ProfileDetails({ navigation }) {
             />
           )}
         </Animated.View>
+        </Wrapper>
       </GestureHandlerRootView>
-    </Wrapper>
   );
 }
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -1957,7 +1958,7 @@ export default function ProfileDetails({ navigation }) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    // backgroundColor: colors.dark,
+    backgroundColor: colors.dark,
   },
 
   // Hero

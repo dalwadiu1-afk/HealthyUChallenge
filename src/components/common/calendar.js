@@ -15,7 +15,7 @@ import moment from 'moment';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const { height } = Dimensions.get('window');
-const RING_SIZE = 44;
+const RING_SIZE = height/25;
 const RING_BORDER = 4;
 // ===== PREMIUM DARK THEME COLORS =====
 
@@ -469,7 +469,7 @@ export function StreakCalendar({
 // ===== STYLES =====
 const styles = StyleSheet.create({
   container: {
-    padding: 10,
+    padding: 5,
     top: height * 0.069,
     alignSelf: 'center',
     backgroundColor: colors.dark,

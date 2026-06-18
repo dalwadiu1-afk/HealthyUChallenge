@@ -1,7 +1,8 @@
-import { PermissionsAndroid, Platform, Dimensions } from 'react-native';
+import {  Platform, PermissionsAndroid, Alert, Linking, Dimensions } from 'react-native';
 import moment from 'moment';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
+import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 
 const user = auth().currentUser;
 
@@ -42,63 +43,60 @@ const generateDaysFromToday = (
   return daysArray;
 };
 
-const requestCameraPermission = async () => {
+ const requestCameraPermission = async () => {
   try {
-    if (Platform.OS !== 'android') {
-      return true;
+    // =========================
+    // ANDROID
+    // =========================
+    if (Platform.OS === 'android') {
+      const permissions = [PermissionsAndroid.PERMISSIONS.CAMERA];
+
+      if (Platform.Version >= 33) {
+        permissions.push(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES);
+      } else {
+        permissions.push(
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        );
+      }
+
+      const granted = await PermissionsAndroid.requestMultiple(permissions);
+
+      const cameraGranted =
+        granted[PermissionsAndroid.PERMISSIONS.CAMERA] ===
+        PermissionsAndroid.RESULTS.GRANTED;
+
+      const galleryGranted =
+        Platform.Version >= 33
+          ? granted[PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES] ===
+            PermissionsAndroid.RESULTS.GRANTED
+          : granted[PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE] ===
+            PermissionsAndroid.RESULTS.GRANTED;
+
+      return cameraGranted && galleryGranted;
     }
 
-    const permissions = [PermissionsAndroid.PERMISSIONS.CAMERA];
+    // =========================
+    // iOS
+    // =========================
+    const cameraStatus = await request(PERMISSIONS.IOS.CAMERA);
+    const photoStatus = await request(PERMISSIONS.IOS.PHOTO_LIBRARY);
 
-    if (Platform.Version >= 33) {
-      permissions.push(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES);
-    } else {
-      permissions.push(
-        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-      );
-    }
+    const cameraGranted = cameraStatus === RESULTS.GRANTED;
+    const photoGranted = photoStatus === RESULTS.GRANTED;
 
-    const granted = await PermissionsAndroid.requestMultiple(permissions, {
-      title: 'Camera & Photo Access',
-      message:
-        'HealthyU Challenge needs access to your camera and photos so you can capture or upload veggie meal pictures and track your weekly challenge progress.',
-      buttonNeutral: 'Ask Me Later',
-      buttonNegative: 'Cancel',
-      buttonPositive: 'Allow',
-    });
-
-    const cameraGranted =
-      granted[PermissionsAndroid.PERMISSIONS.CAMERA] ===
-      PermissionsAndroid.RESULTS.GRANTED;
-
-    const galleryGranted =
-      Platform.Version >= 33
-        ? granted[PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES] ===
-          PermissionsAndroid.RESULTS.GRANTED
-        : granted[PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE] ===
-          PermissionsAndroid.RESULTS.GRANTED;
-
-    const hasPermission = cameraGranted && galleryGranted;
-
-    if (!hasPermission) {
+    if (!cameraGranted || !photoGranted) {
       Alert.alert(
         'Permission Required',
-        'Camera and Photo permissions are required to upload veggie meal photos.',
+        'Camera and Photos access is required to upload veggie meal photos.',
         [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Open Settings',
-            onPress: () => Linking.openSettings(),
-          },
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
         ],
       );
     }
 
-    return hasPermission;
+    return cameraGranted && photoGranted;
   } catch (error) {
     console.log('Permission Error:', error);
     return false;

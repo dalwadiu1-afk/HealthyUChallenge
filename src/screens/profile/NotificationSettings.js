@@ -526,9 +526,8 @@ export default function NotificationSettings() {
 <Header
   header="Reminders"
   headerContainer={{ paddingHorizontal: 23 }}
-  SafeAreaViewProps={{ edges: [] }}
 />
-    <Wrapper>
+    <Wrapper     safeAreaPops={{ edges: ['bottom'] }}>
       <ScrollView style={{}}>
         {/* ================= QUIZ ================= */}
         <View style={styles.quizCard}>

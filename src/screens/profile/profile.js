@@ -9,6 +9,7 @@ import {
   Animated,
   Alert,
   TextInput,
+  StatusBar,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
@@ -19,6 +20,7 @@ import moment from 'moment';
 import analytics from '@react-native-firebase/analytics';
 
 import Modal from 'react-native-modal';
+import { SafeAreaView } from 'react-native-safe-area-context';
 const { width, height } = Dimensions.get('window');
 
 const generateRandomCode = () => {
@@ -385,6 +387,12 @@ export default function Profile({ navigation }) {
   ].filter(Boolean);
 
   return (
+    <SafeAreaView style={{flex:1,backgroundColor:colors.dark}} edges={['top']}>
+       <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle="light-content"
+      />
     <View style={styles.container}>
         {/* Hero section */}
         <Animated.View style={[styles.hero, { opacity: headerAnim }]}>
@@ -445,7 +453,7 @@ export default function Profile({ navigation }) {
           </View>
         </Animated.View>
 
-                <Wrapper containerStyle={{ paddingBottom: height / 6 }}>
+                <Wrapper safeAreaPops={{ edges: ['bottom'] }} containerStyle={{ paddingBottom: height / 6 }}>
         <View
           style={{
             borderBottomWidth: 1,
@@ -527,6 +535,7 @@ export default function Profile({ navigation }) {
         </Modal>
       </Wrapper>
     </View>
+    </SafeAreaView>
   );
 }
 
@@ -538,6 +547,7 @@ const styles = StyleSheet.create({
   scroll: {},
   hero: {
     alignItems: 'center',
+    paddingHorizontal:23
   },
   heroTopRow: {
     width: '100%',

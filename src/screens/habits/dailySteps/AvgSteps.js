@@ -21,10 +21,12 @@ import useStepCount from '../../../hooks/useStepCount';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
+import moment from 'moment';
+import { Wrapper } from '../../../components';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const CHART_HEIGHT = 148;
 const PADDING = 16;
-const GOAL = 200000;
 
 function buildEmptyData(startDate) {
   const base = startDate ?? new Date();
@@ -172,9 +174,15 @@ function ReqIcon() {
   );
 }
 
-export default function StepsChart30Days({ navigation }) {
+export default function StepsChart30Days({ navigation,route }) {
+  const today = moment();
+  const CURRENT_MONTH_KEY = route?.params?.monthKey
+    ? route?.params?.monthKey
+    : today.format('MMMM_YYYY');
   const headerAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(0)).current;
+  const [dailyGoal, setDailyGoal] = useState(8000); // fallback
+  const [start, setStart] = useState(null);
 
   useEffect(() => {
     Animated.stagger(120, [
@@ -191,6 +199,32 @@ export default function StepsChart30Days({ navigation }) {
     ]).start();
   }, []);
 
+  useEffect(() => {
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
+  
+    const ref = database().ref(`users/${uid}/habits/steps/${CURRENT_MONTH_KEY}`);
+  
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val();
+      if (data?.goal) {
+        setDailyGoal(Number(data?.goal));
+      }
+    });
+
+    const userRef = database().ref(`users/${uid}/goal`);
+
+    const userListener = userRef.on('value', snapshot => {
+      const data = snapshot.val();
+  
+      if (data?.startDate) {
+        setStart(moment(data.startDate));
+      }
+    });
+  
+    return () => {ref.off('value', listener), userRef.off('value', userListener)  };
+  }, []);
+
   const {
     data: rawData,
     todaySteps,
@@ -201,6 +235,9 @@ export default function StepsChart30Days({ navigation }) {
 
   const [selected, setSelected] = useState(0);
   const [habits, setHabits] = useState(null);
+  const MONTHLY_GOAL = dailyGoal * 30;
+  const GOAL = dailyGoal * 30;
+
 
   const transformHabitData = habits => {
     if (!habits) return [];
@@ -297,9 +334,10 @@ export default function StepsChart30Days({ navigation }) {
   const displayedTodaySteps =
     todaySteps > 0 ? todaySteps : data[selected]?.steps || 0;
 
-  // Bar height logic
+  const safeSteps = data.map(d => (Number.isFinite(d.steps) ? d.steps : 0));
+
   const MAX_STEPS =
-    data.length > 0 ? Math.max(...data.map(d => d.steps), 1) : 1;
+    safeSteps.length > 0 ? Math.max(...safeSteps, 1) : 1;
   const graphH = CHART_HEIGHT - PADDING * 2;
   const MIN_BAR = 8;
   const getBarH = val => Math.max(MIN_BAR, (val / MAX_STEPS) * graphH);
@@ -307,10 +345,31 @@ export default function StepsChart30Days({ navigation }) {
   const pastData = data.slice(0, selected + 1);
   const pastTotal = pastData.reduce((sum, d) => sum + d.steps, 0);
   const pastAvg = pastTotal / (selected + 1);
-  const remaining = 30 - (selected + 1);
+
+
+  const totalGoalDays = 30;
+  
+  // const startD = startD ? moment(startD) : today;
+  
+  const endDate = moment(start ||today).add(totalGoalDays - 1, 'days');
+  
+  // remaining days in goal window
+  const remaining = Math.max(0, endDate.diff(today, 'days'));
+  const elapsedDays =
+  start && moment(start).isValid()
+    ? Math.max(1, today.diff(start, 'days') + 1)
+    : 1;
+    const goalPct =
+    dailyGoal && elapsedDays
+      ? Math.min(pastTotal / (dailyGoal * elapsedDays), 1)
+      : 0;
+
+  const totalGoal = dailyGoal * totalGoalDays;
+
   const reqAvg =
-    remaining > 0 ? Math.max(0, (GOAL - pastTotal) / remaining) : 0;
-  const goalPct = Math.min(pastTotal / GOAL, 1);
+    remaining > 0
+      ? Math.max(0, (totalGoal - pastTotal) / remaining)
+      : 0;
   const selectedItem = data?.[selected] || {
     steps: 0,
     date: new Date(),
@@ -357,6 +416,7 @@ export default function StepsChart30Days({ navigation }) {
   };
 
   return (
+    <SafeAreaView style={{...styles.container,paddingHorizontal:0}}>
     <View style={styles.container}>
       <StatusBar
         translucent
@@ -364,10 +424,7 @@ export default function StepsChart30Days({ navigation }) {
         barStyle="light-content"
       />
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
-      >
+    
         {/* Header */}
         <Animated.View style={[styles.header, { opacity: headerAnim }]}>
           <TouchableOpacity
@@ -406,6 +463,7 @@ export default function StepsChart30Days({ navigation }) {
           </TouchableOpacity>
         </Animated.View>
 
+<Wrapper containerStyle={{paddingHorizontal:0}} safeAreaPops={{ edges: ['bottom'] }}>
         {/* Hero — ring + selected day */}
         <Animated.View style={[styles.heroCard, { opacity: headerAnim }]}>
           <View style={styles.ringWrapper}>
@@ -575,8 +633,9 @@ export default function StepsChart30Days({ navigation }) {
           </Svg>
           <Text style={styles.shareBtnText}>Share Progress</Text>
         </TouchableOpacity>
-      </ScrollView>
+        </Wrapper>
     </View>
+    </SafeAreaView>
   );
 }
 
@@ -584,6 +643,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.dark,
+    paddingHorizontal:23
   },
   scroll: {
     paddingHorizontal: 16,
@@ -606,6 +666,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex:999
   },
   refreshBtn: {
     width: 40,

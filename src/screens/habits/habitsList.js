@@ -387,6 +387,7 @@ export default function HabitsList({ navigation }) {
   const [selectionMode, setSelectionMode] = useState(true);
   const [confirmVisible, setConfirmVisible] = useState(false);
 
+  
   const ALL_HABITS = [
     {
       id: 1,

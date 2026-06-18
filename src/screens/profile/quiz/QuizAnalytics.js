@@ -368,7 +368,7 @@ export default function QuizAnalytics() {
   };
 
   return (
-    <Wrapper orbsRight scrollEnable={false}>
+    <Wrapper orbsRight scrollEnable={false}  safeAreaPops={{ edges: ['bottom'] }}>
       <Header header="Quiz Analytics" />
 
       <View style={styles.toggle}>

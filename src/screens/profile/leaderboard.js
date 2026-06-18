@@ -332,6 +332,7 @@ export default function Leaderboard({ navigation }) {
         orbsRight
         containerStyle={{ paddingHorizontal: 0 }}
         scrollEnable={false}
+        safeAreaPops={{ edges: ['bottom'] }}
       >
         <Header
           header="Quiz Leaderboard"
