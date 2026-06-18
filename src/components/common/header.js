@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { SvgImg } from './SvgImg';
 import { fontFamily } from '../../constant';
 import Animated from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { height } = Dimensions.get('window');
 
@@ -22,10 +23,12 @@ export function Header({
   showRightBtn = false,
   leftImg = backBtn,
   rightImg = moreIcon,
+  ...SafeAreaViewProps
 }) {
   const navigation = useNavigation();
 
   return (
+    <SafeAreaView  edges={['top']} {...SafeAreaViewProps}>
     <View style={[styles.wrapper, headerContainer]}>
       {/* LEFT BUTTON */}
       <TouchableOpacity
@@ -63,6 +66,7 @@ export function Header({
         <View style={{ width: height * 0.06 }} />
       )}
     </View>
+    </SafeAreaView>
   );
 }
 

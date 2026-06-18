@@ -19,17 +19,19 @@ import SleepChartDays from '../screens/habits/sleepMeasurement/SleepChart';
 import BeverageChallengeUI from '../screens/habits/sugarBeverage/BeverageChallenge';
 import SugarChartDays from '../screens/habits/sugarIntake/SugarIntake';
 import FruitTrackerUI from '../screens/habits/fruitServing/FruitTrackerUI';
-import WeightResistanceTraining from '../screens/habits/weightResistance/WeightResistanceTraining';
+import WeightResistanceTraining from '../screens/habits/WeightResistance/WeightResistanceTraining';
 import WeightChallengeUI from '../screens/habits/weight/WeightChallengeUI';
 import CardioTrackerUI from '../screens/habits/cardioIntencey/cardioInteceyTraker';
 import SnackListingUI from '../screens/habits/healthySnacks/HealthySnackSystem';
 import WeeklyFitnessClass from '../screens/habits/weeklyClass/WeeklyFitnessClass';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 const Stack = createNativeStackNavigator();
 
 // @refresh reset
 export default function HabitsStack() {
   return (
+    <SafeAreaProvider>
     <Stack.Navigator
       screenOptions={{ headerShown: false, unmountOnBlur: true }}
     >
@@ -78,5 +80,6 @@ export default function HabitsStack() {
         component={SessionConfirmation}
       />
     </Stack.Navigator>
+     </SafeAreaProvider>
   );
 }

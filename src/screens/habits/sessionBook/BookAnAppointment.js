@@ -17,7 +17,7 @@ import Svg, { Path } from 'react-native-svg';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import { colors, fontFamily } from '../../../constant';
-import { Header, Wrapper } from '../../../components';
+import { Header, Wrapper } from '../../../components/index';
 import database from '@react-native-firebase/database';
 import ActionSheet from 'react-native-actions-sheet';
 
@@ -248,6 +248,7 @@ Email: ${email}`;
   return (
     <View style={styles.root}>
       {/* FIXED HERO IMAGE */}
+      <Wrapper>
       <Image
         source={{
           uri:
@@ -353,6 +354,7 @@ Email: ${email}`;
           </TouchableOpacity>
         </View>
       </ActionSheet>
+      </Wrapper>
     </View>
   );
 }

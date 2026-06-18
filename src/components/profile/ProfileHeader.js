@@ -13,7 +13,7 @@ import Svg, { Path } from 'react-native-svg';
 import { StreakCalendar } from '../common/calendar';
 import moment from 'moment';
 import auth from '@react-native-firebase/auth';
-
+import { SafeAreaView } from 'react-native-safe-area-context';
 const { height } = Dimensions.get('window');
 
 export default function ProfileHeader({
@@ -54,6 +54,7 @@ export default function ProfileHeader({
     ?.substring(0, 2)
     ?.toUpperCase();
   return (
+    <SafeAreaView  edges={['top']}>
     <Animated.View
       style={[
         styles.header,
@@ -169,6 +170,7 @@ export default function ProfileHeader({
         <View />
       )}
     </Animated.View>
+    </SafeAreaView>
   );
 }
 

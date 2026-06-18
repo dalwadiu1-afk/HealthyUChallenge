@@ -17,8 +17,12 @@ import Animated, {
   withDelay,
   Easing,
 } from 'react-native-reanimated';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView,useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../constant';
+
+
+
+
 
 const { height, width } = Dimensions.get('window');
 export function Wrapper({
@@ -38,6 +42,10 @@ export function Wrapper({
   safeAreaPops,
   disableLayout,
 }) {
+const insets = useSafeAreaInsets();
+
+console.log('TOP INSET:', );
+
   function FloatingOrb({ size, color, style, delay = 0 }) {
     const translateY = useSharedValue(0);
     const opacity = useSharedValue(0);
@@ -88,6 +96,7 @@ export function Wrapper({
   return (
     <View
       style={{
+       
         flex: 1,
         backgroundColor: colors.dark,
       }}
@@ -190,11 +199,7 @@ export function Wrapper({
               edges={['top', !onlyTop && 'bottom']}
               {...safeAreaPops}
             >
-              <StatusBar
-                translucent={translucent}
-                backgroundColor={statusBarColor}
-                barStyle={barStyle}
-              />
+              
               <View
                 style={
                   disableLayout
@@ -204,6 +209,7 @@ export function Wrapper({
                         flex: 1,
                         ...containerStyle,
                         paddingBottom: height / 12,
+                        
                       }
                 }
               >
@@ -217,11 +223,7 @@ export function Wrapper({
             edges={['top', !onlyTop && 'bottom']}
             {...safeAreaPops}
           >
-            <StatusBar
-              translucent={translucent}
-              backgroundColor={statusBarColor}
-              barStyle={barStyle}
-            />
+           
             <View
               style={
                 disableLayout

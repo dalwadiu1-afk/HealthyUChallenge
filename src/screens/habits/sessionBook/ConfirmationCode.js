@@ -11,12 +11,16 @@ import {
   Platform,
   Animated,
   Pressable,
+  Dimensions
 } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import { Header } from '../../../components';
+import { Wrapper } from '../../../components/index';
+
+const  {height} = Dimensions.get('window')
 
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   return (
@@ -141,6 +145,7 @@ export default function ConfirmationCode({ navigation, route }) {
   });
 
   return (
+    <Wrapper containerStyle={{paddingHorizontal:0}}>
     <KeyboardAvoidingView
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -160,7 +165,7 @@ export default function ConfirmationCode({ navigation, route }) {
               'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
           }}
           style={styles.photo}
-          resizeMode="cover"
+          resizeMode="stretch"
         />
 
         <Header
@@ -235,7 +240,7 @@ export default function ConfirmationCode({ navigation, route }) {
           </View>
 
           <View style={{ flex: 1 }}>
-            <Text style={styles.bookingLabel}>Doctor Email</Text>
+            <Text style={styles.bookingLabel}>Dietitian Email</Text>
 
             <Text
               selectable
@@ -385,13 +390,14 @@ export default function ConfirmationCode({ navigation, route }) {
         </>
       )}
     </KeyboardAvoidingView>
+    </Wrapper>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.dark },
 
-  photoWrap: { height: 260, width: '100%' },
+  photoWrap: { height: height/2.2, width: '100%' },
   photo: { width: '100%', height: '100%' },
   backBtn: {
     position: 'absolute',

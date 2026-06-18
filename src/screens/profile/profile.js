@@ -386,7 +386,6 @@ export default function Profile({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <Wrapper containerStyle={{ paddingBottom: height / 6 }}>
         {/* Hero section */}
         <Animated.View style={[styles.hero, { opacity: headerAnim }]}>
           {/* Top row */}
@@ -413,7 +412,7 @@ export default function Profile({ navigation }) {
                 uri:
                   profile?.avatar ||
                   'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-              }}
+                }}
             />
           </Animated.View>
 
@@ -446,6 +445,7 @@ export default function Profile({ navigation }) {
           </View>
         </Animated.View>
 
+                <Wrapper containerStyle={{ paddingBottom: height / 6 }}>
         <View
           style={{
             borderBottomWidth: 1,
@@ -471,7 +471,7 @@ export default function Profile({ navigation }) {
                   setVerifyModalVisible(true);
                   return;
                 } else {
-                  navigation.navigate(item.screenName);
+                  if(item?.screenName != 'VerificationAdmin') navigation.navigate(item.screenName);
                 }
               }}
             />

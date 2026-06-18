@@ -522,8 +522,13 @@ export default function NotificationSettings() {
      UI
   ========================= */
   return (
+    <View style={{backgroundColor:colors.dark ,flex:1,}}>
+<Header
+  header="Reminders"
+  headerContainer={{ paddingHorizontal: 23 }}
+  SafeAreaViewProps={{ edges: [] }}
+/>
     <Wrapper>
-      <Header header="Reminders" />
       <ScrollView style={{}}>
         {/* ================= QUIZ ================= */}
         <View style={styles.quizCard}>
@@ -687,6 +692,7 @@ export default function NotificationSettings() {
         )}
       </ScrollView>
     </Wrapper>
+    </View>
   );
 }
 

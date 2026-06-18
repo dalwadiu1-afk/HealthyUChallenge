@@ -400,7 +400,7 @@ export default function HabitsList({ navigation }) {
       id: 2,
       title: 'Daily Steps',
       description: 'Walk your target number of steps every day',
-      screenName: 'WalkingRewardBoard',
+      screenName: 'AvgSteps',
       category: 'Fitness',
       key: 'steps',
       showInput: 'Enter daily steps target (max 30000)',

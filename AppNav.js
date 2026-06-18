@@ -161,28 +161,34 @@ export default function AppNav() {
   useEffect(() => {
     const hideSplash = async () => {
       const appReady = !loading && (!user || userDataLoaded);
-
+  
+      console.log('appReady', appReady);
+  
       if (!appReady) return;
-
+  
       try {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
+        console.log('Hiding BootSplash');
+  
         await BootSplash.hide({
           fade: true,
         });
-
+  
+        console.log('BootSplash hidden');
+  
         setShowSplash(false);
       } catch (error) {
+        console.log(error);
         setShowSplash(false);
       }
     };
-
+  
     hideSplash();
   }, [loading, userDataLoaded, user]);
 
   // =========================
   // LOADING
   // =========================
+  console.log('loading || showSplash :>> ', loading , showSplash);
   if (loading || showSplash) {
     return <SplashScreen />;
   }
