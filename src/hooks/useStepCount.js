@@ -14,7 +14,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Platform, NativeModules, Alert, Linking } from 'react-native';
 
-const TAG  = '[useStepCount]';
+const TAG = '[useStepCount]';
 const DAYS = 30;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -42,58 +42,68 @@ function toDayIndex(startDate, isoTimestamp) {
   return Math.floor(diffMs / 86_400_000);
 }
 function fmt(date) {
-  return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return new Date(date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 // ─── iOS ──────────────────────────────────────────────────────────────────────
 
 // Fetches today's count + 30-day range. Called after initHealthKit is confirmed ready.
 function doFetch(HK, startDate, resolve) {
-  HK.getStepCount({ date: new Date().toISOString() }, (todayErr, todayResult) => {
-    const todaySteps = todayResult?.value ?? 0;
+  HK.getStepCount(
+    { date: new Date().toISOString() },
+    (todayErr, todayResult) => {
+      const todaySteps = todayResult?.value ?? 0;
 
-    if (todayErr) console.log(`${TAG} getStepCount error:`, todayErr);
-    else          console.log(`${TAG} 👟 Today: ${todaySteps} steps`);
+      if (todayErr) console.log(`${TAG} getStepCount error:`, todayErr);
+      else console.log(`${TAG} 👟 Today: ${todaySteps} steps`);
 
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + DAYS - 1);
-    console.log(`${TAG} Range: ${fmt(startDate)} → ${fmt(endDate)}`);
+      const endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + DAYS - 1);
+      console.log(`${TAG} Range: ${fmt(startDate)} → ${fmt(endDate)}`);
 
-    HK.getDailyStepCountSamples(
-      { startDate: startOfDay(startDate), endDate: endOfDay(endDate) },
-      (rangeErr, results) => {
-        const skeleton = buildSkeleton(startDate);
+      HK.getDailyStepCountSamples(
+        { startDate: startOfDay(startDate), endDate: endOfDay(endDate) },
+        (rangeErr, results) => {
+          const skeleton = buildSkeleton(startDate);
 
-        if (rangeErr) {
-          console.log(`${TAG} getDailyStepCountSamples error:`, rangeErr);
-          if (todaySteps > 0) skeleton[0].steps = todaySteps;
+          if (rangeErr) {
+            console.log(`${TAG} getDailyStepCountSamples error:`, rangeErr);
+            if (todaySteps > 0) skeleton[0].steps = todaySteps;
+            resolve({ skeleton, todaySteps });
+            return;
+          }
+
+          (results ?? []).forEach(sample => {
+            const steps = Math.round(sample.value ?? 0);
+            console.log(
+              `${TAG}   📅 ${fmt(sample.startDate)} → ${steps} steps`,
+            );
+            const idx = toDayIndex(startDate, sample.startDate);
+            if (idx >= 0 && idx < DAYS) skeleton[idx].steps += steps;
+          });
+
+          if (skeleton[0].steps === 0 && todaySteps > 0) {
+            skeleton[0].steps = todaySteps;
+          }
+
+          console.log(
+            `${TAG} Done — total: ${skeleton.reduce(
+              (s, d) => s + d.steps,
+              0,
+            )}, ` + `active: ${skeleton.filter(d => d.steps > 0).length} days`,
+          );
           resolve({ skeleton, todaySteps });
-          return;
-        }
-
-        (results ?? []).forEach((sample) => {
-          const steps = Math.round(sample.value ?? 0);
-          console.log(`${TAG}   📅 ${fmt(sample.startDate)} → ${steps} steps`);
-          const idx = toDayIndex(startDate, sample.startDate);
-          if (idx >= 0 && idx < DAYS) skeleton[idx].steps += steps;
-        });
-
-        if (skeleton[0].steps === 0 && todaySteps > 0) {
-          skeleton[0].steps = todaySteps;
-        }
-
-        console.log(
-          `${TAG} Done — total: ${skeleton.reduce((s, d) => s + d.steps, 0)}, ` +
-          `active: ${skeleton.filter(d => d.steps > 0).length} days`,
-        );
-        resolve({ skeleton, todaySteps });
-      },
-    );
-  });
+        },
+      );
+    },
+  );
 }
 
 function fetchIOS(startDate) {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const HK = NativeModules.AppleHealthKit;
 
     if (!HK) {
@@ -107,10 +117,13 @@ function fetchIOS(startDate) {
     // finished its own initHealthKit callback.
     HK.initHealthKit(
       { permissions: { read: ['StepCount'], write: [] } },
-      (initErr) => {
+      initErr => {
         if (initErr) {
           // An error here usually means HealthKit is already initialised — proceed anyway
-          console.log(`${TAG} initHealthKit result (may already be ready):`, initErr);
+          console.log(
+            `${TAG} initHealthKit result (may already be ready):`,
+            initErr,
+          );
         } else {
           console.log(`${TAG} ✅ HealthKit initialised`);
         }
@@ -131,23 +144,29 @@ async function fetchAndroid(startDate) {
     k.toLowerCase().includes('healthconnect'),
   );
   if (!hcModuleKey) {
-    console.log(`${TAG} Health Connect native module not registered — skipping`);
+    console.log(
+      `${TAG} Health Connect native module not registered — skipping`,
+    );
     return empty;
   }
 
   // Wrap everything so a native crash never propagates to the UI
   try {
     let HC;
-    try { HC = require('react-native-health-connect'); }
-    catch (e) {
+    try {
+      HC = require('react-native-health-connect');
+    } catch (e) {
       console.log(`${TAG} react-native-health-connect not found:`, e?.message);
       return empty;
     }
 
     const {
-      getSdkStatus, SdkAvailabilityStatus,
-      initialize, openHealthConnectSettings,
-      requestPermission, readRecords,
+      getSdkStatus,
+      SdkAvailabilityStatus,
+      initialize,
+      openHealthConnectSettings,
+      requestPermission,
+      readRecords,
     } = HC;
 
     const status = await getSdkStatus();
@@ -155,14 +174,24 @@ async function fetchAndroid(startDate) {
       Alert.alert(
         'Health Connect Required',
         'Install Health Connect from the Play Store.',
-        [{ text: 'Install', onPress: () => Linking.openURL('https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata') }],
+        [
+          {
+            text: 'Install',
+            onPress: () =>
+              Linking.openURL(
+                'https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata',
+              ),
+          },
+        ],
       );
       return empty;
     }
 
     await initialize();
 
-    const granted = await requestPermission([{ accessType: 'read', recordType: 'Steps' }]);
+    const granted = await requestPermission([
+      { accessType: 'read', recordType: 'Steps' },
+    ]);
     if (!granted?.length) {
       Alert.alert(
         'Permission Denied',
@@ -179,7 +208,7 @@ async function fetchAndroid(startDate) {
       timeRangeFilter: {
         operator: 'between',
         startTime: startOfDay(startDate),
-        endTime:   endOfDay(endDate),
+        endTime: endOfDay(endDate),
       },
     });
 
@@ -187,9 +216,9 @@ async function fetchAndroid(startDate) {
     const todayStr = startOfDay(new Date());
     let todaySteps = 0;
 
-    (records ?? []).forEach((r) => {
+    (records ?? []).forEach(r => {
       const steps = Math.round(r.count ?? 0);
-      const idx   = toDayIndex(startDate, r.startTime);
+      const idx = toDayIndex(startDate, r.startTime);
       if (idx >= 0 && idx < DAYS) skeleton[idx].steps += steps;
       if (r.startTime >= todayStr) todaySteps += steps;
     });
@@ -203,11 +232,11 @@ async function fetchAndroid(startDate) {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 export default function useStepCount() {
-  const [data,       setData]       = useState(null);
+  const [data, setData] = useState(null);
   const [todaySteps, setTodaySteps] = useState(0);
-  const [startDate,  setStartDate]  = useState(null);
-  const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState(null);
+  const [startDate, setStartDate] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -215,14 +244,16 @@ export default function useStepCount() {
     try {
       // Start from today (day 0 = today, days 1-29 = future)
       const start = new Date();
+      start.setDate(start.getDate() - 29);
       start.setHours(0, 0, 0, 0);
 
       setStartDate(start);
       console.log(`${TAG} Start date: ${fmt(start)}`);
 
-      const { skeleton, todaySteps: ts } = Platform.OS === 'ios'
-        ? await fetchIOS(start)
-        : await fetchAndroid(start);
+      const { skeleton, todaySteps: ts } =
+        Platform.OS === 'ios'
+          ? await fetchIOS(start)
+          : await fetchAndroid(start);
 
       setData(skeleton);
       setTodaySteps(ts);
@@ -234,7 +265,9 @@ export default function useStepCount() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   return { data, todaySteps, startDate, loading, error, refetch: load };
 }

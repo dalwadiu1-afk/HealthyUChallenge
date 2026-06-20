@@ -119,7 +119,7 @@ export default function QuizStart({ navigation, route }) {
   }
 
   return (
-    <View>
+    <View style={{ backgroundColor: colors.dark, flex: 1 }}>
       <Wrapper
         scrollEnable={false}
         orbsRight

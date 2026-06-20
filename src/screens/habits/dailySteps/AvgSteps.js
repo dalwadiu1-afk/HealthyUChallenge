@@ -8,6 +8,7 @@ import {
   StatusBar,
   Animated,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import Svg, {
   Circle,
@@ -174,7 +175,7 @@ function ReqIcon() {
   );
 }
 
-export default function StepsChart30Days({ navigation,route }) {
+export default function StepsChart30Days({ navigation, route }) {
   const today = moment();
   const CURRENT_MONTH_KEY = route?.params?.monthKey
     ? route?.params?.monthKey
@@ -202,9 +203,11 @@ export default function StepsChart30Days({ navigation,route }) {
   useEffect(() => {
     const uid = auth().currentUser?.uid;
     if (!uid) return;
-  
-    const ref = database().ref(`users/${uid}/habits/steps/${CURRENT_MONTH_KEY}`);
-  
+
+    const ref = database().ref(
+      `users/${uid}/habits/steps/${CURRENT_MONTH_KEY}`,
+    );
+
     const listener = ref.on('value', snapshot => {
       const data = snapshot.val();
       if (data?.goal) {
@@ -216,13 +219,15 @@ export default function StepsChart30Days({ navigation,route }) {
 
     const userListener = userRef.on('value', snapshot => {
       const data = snapshot.val();
-  
+
       if (data?.startDate) {
         setStart(moment(data.startDate));
       }
     });
-  
-    return () => {ref.off('value', listener), userRef.off('value', userListener)  };
+
+    return () => {
+      ref.off('value', listener), userRef.off('value', userListener);
+    };
   }, []);
 
   const {
@@ -238,6 +243,17 @@ export default function StepsChart30Days({ navigation,route }) {
   const MONTHLY_GOAL = dailyGoal * 30;
   const GOAL = dailyGoal * 30;
 
+  useEffect(() => {
+    if (todaySteps > 0) {
+      saveSteps(todaySteps);
+    }
+  }, [todaySteps]);
+
+  useEffect(() => {
+    console.log('Platform:', Platform.OS);
+    console.log('Today Steps:', todaySteps);
+    console.log('Raw Data:', rawData?.length);
+  }, [todaySteps, rawData]);
 
   const transformHabitData = habits => {
     if (!habits) return [];
@@ -305,7 +321,7 @@ export default function StepsChart30Days({ navigation,route }) {
   }, []);
 
   // Use real HealthKit data, fall back to empty skeleton while loading
-  let data = [];
+  let data = rawData && rawData.length ? rawData : buildEmptyData(startDate);
 
   if (habits) {
     const habitData = transformHabitData(habits);
@@ -336,8 +352,7 @@ export default function StepsChart30Days({ navigation,route }) {
 
   const safeSteps = data.map(d => (Number.isFinite(d.steps) ? d.steps : 0));
 
-  const MAX_STEPS =
-    safeSteps.length > 0 ? Math.max(...safeSteps, 1) : 1;
+  const MAX_STEPS = safeSteps.length > 0 ? Math.max(...safeSteps, 1) : 1;
   const graphH = CHART_HEIGHT - PADDING * 2;
   const MIN_BAR = 8;
   const getBarH = val => Math.max(MIN_BAR, (val / MAX_STEPS) * graphH);
@@ -346,20 +361,19 @@ export default function StepsChart30Days({ navigation,route }) {
   const pastTotal = pastData.reduce((sum, d) => sum + d.steps, 0);
   const pastAvg = pastTotal / (selected + 1);
 
-
   const totalGoalDays = 30;
-  
+
   // const startD = startD ? moment(startD) : today;
-  
-  const endDate = moment(start ||today).add(totalGoalDays - 1, 'days');
-  
+
+  const endDate = moment(start || today).add(totalGoalDays - 1, 'days');
+
   // remaining days in goal window
   const remaining = Math.max(0, endDate.diff(today, 'days'));
   const elapsedDays =
-  start && moment(start).isValid()
-    ? Math.max(1, today.diff(start, 'days') + 1)
-    : 1;
-    const goalPct =
+    start && moment(start).isValid()
+      ? Math.max(1, today.diff(start, 'days') + 1)
+      : 1;
+  const goalPct =
     dailyGoal && elapsedDays
       ? Math.min(pastTotal / (dailyGoal * elapsedDays), 1)
       : 0;
@@ -367,9 +381,7 @@ export default function StepsChart30Days({ navigation,route }) {
   const totalGoal = dailyGoal * totalGoalDays;
 
   const reqAvg =
-    remaining > 0
-      ? Math.max(0, (totalGoal - pastTotal) / remaining)
-      : 0;
+    remaining > 0 ? Math.max(0, (totalGoal - pastTotal) / remaining) : 0;
   const selectedItem = data?.[selected] || {
     steps: 0,
     date: new Date(),
@@ -416,15 +428,14 @@ export default function StepsChart30Days({ navigation,route }) {
   };
 
   return (
-    <SafeAreaView style={{...styles.container,paddingHorizontal:0}}>
-    <View style={styles.container}>
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        barStyle="light-content"
-      />
+    <SafeAreaView style={{ ...styles.container, paddingHorizontal: 0 }}>
+      <View style={styles.container}>
+        <StatusBar
+          translucent
+          backgroundColor="transparent"
+          barStyle="light-content"
+        />
 
-    
         {/* Header */}
         <Animated.View style={[styles.header, { opacity: headerAnim }]}>
           <TouchableOpacity
@@ -452,7 +463,7 @@ export default function StepsChart30Days({ navigation,route }) {
             style={styles.refreshBtn}
             activeOpacity={0.8}
             // onPress={refetch}
-            // onPress={refetch}
+            onPress={refetch}
             disabled={loading}
           >
             {loading ? (
@@ -463,178 +474,181 @@ export default function StepsChart30Days({ navigation,route }) {
           </TouchableOpacity>
         </Animated.View>
 
-<Wrapper containerStyle={{paddingHorizontal:0}} safeAreaPops={{ edges: ['bottom'] }}>
-        {/* Hero — ring + selected day */}
-        <Animated.View style={[styles.heroCard, { opacity: headerAnim }]}>
-          <View style={styles.ringWrapper}>
-            <RingProgress percent={goalPct} />
-            <View style={styles.ringCenter}>
-              <Text style={styles.ringPct}>{Math.round(goalPct * 100)}%</Text>
-              <Text style={styles.ringLabel}>of goal</Text>
+        <Wrapper
+          containerStyle={{ paddingHorizontal: 0 }}
+          safeAreaPops={{ edges: ['bottom'] }}
+        >
+          {/* Hero — ring + selected day */}
+          <Animated.View style={[styles.heroCard, { opacity: headerAnim }]}>
+            <View style={styles.ringWrapper}>
+              <RingProgress percent={goalPct} />
+              <View style={styles.ringCenter}>
+                <Text style={styles.ringPct}>{Math.round(goalPct * 100)}%</Text>
+                <Text style={styles.ringLabel}>of goal</Text>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.heroRight}>
-            <Text style={styles.heroStepsVal}>
-              {selectedItem?.steps?.toLocaleString() ?? '0'}
-            </Text>
-            <Text style={styles.heroStepsUnit}>steps</Text>
-            <Text style={styles.heroDate}>
-              {selectedItem?.date?.toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-              })}
-            </Text>
-
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>
-                {selectedItem?.steps >= 8000
-                  ? '🔥 Great day!'
-                  : selectedItem?.steps >= 5000
-                  ? '✅ On track'
-                  : '📈 Keep going'}
+            <View style={styles.heroRight}>
+              <Text style={styles.heroStepsVal}>
+                {selectedItem?.steps?.toLocaleString() ?? '0'}
               </Text>
-            </View>
-
-            {/* Today's live step count from HealthKit */}
-            <View style={styles.todayRow}>
-              <Text style={styles.todayLabel}>Today </Text>
-              <Text style={styles.todayVal}>
-                {displayedTodaySteps.toLocaleString()}
+              <Text style={styles.heroStepsUnit}>steps</Text>
+              <Text style={styles.heroDate}>
+                {selectedItem?.date?.toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                })}
               </Text>
+
+              <View style={styles.heroBadge}>
+                <Text style={styles.heroBadgeText}>
+                  {selectedItem?.steps >= 8000
+                    ? '🔥 Great day!'
+                    : selectedItem?.steps >= 5000
+                    ? '✅ On track'
+                    : '📈 Keep going'}
+                </Text>
+              </View>
+
+              {/* Today's live step count from HealthKit */}
+              <View style={styles.todayRow}>
+                <Text style={styles.todayLabel}>Today </Text>
+                <Text style={styles.todayVal}>
+                  {displayedTodaySteps.toLocaleString()}
+                </Text>
+              </View>
             </View>
-          </View>
-        </Animated.View>
+          </Animated.View>
 
-        {/* Chart */}
-        <Animated.View style={[styles.chartCard, { opacity: cardAnim }]}>
-          <View style={styles.chartHeader}>
-            <Text style={styles.chartTitle}>Daily Steps</Text>
-            <View style={styles.chartLegend}>
-              <View style={styles.legendDot} />
-              <Text style={styles.legendText}>Selected</Text>
+          {/* Chart */}
+          <Animated.View style={[styles.chartCard, { opacity: cardAnim }]}>
+            <View style={styles.chartHeader}>
+              <Text style={styles.chartTitle}>Daily Steps</Text>
+              <View style={styles.chartLegend}>
+                <View style={styles.legendDot} />
+                <Text style={styles.legendText}>Selected</Text>
+              </View>
             </View>
-          </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chartScroll}
-          >
-            {data.map((item, index) => renderBar(item, index))}
-          </ScrollView>
-        </Animated.View>
-
-        {/* Stats */}
-        <Animated.View style={[styles.statsCard, { opacity: cardAnim }]}>
-          <Text style={styles.statsTitle}>Summary</Text>
-
-          <View style={styles.statRow}>
-            <View
-              style={[
-                styles.statIconBox,
-                { backgroundColor: 'rgba(143,175,120,0.15)' },
-              ]}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chartScroll}
             >
-              <AvgIcon />
-            </View>
-            <View style={styles.statInfo}>
-              <Text style={styles.statLabel}>Avg (Start → Today)</Text>
-              <Text style={styles.statSub}>Based on {selected + 1} days</Text>
-            </View>
-            <Text style={styles.statValue}>
-              {pastAvg.toFixed(0)}
-              <Text style={styles.statUnit}> steps</Text>
-            </Text>
-          </View>
+              {data.map((item, index) => renderBar(item, index))}
+            </ScrollView>
+          </Animated.View>
 
-          <View style={styles.statDivider} />
+          {/* Stats */}
+          <Animated.View style={[styles.statsCard, { opacity: cardAnim }]}>
+            <Text style={styles.statsTitle}>Summary</Text>
 
-          <View style={styles.statRow}>
-            <View
-              style={[
-                styles.statIconBox,
-                { backgroundColor: 'rgba(255,193,90,0.15)' },
-              ]}
-            >
-              <GoalIcon />
-            </View>
-            <View style={styles.statInfo}>
-              <Text style={styles.statLabel}>Goal</Text>
-              <Text style={styles.statSub}>30-day target</Text>
-            </View>
-            <Text style={styles.statValue}>
-              {(GOAL / 1000).toFixed(0)}k
-              <Text style={styles.statUnit}> steps</Text>
-            </Text>
-          </View>
-
-          <View style={styles.statDivider} />
-
-          <View style={styles.statRow}>
-            <View
-              style={[
-                styles.statIconBox,
-                { backgroundColor: 'rgba(167,130,255,0.15)' },
-              ]}
-            >
-              <ReqIcon />
-            </View>
-            <View style={styles.statInfo}>
-              <Text style={styles.statLabel}>Required Daily Avg</Text>
-              <Text style={styles.statSub}>{remaining} days remaining</Text>
-            </View>
-            <Text style={styles.statValue}>
-              {reqAvg.toFixed(0)}
-              <Text style={styles.statUnit}>/day</Text>
-            </Text>
-          </View>
-
-          {/* Progress bar */}
-          <View style={styles.progressSection}>
-            <View style={styles.progressLabelRow}>
-              <Text style={styles.progressLabel}>Goal Progress</Text>
-              <Text style={styles.progressPct}>
-                {(goalPct * 100).toFixed(1)}%
-              </Text>
-            </View>
-            <View style={styles.progressTrack}>
+            <View style={styles.statRow}>
               <View
-                style={[styles.progressFill, { width: `${goalPct * 100}%` }]}
-              />
-            </View>
-            <View style={styles.progressLabelRow}>
-              <Text style={styles.progressSub}>
-                {pastTotal.toLocaleString()} steps done
+                style={[
+                  styles.statIconBox,
+                  { backgroundColor: 'rgba(143,175,120,0.15)' },
+                ]}
+              >
+                <AvgIcon />
+              </View>
+              <View style={styles.statInfo}>
+                <Text style={styles.statLabel}>Avg (Start → Today)</Text>
+                <Text style={styles.statSub}>Based on {selected + 1} days</Text>
+              </View>
+              <Text style={styles.statValue}>
+                {pastAvg.toFixed(0)}
+                <Text style={styles.statUnit}> steps</Text>
               </Text>
-              <Text style={styles.progressSub}>
-                {GOAL.toLocaleString()} total
-              </Text>
             </View>
-          </View>
-        </Animated.View>
 
-        {/* Share button */}
-        <TouchableOpacity style={styles.shareBtn} activeOpacity={0.85}>
-          <Svg
-            width={18}
-            height={18}
-            viewBox="0 0 24 24"
-            fill="none"
-            style={{ marginRight: 8 }}
-          >
-            <Path
-              d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"
-              stroke="#FFFFFF"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
-          <Text style={styles.shareBtnText}>Share Progress</Text>
-        </TouchableOpacity>
+            <View style={styles.statDivider} />
+
+            <View style={styles.statRow}>
+              <View
+                style={[
+                  styles.statIconBox,
+                  { backgroundColor: 'rgba(255,193,90,0.15)' },
+                ]}
+              >
+                <GoalIcon />
+              </View>
+              <View style={styles.statInfo}>
+                <Text style={styles.statLabel}>Goal</Text>
+                <Text style={styles.statSub}>30-day target</Text>
+              </View>
+              <Text style={styles.statValue}>
+                {(GOAL / 1000).toFixed(0)}k
+                <Text style={styles.statUnit}> steps</Text>
+              </Text>
+            </View>
+
+            <View style={styles.statDivider} />
+
+            <View style={styles.statRow}>
+              <View
+                style={[
+                  styles.statIconBox,
+                  { backgroundColor: 'rgba(167,130,255,0.15)' },
+                ]}
+              >
+                <ReqIcon />
+              </View>
+              <View style={styles.statInfo}>
+                <Text style={styles.statLabel}>Required Daily Avg</Text>
+                <Text style={styles.statSub}>{remaining} days remaining</Text>
+              </View>
+              <Text style={styles.statValue}>
+                {reqAvg.toFixed(0)}
+                <Text style={styles.statUnit}>/day</Text>
+              </Text>
+            </View>
+
+            {/* Progress bar */}
+            <View style={styles.progressSection}>
+              <View style={styles.progressLabelRow}>
+                <Text style={styles.progressLabel}>Goal Progress</Text>
+                <Text style={styles.progressPct}>
+                  {(goalPct * 100).toFixed(1)}%
+                </Text>
+              </View>
+              <View style={styles.progressTrack}>
+                <View
+                  style={[styles.progressFill, { width: `${goalPct * 100}%` }]}
+                />
+              </View>
+              <View style={styles.progressLabelRow}>
+                <Text style={styles.progressSub}>
+                  {pastTotal.toLocaleString()} steps done
+                </Text>
+                <Text style={styles.progressSub}>
+                  {GOAL.toLocaleString()} total
+                </Text>
+              </View>
+            </View>
+          </Animated.View>
+
+          {/* Share button */}
+          <TouchableOpacity style={styles.shareBtn} activeOpacity={0.85}>
+            <Svg
+              width={18}
+              height={18}
+              viewBox="0 0 24 24"
+              fill="none"
+              style={{ marginRight: 8 }}
+            >
+              <Path
+                d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"
+                stroke="#FFFFFF"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+            <Text style={styles.shareBtnText}>Share Progress</Text>
+          </TouchableOpacity>
         </Wrapper>
-    </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -643,7 +657,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.dark,
-    paddingHorizontal:23
+    paddingHorizontal: 23,
   },
   scroll: {
     paddingHorizontal: 16,
@@ -666,7 +680,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex:999
+    zIndex: 999,
   },
   refreshBtn: {
     width: 40,

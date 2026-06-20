@@ -338,7 +338,10 @@ export default function QuizResult({ navigation, route }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.dark }}>
-      <Header header="Quiz Result" />
+      <Header
+        header="Quiz Result"
+        headerContainer={{ paddingHorizontal: 23 }}
+      />
       <Wrapper
         scrollEnable={false}
         orbsRight
@@ -459,6 +462,7 @@ export default function QuizResult({ navigation, route }) {
                 {multiplier > 1 && (
                   <Text style={styles.rewardBoost}>
                     {isBonus ? '⚡' : '🚀'} {multiplier}x multiplier active
+                    based on {isBonus ? 'Bonus Quiz' : 'Daily Quiz'} steak
                   </Text>
                 )}
               </View>
