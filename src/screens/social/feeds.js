@@ -16,7 +16,7 @@ import { fontFamily as ff } from '../../constant';
 import ChatCard from '../../components/social/chatCard';
 import auth from '@react-native-firebase/auth';
 import ProfileHeader from '../../components/profile/ProfileHeader';
-import { Wrapper } from '../../components';
+import { Header, Wrapper } from '../../components';
 import database, { onValue } from '@react-native-firebase/database';
 import moment from 'moment';
 
@@ -179,7 +179,13 @@ export default function Feeds({ navigation }) {
           zIndex: 1,
         }}
       >
-        <ProfileHeader
+        <View style={{ paddingVertical: 10 }}>
+          <Header
+            showSubHeader={'supporting healthier lifestyles'}
+            header={'Healthy U Community'}
+          />
+        </View>
+        {/* <ProfileHeader
           userData={userData?.profile}
           startDate={
             moment(
@@ -187,7 +193,7 @@ export default function Feeds({ navigation }) {
             )?.format('YYYY-MM-DD') || ''
           }
           streakData={mergedQuiz}
-        />
+        /> */}
       </View>
       <Wrapper
         orbsRight

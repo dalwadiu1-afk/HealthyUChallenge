@@ -292,7 +292,6 @@ export default function BeverageChallengeUI({ navigation }) {
       <Header
         header={'Healthy Beverage'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />

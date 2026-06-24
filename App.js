@@ -36,6 +36,12 @@ export default function App() {
   // SAVE FCM TOKEN + TIMEZONE
   // =========================
   useEffect(() => {
+    const uid = auth().currentUser?.uid;
+
+    if (!uid) {
+      return;
+    }
+
     let unsubscribeTokenRefresh;
 
     const setupFCM = async () => {
@@ -223,6 +229,7 @@ export default function App() {
 
     checkInitialNotification();
   }, []);
+
   const linking = {
     prefixes: ['yourapp://'],
     config: {

@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
 
   insightBubble: {
     position: 'absolute',
-    top: height * 0.55,
+    top: height * 0.65,
     backgroundColor: '#161B16',
     borderRadius: 18,
     padding: 16,

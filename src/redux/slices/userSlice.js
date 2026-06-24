@@ -56,6 +56,7 @@ const userSlice = createSlice({
       state.activities = data.activities || {};
       state.challenges = data.challenges || {};
       state.fruits = data.fruits || {};
+      state.quizzes = data?.quizzes || {};
 
       state.loaded = true;
       state.loading = false;

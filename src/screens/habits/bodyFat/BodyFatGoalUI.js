@@ -414,7 +414,6 @@ const BodyFatGoalScreen = ({ navigation }) => {
       <Header
         header={'Body Fat Goal'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />

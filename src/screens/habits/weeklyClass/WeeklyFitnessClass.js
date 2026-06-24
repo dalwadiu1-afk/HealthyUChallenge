@@ -91,6 +91,7 @@ export default function FitnessClassUI({ route }) {
   const [goal, setGoal] = useState(4);
 
   const [weekData, setWeekData] = useState([]);
+  const [expandedWeeks, setExpandedWeeks] = useState({});
   const [photos, setPhotos] = useState(Array(TOTAL).fill(null));
 
   const headerAnim = useRef(new Animated.Value(0)).current;
@@ -166,24 +167,14 @@ export default function FitnessClassUI({ route }) {
      LOCK LOGIC FIXED
   ========================== */
   const isWeekLocked = weekKey => {
-    const w = getWeekData(weekKey);
-    if (!w) return false;
-
-    return (
-      w.locked === true ||
-      (w.expiresAt && moment().valueOf() > w.expiresAt) ||
-      weekKey !== currentWeek
-    );
+    return weekKey !== currentWeek;
   };
 
-  /* =========================
-     PROGRESS FIX (CURRENT WEEK ONLY)
-  ========================== */
-  const done = currentWeekData?.workoutPhotos
-    ? Object.values(currentWeekData.workoutPhotos).filter(Boolean).length
-    : 0;
+  const completedWeeks = weekData.filter(
+    w => Object.keys(w?.workoutPhotos || {}).length > 0,
+  ).length;
 
-  const progress = done / TOTAL;
+  const progress = completedWeeks / 4;
 
   /* =========================
      REMAINING TIME FIX
@@ -216,11 +207,6 @@ export default function FitnessClassUI({ route }) {
       const snap = await ref.once('value');
       const data = snap.val() || {};
 
-      if (data.locked) {
-        Alert.alert('Locked', 'Week already completed');
-        return;
-      }
-
       const granted = await requestCameraPermission();
       if (!granted) return;
 
@@ -240,23 +226,21 @@ export default function FitnessClassUI({ route }) {
 
         const updatedPhotos = {
           ...existing,
-          [index]: {
+          [`day${index + 1}`]: {
             imageUrl: url,
             uploadedAt: now,
-            caption: `Workout #${index + 1}`,
           },
         };
 
-        const totalCompleted =
-          Object.values(updatedPhotos).filter(Boolean).length;
+        const totalPhotos = Object.keys(updatedPhotos).length;
 
         await ref.update({
           workoutPhotos: updatedPhotos,
-          totalCompleted,
-          completed: totalCompleted === TOTAL,
-          locked: totalCompleted === TOTAL,
+          totalPhotos,
+          completed: totalPhotos >= 1,
+          firstCompletionTime:
+            data.firstCompletionTime || (totalPhotos >= 1 ? now : null),
           startedAt: data.startedAt || now,
-          expiresAt: data.expiresAt || now + DAY_MS,
           updatedAt: now,
         });
       });
@@ -281,9 +265,8 @@ export default function FitnessClassUI({ route }) {
 
     const week = getWeekData(weekKey);
 
-    const photos = week?.workoutPhotos || [];
-
-    const photo = photos[index]?.imageUrl;
+    const photos = week?.workoutPhotos || {};
+    const photo = photos[`day${index + 1}`]?.imageUrl;
 
     const isCompleted = !!photo;
 
@@ -293,7 +276,7 @@ export default function FitnessClassUI({ route }) {
     // 🔥 FINAL TRUTH LOGIC
     const isMissed = !isCurrentMonth && !photo;
 
-    const locked = !isCurrentWeek || !isCurrentMonth || week?.locked;
+    const locked = !isCurrentWeek || !isCurrentMonth;
 
     return (
       <Animated.View style={{ opacity: anim }}>
@@ -334,7 +317,15 @@ export default function FitnessClassUI({ route }) {
             onPress={() => handleUpload(index, weekKey)}
           >
             {photo ? (
-              <Image source={{ uri: photo }} style={styles.uploadImage} />
+              <View style={{ flex: 1, width: '100%' }}>
+                <Image source={{ uri: photo }} style={styles.uploadImage} />
+
+                <Text style={styles.timestamp}>
+                  {moment(photos[`day${index + 1}`]?.uploadedAt).format(
+                    'MMM D, YYYY • h:mm A',
+                  )}
+                </Text>
+              </View>
             ) : (
               <View style={styles.uploadPlaceholder}>
                 <CameraIcon />
@@ -359,24 +350,26 @@ export default function FitnessClassUI({ route }) {
      UI MAPPING FIX
   ========================== */
   return (
-      <View style={styles.root}>
-        <Header header="Weekly Classes"  headerContainer={{paddingHorizontal:23}}/>
-    <Wrapper isForgot  safeAreaPops={{ edges: ['bottom'] }}>
-
+    <View style={styles.root}>
+      <Header
+        header="Weekly Classes"
+        headerContainer={{ paddingHorizontal: 23 }}
+      />
+      <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
         <Animated.View style={{ opacity: headerAnim }}>
           <Text style={styles.heroTitle}>🏋️ Weekly Fitness Class</Text>
-
           <Text style={styles.heroSub}>
-            Upload {TOTAL} workout proofs within 24 hours
+            Upload at least 1 workout photo each week. Additional photos are
+            optional.
           </Text>
 
           <View style={styles.progressCard}>
             <Text style={styles.progressCount}>
-              {done} / {TOTAL}
+              {completedWeeks} / 4 Weeks Completed
             </Text>
 
             <Text style={styles.statusText}>
-              {isWeekLocked(currentWeek) ? 'Locked' : getRemainingTime()}
+              Upload 1 Photo To Complete This Week
             </Text>
           </View>
         </Animated.View>
@@ -391,7 +384,16 @@ export default function FitnessClassUI({ route }) {
             </Text>
 
             <Text style={styles.weekSub}>
-              {week.totalCompleted || 0} workouts uploaded
+              {Object.keys(week.workoutPhotos || {}).length} Photos Uploaded
+            </Text>
+
+            <Text
+              style={{
+                color: week.completed ? '#4CAF50' : '#FFB84D',
+                marginTop: 5,
+              }}
+            >
+              {week.completed ? 'Week Completed ✅' : 'Waiting For First Photo'}
             </Text>
 
             {/* preview */}
@@ -418,23 +420,69 @@ export default function FitnessClassUI({ route }) {
         {/* =====================
             CURRENT WEEK CARDS
         ====================== */}
-        {Array.from({ length: TOTAL }).map((_, i) => (
+        {/* {Array.from({ length: TOTAL }).map((_, i) => (
           <WorkoutCard
             key={i}
             index={i}
             weekKey={currentWeek}
             monthKey={moment().format('MMMM_YYYY')}
           />
-        ))}
-    </Wrapper>
-      </View>
+        ))} */}
+        {(() => {
+          const uploadedCount = Object.keys(
+            currentWeekData?.workoutPhotos || {},
+          ).length;
+
+          const visibleSlots = Math.min(uploadedCount + 1, 7);
+
+          return (
+            <>
+              <View style={styles.currentWeekHeader}>
+                <Text style={styles.currentWeekTitle}>
+                  Week {currentWeek.replace('week', '')} • Current Week
+                </Text>
+
+                {uploadedCount > 0 && (
+                  <Text style={styles.completedText}>Week Completed ✅</Text>
+                )}
+              </View>
+
+              {Array.from({ length: visibleSlots }).map((_, i) => (
+                <WorkoutCard
+                  key={i}
+                  index={i}
+                  weekKey={currentWeek}
+                  monthKey={moment().format('MMMM_YYYY')}
+                />
+              ))}
+
+              <View style={styles.slotProgress}>
+                {Array.from({ length: 7 }).map((_, i) => {
+                  const completed = i < uploadedCount;
+
+                  return (
+                    <View
+                      key={i}
+                      style={[
+                        styles.slotDot,
+                        completed && styles.slotDotCompleted,
+                      ]}
+                    />
+                  );
+                })}
+              </View>
+            </>
+          );
+        })()}
+      </Wrapper>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor:colors.dark
+    backgroundColor: colors.dark,
   },
   completedBadge: {
     backgroundColor: 'rgba(76,175,80,0.2)',
@@ -667,9 +715,45 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   timestamp: {
-    marginTop: 8,
+    color: 'rgba(255,255,255,0.5)',
     fontSize: 11,
-    color: 'rgba(255,255,255,0.3)',
-    fontFamily: fontFamily.montserratRegular,
+    textAlign: 'center',
+    paddingVertical: 6,
+    fontFamily: fontFamily.montserratMedium,
+  },
+
+  currentWeekHeader: {
+    marginBottom: 15,
+  },
+
+  currentWeekTitle: {
+    color: colors.white,
+    fontSize: 16,
+    marginBottom: 4,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  completedText: {
+    color: '#4CAF50',
+    fontSize: 12,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  slotProgress: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginVertical: 12,
+  },
+
+  slotDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginHorizontal: 4,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+
+  slotDotCompleted: {
+    backgroundColor: colors.secondary,
   },
 });

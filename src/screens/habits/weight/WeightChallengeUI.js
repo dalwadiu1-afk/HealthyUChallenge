@@ -298,7 +298,6 @@ export default function WeightChallengeUI({ route }) {
       <Header
         header={'Weight Challenge'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />

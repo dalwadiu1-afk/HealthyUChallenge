@@ -410,7 +410,6 @@ export default function FruitTrackerUI({ navigation, route }) {
       <Header
         header={'🍎 Daily Fruit'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />

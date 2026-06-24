@@ -133,9 +133,7 @@ export default function FeedDetails({ navigation, route }) {
     <>
       <Wrapper safeAreaPops={{ edges: ['bottom'] }}>
         <Header
-          headerContainer={{
-            marginTop: StatusBar.currentHeight,
-          }}
+          headerContainer={{}}
           header={post?.name ? `${post.name}'s Post` : 'Post'}
         />
 

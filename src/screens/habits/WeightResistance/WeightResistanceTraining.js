@@ -65,7 +65,7 @@ export default function WeightTrainingUI({ route }) {
   const CURRENT_MONTH_KEY = route?.params?.monthKey
     ? route.params.monthKey
     : moment().format('MMMM_YYYY');
-
+  const [selectedWeek, setSelectedWeek] = useState(1);
   const selectedMonth = moment(CURRENT_MONTH_KEY, 'MMMM_YYYY');
 
   const isPastMonth = selectedMonth.isBefore(moment(), 'month');
@@ -81,6 +81,14 @@ export default function WeightTrainingUI({ route }) {
   const [startDate, setStartDate] = useState(null);
   const tempPhotos = useRef({});
   const headerAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (isPastMonth) {
+      setSelectedWeek(1);
+    } else {
+      setSelectedWeek(currentUnlockedWeek + 1);
+    }
+  }, [currentUnlockedWeek, isPastMonth]);
 
   /* =========================================
       FETCH USER START DATE
@@ -423,16 +431,15 @@ export default function WeightTrainingUI({ route }) {
   return (
     <View style={styles.root}>
       <Header
-        header={'Weight Training'}
+        header={'Strength Training'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />
 
       <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
         <Animated.View style={{ opacity: headerAnim }}>
-          <Text style={styles.heroTitle}>🏋️ Weight Training Sessions</Text>
+          {/* <Text style={styles.heroTitle}>🏋️ Strength Training Sessions</Text> */}
 
           <Text style={styles.heroSub}>
             Complete at least {weeklyTarget} workouts per week and upload your
@@ -486,39 +493,115 @@ export default function WeightTrainingUI({ route }) {
             </View>
 
             <View style={styles.weekMarkers}>
-              {Array.from({
-                length: TOTAL_WEEKS,
-              }).map((_, i) => {
+              {Array.from({ length: TOTAL_WEEKS }).map((_, i) => {
+                const weekNumber = i + 1;
+                const lockedForSelection =
+                  !isPastMonth && weekNumber > currentUnlockedWeek + 1;
                 const unlocked = isPastMonth ? true : i <= currentUnlockedWeek;
 
+                const completedCount = sessions
+                  .slice(i * weeklyTarget, i * weeklyTarget + weeklyTarget)
+                  .filter(item => item?.photo).length;
+
+                const isCompleted = completedCount >= weeklyTarget;
+
+                const isActive = selectedWeek === weekNumber;
+
                 return (
-                  <View
+                  <TouchableOpacity
                     key={i}
-                    style={[styles.weekChip, unlocked && styles.weekChipDone]}
+                    onPress={() => setSelectedWeek(weekNumber)}
+                    style={[
+                      styles.weekChip,
+                      unlocked && styles.weekChipDone,
+                      isCompleted && styles.weekChipCompleted,
+                      isActive && styles.weekChipActive,
+                      lockedForSelection && { opacity: 0.5 },
+                    ]}
                   >
                     <Text
                       style={[
                         styles.weekChipText,
                         unlocked && styles.weekChipTextDone,
+                        isActive && styles.weekChipTextActive,
                       ]}
                     >
-                      W{i + 1}
+                      W{weekNumber}
+                      {lockedForSelection ? ' 🔒' : ''}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
           </View>
         </Animated.View>
+        {(() => {
+          const weekIndex = selectedWeek - 1;
 
-        {sessions.map((s, index) => (
-          <WorkoutCard
-            key={index}
-            index={index}
-            photo={s?.photo}
-            timestamp={s?.timestamp}
-          />
-        ))}
+          const weekSessions = sessions.slice(
+            weekIndex * weeklyTarget,
+            weekIndex * weeklyTarget + weeklyTarget,
+          );
+
+          const completedCount = weekSessions.filter(
+            item => item?.photo,
+          ).length;
+
+          const isCurrentWeek = weekIndex === currentUnlockedWeek;
+
+          const isLocked = !isPastMonth && weekIndex > currentUnlockedWeek;
+
+          const isCompleted = completedCount >= weeklyTarget;
+
+          return (
+            <View style={styles.weekContainer}>
+              <View style={styles.weekHeader}>
+                <View>
+                  <Text style={styles.weekTitle}>Week {selectedWeek}</Text>
+
+                  <Text style={styles.weekSubtitle}>
+                    {completedCount}/{weeklyTarget} Sessions
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.weekStatusPill,
+                    isCompleted && styles.weekStatusCompleted,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.weekStatusText,
+                      isCompleted && styles.weekStatusTextCompleted,
+                    ]}
+                  >
+                    {isCompleted
+                      ? 'Completed'
+                      : isLocked
+                      ? 'Locked'
+                      : isCurrentWeek
+                      ? 'Current'
+                      : 'Missed'}
+                  </Text>
+                </View>
+              </View>
+
+              {weekSessions.map((session, localIndex) => {
+                const globalIndex = weekIndex * weeklyTarget + localIndex;
+
+                return (
+                  <WorkoutCard
+                    key={globalIndex}
+                    index={globalIndex}
+                    photo={session?.photo}
+                    timestamp={session?.timestamp}
+                  />
+                );
+              })}
+            </View>
+          );
+        })()}
       </Wrapper>
     </View>
   );
@@ -763,5 +846,62 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: 'rgba(255,255,255,0.3)',
     fontFamily: fontFamily.montserratRegular,
+  },
+  weekContainer: {
+    marginBottom: 20,
+  },
+
+  weekHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+
+  weekTitle: {
+    color: colors.white,
+    fontSize: 18,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  weekSubtitle: {
+    color: colors.grey,
+    fontSize: 12,
+    marginTop: 3,
+    fontFamily: fontFamily.montserratMedium,
+  },
+
+  weekStatusPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+
+  weekStatusCompleted: {
+    backgroundColor: 'rgba(143,175,120,0.15)',
+  },
+
+  weekStatusText: {
+    color: colors.grey,
+    fontSize: 11,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  weekStatusTextCompleted: {
+    color: colors.secondary,
+  },
+  weekChipActive: {
+    backgroundColor: colors.secondary,
+    borderColor: colors.secondary,
+  },
+
+  weekChipCompleted: {
+    borderColor: colors.secondary,
+  },
+
+  weekChipTextActive: {
+    color: colors.dark,
+    fontFamily: fontFamily.montserratBold,
   },
 });

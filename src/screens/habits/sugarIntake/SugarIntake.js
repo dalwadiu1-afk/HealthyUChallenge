@@ -273,7 +273,6 @@ export default function SugarChart30Days({ route }) {
       <Header
         header={'Sugar Intake'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />

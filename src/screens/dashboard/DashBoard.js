@@ -14,21 +14,22 @@ import {
   Easing,
   Dimensions,
 } from 'react-native';
-import { Wrapper, Header } from '../../../components';
-import { BONUS_DAY, colors, fontFamily } from '../../../constant';
+import { Wrapper, Header } from '../../components';
+import { BONUS_DAY, colors, fontFamily } from '../../constant/index';
 import { useDispatch, useSelector } from 'react-redux';
 import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
 import firestore from '@react-native-firebase/firestore';
 import moment from 'moment';
-import BonusCountdown from './../../../components/profile/BonusCountdown';
-import { getDynamicWeekId } from '../../../utils/helper';
-import { setUserData } from '../../../redux/slices/userSlice';
 import { useIsFocused, useFocusEffect } from '@react-navigation/native';
+import BonusCountdown from '../../components/profile/BonusCountdown';
+import { getDynamicWeekId } from '../../utils/helper';
+import { setUserData } from '../../redux/slices/userSlice';
+import ProfileHeader from '../../components/profile/ProfileHeader';
 
 const { height } = Dimensions.get('window');
 
-export default function QuizBoard({ navigation, route }) {
+export default function DashBoard({ navigation, route }) {
   const userData = useSelector(state => state.user);
   const dispatch = useDispatch();
   const isFocused = useIsFocused();
@@ -266,7 +267,8 @@ export default function QuizBoard({ navigation, route }) {
             snacks: userData?.snacks || {},
             activities: userData?.activities || {},
             challenges: userData?.challenges || {},
-
+            quizzes: userData?.quizzes || {},
+            ...userData,
             // stats: {
             //   ...(userData?.stats || {}),
             //   ...stats,
@@ -358,13 +360,6 @@ export default function QuizBoard({ navigation, route }) {
   };
 
   const bonusDate = useRef(getNextBonusDate()).current;
-
-  const formatHHMMSS = useCallback((h, m, s) => {
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(
-      2,
-      '0',
-    )}:${String(s).padStart(2, '0')}`;
-  }, []);
 
   const allQuizDays = Object.entries(quizDays || {})
     .filter(([_, item]) => item)
@@ -525,21 +520,101 @@ export default function QuizBoard({ navigation, route }) {
   // USAGE
   // ===============================
 
+  const startDay = userData?.goal?.startDate;
+  console.log('startDay :>> ', startDay);
+  const TOTAL_CHALLENGE_DAYS = 30;
+  let remainingDays = 0;
+
+  if (startDay) {
+    const start = new Date(startDay);
+    const today = new Date();
+
+    const diffInMs = today - start;
+    const daysPassed = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+
+    remainingDays = Math.max(0, TOTAL_CHALLENGE_DAYS - daysPassed);
+  }
+
   const challengeDays = leaderboardData?.challenge?.days || {};
 
   const QuizTime = calculateAverageQuizTime(challengeDays);
 
   const averageQuizTime = formatDuration(QuizTime);
 
+  const STATS = [
+    {
+      label: 'Streak',
+      value: currentStreak,
+      emoji: '🔥',
+    },
+    {
+      label: 'Longest',
+      value: longestStreak,
+      emoji: '🏆',
+    },
+    {
+      label: 'Days Left of\nChallenge',
+      value: remainingDays,
+      emoji: '📅',
+    },
+    // {
+    //   label: 'Consistency',
+    //   value: `${consistency}%`,
+    //   emoji: '⚡',
+    // },
+  ];
+
   // ===============================
   // DISPLAY
   // ===============================
 
+  const leaderboardQuiz =
+    leaderboardData?.quizzes?.days || leaderboardData?.challenge?.days || {};
+  const profileQuiz =
+    userData?.quizzes?.days || userData?.challenge?.days || {};
+  const mergedQuiz = {
+    ...leaderboardQuiz,
+    ...profileQuiz,
+  };
+
   const bonusUnlocked = moment().isSameOrAfter(bonusDate);
   return (
     <View style={{ flex: 1, backgroundColor: colors.dark }}>
-      <Header header="Quiz Hub" headerContainer={{ paddingHorizontal: 23 }} />
+      <View
+        style={{
+          paddingHorizontal: 23,
+          zIndex: 1,
+        }}
+      >
+        <ProfileHeader
+          profileData={userData}
+          startDate={
+            moment(
+              userData?.profile?.memberSince
+                ? userData?.profile?.memberSince
+                : moment(),
+            )?.format('YYYY-MM-DD') || ''
+          }
+          streakData={mergedQuiz}
+        />
+      </View>
       <Wrapper orbsRight safeAreaPops={{ edges: ['bottom'] }}>
+        {/* Stats row */}
+        <View style={styles.statsRow}>
+          {STATS.map((s, i) => (
+            <View key={i} style={styles.statItem}>
+              <Text style={styles.statEmoji}>{s?.emoji}</Text>
+              <Text
+                style={styles.statValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {s.value}
+              </Text>
+              <Text style={styles.statLabel}>{s?.label}</Text>
+            </View>
+          ))}
+        </View>
         {loading ? (
           <View
             style={{
@@ -1636,5 +1711,36 @@ const styles = StyleSheet.create({
     color: '#CBBEFF',
     fontSize: 20,
     fontFamily: fontFamily.montserratBold,
+  },
+
+  statsRow: {
+    flexDirection: 'row',
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    paddingVertical: 14,
+    marginBottom: 10,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(255,255,255,0.08)',
+  },
+  statEmoji: { fontSize: 18, marginBottom: 4 },
+  statValue: {
+    color: colors.white,
+    fontSize: 18,
+    fontFamily: fontFamily.montserratBold,
+    lineHeight: 22,
+  },
+  statLabel: {
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 10,
+    fontFamily: fontFamily.montserratMedium,
+    marginTop: 2,
+    textAlign: 'center',
   },
 });

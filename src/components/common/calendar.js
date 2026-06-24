@@ -15,7 +15,7 @@ import moment from 'moment';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const { height } = Dimensions.get('window');
-const RING_SIZE = height/25;
+const RING_SIZE = height / 25;
 const RING_BORDER = 4;
 // ===== PREMIUM DARK THEME COLORS =====
 

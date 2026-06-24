@@ -30,11 +30,12 @@ import auth from '@react-native-firebase/auth';
 import { useSelector } from 'react-redux';
 import { Header, Wrapper } from '../../components';
 import moment from 'moment';
+import { logo } from '../../assets/images';
 
 const userId = auth().currentUser?.uid;
 const currentMonthKey = moment().format('MMMM_YYYY');
 const { height, width } = Dimensions.get('window');
-const SHEET_MIN = height * 0.60;
+const SHEET_MIN = height * 0.6;
 const SHEET_MAX = height * 0.86;
 
 const TAB_OPTIONS = ['Feeds', 'Stats', 'Progress'];
@@ -1327,22 +1328,34 @@ export default function ProfileDetails({ navigation }) {
 
   // =====================================================
   // PROFILE STATS
-  // =====================================================
+  // ===========
+  // ==========================================
+  let remainingDays = 0;
+  const TOTAL_CHALLENGE_DAYS = 30;
+  const startDay = userData?.goal?.startDate;
+  if (startDay) {
+    const start = new Date(startDay);
+    const today = new Date();
+
+    const diffInMs = today - start;
+    const daysPassed = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+
+    remainingDays = Math.max(0, TOTAL_CHALLENGE_DAYS - daysPassed);
+  }
 
   const PROFILE_STATS = [
     {
       label: 'Streak',
-      value: `${currentStreak} 🔥`,
+      value: `${currentStreak}`,
+      emoji: '🔥',
     },
-
     {
-      label: 'Goals',
-      value: `${totalGoalsCreated} 🎯`,
+      showLogo: true,
     },
-
     {
-      label: 'Quiz Streak',
-      value: completionRate,
+      label: 'Days Left of\nChallenge',
+      value: remainingDays,
+      emoji: '📅',
     },
   ];
 
@@ -1753,110 +1766,120 @@ export default function ProfileDetails({ navigation }) {
   };
 
   return (
-   
-      <GestureHandlerRootView style={styles.root}>
-        <Header
-          header={'Profile Details'}
-          headerContainer={{
-            paddingHorizontal: 23,
-          }}
-          textStyle={[styles.navTitle, navTitleStyle]}
-          showRightBtn
-        />
- 
-        <View style={styles.heroContent}>
-          {/* ================================================= */}
-          {/* AVATAR */}
-          {/* ================================================= */}
-          <Animated.View style={[styles.avatarWrap, avatarStyle]}>
-            <Image
-              source={{
-                uri:
-                  profile?.avatar ||
-                  profile?.image ||
-                  'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-              }}
-              style={{
-                width: '100%',
-                height: '100%',
-                borderRadius: 999,
-              }}
-              resizeMode="cover"
-            />
+    <GestureHandlerRootView style={styles.root}>
+      <Header
+        header={'Profile Details'}
+        headerContainer={{
+          paddingHorizontal: 23,
+        }}
+        textStyle={[styles.navTitle, navTitleStyle]}
+        showRightBtn
+      />
 
-            <TouchableOpacity
-              style={styles.editAvatarBtn}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate('EditProfile')}
-            >
-              <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"
-                  stroke="#8FAF78"
-                  strokeWidth={2.2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <Path
-                  d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
-                  stroke="#8FAF78"
-                  strokeWidth={2.2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
-            </TouchableOpacity>
-          </Animated.View>
+      <View style={styles.heroContent}>
+        {/* ================================================= */}
+        {/* AVATAR */}
+        {/* ================================================= */}
+        <Animated.View style={[styles.avatarWrap, avatarStyle]}>
+          <Image
+            source={{
+              uri:
+                profile?.avatar ||
+                profile?.image ||
+                'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
+            }}
+            style={{
+              width: '100%',
+              height: '100%',
+              borderRadius: 999,
+            }}
+            resizeMode="cover"
+          />
 
-          {/* ================================================= */}
-          {/* NAME */}
-          {/* ================================================= */}
-
-          <Animated.Text style={[styles.heroName, nameStyle]}>
-            {profile?.name ||
-              profile?.fullName ||
-              profile?.displayName ||
-              'User'}
-          </Animated.Text>
-
-          {/* ================================================= */}
-          {/* PROFILE INFO */}
-          {/* ================================================= */}
-
-          <Animated.View style={[styles.heroInfo, heroInfoStyle]}>
-            <Text style={styles.heroHandle}>
-              {profile?.username || profile?.userName || 'healthyu'}
-              {'  '}·{'  '}
-              Member since {memberSince}
-            </Text>
-
-            {/* ================================================= */}
-            {/* PROFILE STATS */}
-            {/* ================================================= */}
-
-            <View style={styles.statRow}>
-              {PROFILE_STATS.map((item, index) => (
-                <React.Fragment key={index}>
-                  <StatPill label={item?.label} value={item?.value} />
-
-                  {index < PROFILE_STATS.length - 1 && (
-                    <View style={styles.statDivider} />
-                  )}
-                </React.Fragment>
-              ))}
-            </View>
-          </Animated.View>
-        </View>
+          <TouchableOpacity
+            style={styles.editAvatarBtn}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('EditProfile')}
+          >
+            <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+              <Path
+                d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"
+                stroke="#8FAF78"
+                strokeWidth={2.2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <Path
+                d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
+                stroke="#8FAF78"
+                strokeWidth={2.2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+          </TouchableOpacity>
+        </Animated.View>
 
         {/* ================================================= */}
-        {/* BOTTOM SHEET */}
+        {/* NAME */}
         {/* ================================================= */}
-        <Wrapper
-      safeAreaPops={{ edges: ['top'] }}
-      scrollEnable={false}
-      disableLayout
-      containerStyle={{ flex: 1 }}
-    >
+
+        <Animated.Text style={[styles.heroName, nameStyle]}>
+          {profile?.name || profile?.fullName || profile?.displayName || 'User'}
+        </Animated.Text>
+
+        {/* ================================================= */}
+        {/* PROFILE INFO */}
+        {/* ================================================= */}
+
+        <Animated.View style={[styles.heroInfo, heroInfoStyle]}>
+          <Text style={styles.heroHandle}>
+            {profile?.username || profile?.userName || 'healthyu'}
+            {'  '}·{'  '}
+            Member since {moment(memberSince).format('YYYY')}
+          </Text>
+
+          {/* ================================================= */}
+          {/* PROFILE STATS */}
+          {/* ================================================= */}
+
+          <View style={styles.statRow}>
+            {PROFILE_STATS.map((item, index) => (
+              <View key={index} style={styles.statItem}>
+                {item?.showLogo ? (
+                  <Image
+                    source={logo}
+                    style={styles.logo}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <>
+                    <Text style={styles.statEmoji}>{item?.emoji}</Text>
+                    <Text
+                      style={styles.statValue}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                    >
+                      {item.value}
+                    </Text>
+                    <Text style={styles.statLabel}>{item?.label}</Text>
+                  </>
+                )}
+              </View>
+            ))}
+          </View>
+        </Animated.View>
+      </View>
+
+      {/* ================================================= */}
+      {/* BOTTOM SHEET */}
+      {/* ================================================= */}
+      <Wrapper
+        safeAreaPops={{ edges: ['top'] }}
+        scrollEnable={false}
+        disableLayout
+        containerStyle={{ flex: 1 }}
+      >
         <Animated.View style={[styles.sheet, sheetStyle]}>
           {/* ================================================= */}
           {/* HANDLE */}
@@ -1949,8 +1972,8 @@ export default function ProfileDetails({ navigation }) {
             />
           )}
         </Animated.View>
-        </Wrapper>
-      </GestureHandlerRootView>
+      </Wrapper>
+    </GestureHandlerRootView>
   );
 }
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -1997,16 +2020,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-
-  badgeEmoji: {
-    fontSize: 18,
-    marginRight: 8,
+  logo: {
+    height: height / 20,
+    width: height / 20,
+    borderRadius: 50,
   },
-
-  badgeLabel: {
-    color: '#fff',
-    fontSize: 12,
-    fontFamily: fontFamily.montserratSemiBold,
+  statEmoji: { fontSize: 18, marginBottom: 4 },
+  statValue: {
+    color: colors.white,
+    fontSize: 18,
+    fontFamily: fontFamily.montserratBold,
+    lineHeight: 22,
+  },
+  statLabel: {
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 10,
+    fontFamily: fontFamily.montserratMedium,
+    marginTop: 2,
+    textAlign: 'center',
   },
   topNav: {
     flexDirection: 'row',
@@ -2080,13 +2111,19 @@ const styles = StyleSheet.create({
   // Stat pills
   statRow: {
     flexDirection: 'row',
+    width: '100%',
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    paddingVertical: 10,
-    width: '100%',
-    marginBottom: 12,
+    paddingVertical: 5,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
   },
   statPill: {
     flex: 1,
@@ -2098,12 +2135,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.montserratBold,
     lineHeight: 20,
   },
-  statLabel: {
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 10,
-    fontFamily: fontFamily.montserratRegular,
-    marginTop: 2,
-  },
+
   statDivider: {
     width: 1,
     backgroundColor: 'rgba(255,255,255,0.08)',

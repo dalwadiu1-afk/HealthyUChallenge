@@ -32,13 +32,6 @@ const generateCode = () => {
   return Math.floor(1000 + Math.random() * 9000).toString();
 };
 
-const monthKey = new Date()
-  .toLocaleString('en-US', {
-    month: 'long',
-    year: 'numeric',
-  })
-  .replace(' ', '_');
-
 export default function BookAnAppointment({ navigation, route }) {
   const { doctorId = '1' } = route.params || {};
 
@@ -103,8 +96,6 @@ export default function BookAnAppointment({ navigation, route }) {
               )
             : null;
 
-        console.log('Latest booking:', latest);
-        console.log('latest?.status :>> ', data, latest?.status);
         if (latest?.status === 'requested') {
           navigation.replace('ConfirmationCode', {
             doctor: {
@@ -212,6 +203,9 @@ Email: ${email}`;
         bookingId: appointmentId,
         createdAt: now,
         used: false,
+        verifiedBy: '',
+        verifiedAt: '',
+        attended: false,
       };
 
       await database().ref().update(updates);
@@ -248,112 +242,110 @@ Email: ${email}`;
   return (
     <View style={styles.root}>
       {/* FIXED HERO IMAGE */}
-      <Wrapper>
-      <Image
-        source={{
-          uri:
-            doctor.image ||
-            'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-        }}
-        style={styles.heroImage}
-        resizeMode="cover"
-      />
-
       <Header
         headerContainer={{
           paddingHorizontal: 23,
           zIndex: 2,
-          position: 'absolute',
+          // position: 'absolute',/
           width: '100%',
-          paddingTop: StatusBar.currentHeight,
         }}
         leftBtnStyle={{ backgroundColor: 'rgba(7, 4, 19, 0.6)' }}
       />
+      <Wrapper>
+        <Image
+          source={{
+            uri:
+              doctor.image ||
+              'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
+          }}
+          style={styles.heroImage}
+          resizeMode="cover"
+        />
 
-      {/* SCROLLABLE CONTENT */}
-      <ScrollView
-        // scrollEnabled={seeMore}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingTop: HERO_HEIGHT - 40,
-          flexGrow: 1,
-        }}
-      >
-        <View style={styles.card}>
-          <Text style={styles.doctorName}>{doctor.name}</Text>
-          <Text style={styles.specialty}>{doctor.specialty}</Text>
+        {/* SCROLLABLE CONTENT */}
+        <ScrollView
+          // scrollEnabled={seeMore}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingTop: HERO_HEIGHT - 40,
+            flexGrow: 1,
+          }}
+        >
+          <View style={styles.card}>
+            <Text style={styles.doctorName}>{doctor.name}</Text>
+            <Text style={styles.specialty}>{doctor.specialty}</Text>
 
-          <View style={styles.statsRow}>
-            <Stat value={`${doctor.patients}+`} label="Patients" />
-            <Stat value={doctor.experience} label="Experience" />
-            <Stat value={`${doctor.rating}★`} label="Reviews" />
-            <Stat value={doctor.awards} label="Awards" />
-          </View>
+            <View style={styles.statsRow}>
+              <Stat value={`${doctor.patients}+`} label="Patients" />
+              <Stat value={doctor.experience} label="Experience" />
+              <Stat value={`${doctor.rating}★`} label="Reviews" />
+              <Stat value={doctor.awards} label="Awards" />
+            </View>
 
-          <View style={styles.divider} />
+            <View style={styles.divider} />
 
-          <Text style={styles.sectionTitle}>About Me</Text>
+            <Text style={styles.sectionTitle}>About Me</Text>
 
-          <Text style={styles.aboutText} numberOfLines={seeMore ? 0 : 3}>
-            {doctor.about}
-          </Text>
-
-          <TouchableOpacity
-            style={{ marginTop: 10, alignSelf: 'flex-end' }}
-            onPress={() => setSeeMore(!seeMore)}
-          >
-            <Text style={styles.readMore}>
-              {!seeMore ? '...Read More' : '...Read Less'}
+            <Text style={styles.aboutText} numberOfLines={seeMore ? 0 : 3}>
+              {doctor.about}
             </Text>
-          </TouchableOpacity>
 
-          <View style={{ marginTop: 20, justifyContent: 'flex-end' }}>
             <TouchableOpacity
-              style={styles.bookBtn}
-              onPress={() => openEmail()}
+              style={{ marginTop: 10, alignSelf: 'flex-end' }}
+              onPress={() => setSeeMore(!seeMore)}
             >
-              <Text style={styles.bookBtnText}>Book An Appointment</Text>
+              <Text style={styles.readMore}>
+                {!seeMore ? '...Read More' : '...Read Less'}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={{ marginTop: 20, justifyContent: 'flex-end' }}>
+              <TouchableOpacity
+                style={styles.bookBtn}
+                onPress={() => openEmail()}
+              >
+                <Text style={styles.bookBtnText}>Book An Appointment</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+
+        <ActionSheet ref={actionSheetRef}>
+          <View style={{ padding: 20 }}>
+            <Text style={{ fontSize: 16, marginBottom: 20 }}>
+              Did you send the appointment email?
+            </Text>
+
+            <TouchableOpacity
+              style={{
+                padding: 14,
+                backgroundColor: colors.secondary,
+                borderRadius: 10,
+                marginBottom: 10,
+              }}
+              onPress={async () => {
+                actionSheetRef.current?.hide();
+                await saveAppointment();
+              }}
+            >
+              <Text style={{ color: '#000', textAlign: 'center' }}>
+                Yes, Sent
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                padding: 14,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: '#ccc',
+              }}
+              onPress={() => actionSheetRef.current?.hide()}
+            >
+              <Text style={{ textAlign: 'center' }}>Not Yet</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </ScrollView>
-
-      <ActionSheet ref={actionSheetRef}>
-        <View style={{ padding: 20 }}>
-          <Text style={{ fontSize: 16, marginBottom: 20 }}>
-            Did you send the appointment email?
-          </Text>
-
-          <TouchableOpacity
-            style={{
-              padding: 14,
-              backgroundColor: colors.secondary,
-              borderRadius: 10,
-              marginBottom: 10,
-            }}
-            onPress={async () => {
-              actionSheetRef.current?.hide();
-              await saveAppointment();
-            }}
-          >
-            <Text style={{ color: '#000', textAlign: 'center' }}>
-              Yes, Sent
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={{
-              padding: 14,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: '#ccc',
-            }}
-            onPress={() => actionSheetRef.current?.hide()}
-          >
-            <Text style={{ textAlign: 'center' }}>Not Yet</Text>
-          </TouchableOpacity>
-        </View>
-      </ActionSheet>
+        </ActionSheet>
       </Wrapper>
     </View>
   );

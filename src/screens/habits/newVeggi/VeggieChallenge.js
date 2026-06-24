@@ -326,7 +326,6 @@ const VeggieChallenge = ({ navigation, route }) => {
       <Header
         header={'Veggie Challenge'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />

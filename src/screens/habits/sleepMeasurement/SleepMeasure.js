@@ -438,7 +438,6 @@ export default function SleepClock({ navigation }) {
       <Header
         header="Sleep"
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />

@@ -391,7 +391,6 @@ export default function CardioTrackerUI({ navigation, route }) {
       <Header
         header={'Cardio Tracker'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />

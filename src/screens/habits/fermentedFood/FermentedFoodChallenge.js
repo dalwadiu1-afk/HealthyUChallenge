@@ -439,7 +439,6 @@ const FermentedFoodChallenge = ({ navigation, route }) => {
       <Header
         header={'🥒 Fermented Food'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />

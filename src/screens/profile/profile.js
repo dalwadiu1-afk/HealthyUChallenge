@@ -300,11 +300,11 @@ export default function Profile({ navigation }) {
       value: remainingDays,
       emoji: '📅',
     },
-    {
-      label: 'Consistency',
-      value: `${consistency}%`,
-      emoji: '⚡',
-    },
+    // {
+    //   label: 'Consistency',
+    //   value: `${consistency}%`,
+    //   emoji: '⚡',
+    // },
   ];
   const handleLogout = async () => {
     try {
@@ -387,13 +387,16 @@ export default function Profile({ navigation }) {
   ].filter(Boolean);
 
   return (
-    <SafeAreaView style={{flex:1,backgroundColor:colors.dark}} edges={['top']}>
-       <StatusBar
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.dark }}
+      edges={['top']}
+    >
+      <StatusBar
         translucent
         backgroundColor="transparent"
         barStyle="light-content"
       />
-    <View style={styles.container}>
+      <View style={styles.container}>
         {/* Hero section */}
         <Animated.View style={[styles.hero, { opacity: headerAnim }]}>
           {/* Top row */}
@@ -420,7 +423,7 @@ export default function Profile({ navigation }) {
                 uri:
                   profile?.avatar ||
                   'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-                }}
+              }}
             />
           </Animated.View>
 
@@ -453,88 +456,92 @@ export default function Profile({ navigation }) {
           </View>
         </Animated.View>
 
-                <Wrapper safeAreaPops={{ edges: ['bottom'] }} containerStyle={{ paddingBottom: height / 6 }}>
-        <View
-          style={{
-            borderBottomWidth: 1,
-            borderBottomColor: 'rgba(255,255,255,0.07)',
-            marginVertical: 20,
-          }}
-        />
-
-        {/* Menu */}
-        <View style={styles.menuSection}>
-          <Text style={styles.menuHeader}>Account</Text>
-          {MENU_ITEMS.map((item, index) => (
-            <MenuItem
-              key={index}
-              item={item}
-              index={index}
-              onPress={() => {
-                // NON ADMIN VERIFICATION
-                if (
-                  item.title === 'Challenge Verification' &&
-                  profile?.role !== 'admin'
-                ) {
-                  setVerifyModalVisible(true);
-                  return;
-                } else {
-                  if(item?.screenName != 'VerificationAdmin') navigation.navigate(item.screenName);
-                }
-              }}
-            />
-          ))}
-        </View>
-
-        {/* Logout */}
-        <TouchableOpacity
-          style={styles.logoutBtn}
-          activeOpacity={0.8}
-          onPress={handleLogout}
+        <Wrapper
+          safeAreaPops={{ edges: ['bottom'] }}
+          containerStyle={{ paddingBottom: height / 6 }}
         >
-          <Text style={styles.logoutIcon}>🚪</Text>
-          <Text style={styles.logoutText}>Log Out</Text>
-        </TouchableOpacity>
-        <Modal
-          isVisible={verifyModalVisible}
-          onBackdropPress={() => setVerifyModalVisible(false)}
-          backdropOpacity={0.8}
-          animationIn="zoomIn"
-          animationOut="zoomOut"
-          useNativeDriver
-        >
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalEmoji}>🏆</Text>
+          <View
+            style={{
+              borderBottomWidth: 1,
+              borderBottomColor: 'rgba(255,255,255,0.07)',
+              marginVertical: 20,
+            }}
+          />
 
-            <Text style={styles.modalTitle}>Verify Challenge</Text>
-
-            <Text style={styles.modalSubtitle}>
-              Enter the verification code provided by your administrator.
-            </Text>
-
-            <TextInput
-              value={verificationCode}
-              onChangeText={text => setVerificationCode(text.toUpperCase())}
-              placeholder="ENTER CODE"
-              placeholderTextColor="rgba(255,255,255,0.35)"
-              style={styles.codeInput}
-              autoCapitalize="characters"
-            />
-
-            <TouchableOpacity
-              style={styles.verifyBtn}
-              onPress={handleVerifyCode}
-            >
-              <Text style={styles.verifyBtnText}>Verify Completion</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => setVerifyModalVisible(false)}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
+          {/* Menu */}
+          <View style={styles.menuSection}>
+            <Text style={styles.menuHeader}>Account</Text>
+            {MENU_ITEMS.map((item, index) => (
+              <MenuItem
+                key={index}
+                item={item}
+                index={index}
+                onPress={() => {
+                  // NON ADMIN VERIFICATION
+                  if (
+                    item.title === 'Challenge Verification' &&
+                    profile?.role !== 'admin'
+                  ) {
+                    setVerifyModalVisible(true);
+                    return;
+                  } else {
+                    if (item?.screenName != 'VerificationAdmin')
+                      navigation.navigate(item.screenName);
+                  }
+                }}
+              />
+            ))}
           </View>
-        </Modal>
-      </Wrapper>
-    </View>
+
+          {/* Logout */}
+          <TouchableOpacity
+            style={styles.logoutBtn}
+            activeOpacity={0.8}
+            onPress={handleLogout}
+          >
+            <Text style={styles.logoutIcon}>🚪</Text>
+            <Text style={styles.logoutText}>Log Out</Text>
+          </TouchableOpacity>
+          <Modal
+            isVisible={verifyModalVisible}
+            onBackdropPress={() => setVerifyModalVisible(false)}
+            backdropOpacity={0.8}
+            animationIn="zoomIn"
+            animationOut="zoomOut"
+            useNativeDriver
+          >
+            <View style={styles.modalContainer}>
+              <Text style={styles.modalEmoji}>🏆</Text>
+
+              <Text style={styles.modalTitle}>Verify Challenge</Text>
+
+              <Text style={styles.modalSubtitle}>
+                Enter the verification code provided by your administrator.
+              </Text>
+
+              <TextInput
+                value={verificationCode}
+                onChangeText={text => setVerificationCode(text.toUpperCase())}
+                placeholder="ENTER CODE"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                style={styles.codeInput}
+                autoCapitalize="characters"
+              />
+
+              <TouchableOpacity
+                style={styles.verifyBtn}
+                onPress={handleVerifyCode}
+              >
+                <Text style={styles.verifyBtnText}>Verify Completion</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setVerifyModalVisible(false)}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </Modal>
+        </Wrapper>
+      </View>
     </SafeAreaView>
   );
 }
@@ -547,7 +554,7 @@ const styles = StyleSheet.create({
   scroll: {},
   hero: {
     alignItems: 'center',
-    paddingHorizontal:23
+    paddingHorizontal: 23,
   },
   heroTopRow: {
     width: '100%',

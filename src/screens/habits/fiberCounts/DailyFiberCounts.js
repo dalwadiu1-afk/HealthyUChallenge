@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -49,7 +49,9 @@ export default function FiberChartDays({ navigation, route }) {
   const [goalRange, setGoalRange] = useState({
     min: 25,
     max: 38,
+    current: 30,
   });
+  const scrollRef = useRef(null);
 
   const today = moment();
   const TODAY_KEY = today.format('YYYY-MM-DD');
@@ -61,11 +63,9 @@ export default function FiberChartDays({ navigation, route }) {
   const IS_CURRENT_MONTH = CURRENT_MONTH_KEY === today.format('MMMM_YYYY');
 
   const buildFiberTemplate = startDate => {
-    const start = moment(startDate).startOf('month');
+    const start = moment(startDate);
 
-    const daysInMonth = start.daysInMonth();
-
-    return Array.from({ length: daysInMonth }, (_, i) => {
+    return Array.from({ length: 30 }, (_, i) => {
       const d = moment(start).add(i, 'days');
 
       return {
@@ -94,21 +94,43 @@ export default function FiberChartDays({ navigation, route }) {
         const monthData = habits?.[CURRENT_MONTH_KEY] || {};
 
         const days = monthData?.days || {};
+        console.log('monthData :>> ', monthData);
 
+        const current = Number(monthData?.goal || monthData?.current || 30);
+
+        setGoalRange({
+          min: Math.max(0, current - 5),
+          max: current + 5,
+          current,
+        });
         const startDate =
-          monthData?.startDate ||
+          data?.goal?.startDate ||
           moment(CURRENT_MONTH_KEY, 'MMMM_YYYY')
             .startOf('month')
             .format('YYYY-MM-DD');
 
-        const baseData = buildFiberTemplate(startDate);
+        console.log('monthData?.startDate :>> ', data?.goal?.startDate);
 
+        const baseData = buildFiberTemplate(startDate);
         const formatted = baseData.map(item => ({
           ...item,
           fiber: Number(days?.[item.key]?.progress || 0),
         }));
 
         setFiberData(formatted);
+
+        const todayIndex = formatted.findIndex(item => item.key === TODAY_KEY);
+
+        if (todayIndex >= 0) {
+          setSelected(todayIndex);
+
+          setTimeout(() => {
+            scrollRef.current?.scrollTo({
+              x: Math.max(0, todayIndex * ITEM_WIDTH - 100),
+              animated: true,
+            });
+          }, 100);
+        }
         setTips(getSmartTips(formatted));
       });
     });
@@ -165,7 +187,7 @@ export default function FiberChartDays({ navigation, route }) {
         .ref(`users/${uid}/habits/fiber/${CURRENT_MONTH_KEY}`)
         .update({
           title: 'Fiber Intake',
-          target: '25-38g',
+          target: `${goalRange?.min}g - ${goalRange?.max}g`,
         });
 
       setFiberData(prev =>
@@ -209,7 +231,6 @@ export default function FiberChartDays({ navigation, route }) {
       <Header
         header={'Fiber Tracker'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />
@@ -223,7 +244,11 @@ export default function FiberChartDays({ navigation, route }) {
 
         {/* Chart */}
         <View style={styles.chartCard}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+          >
             <View style={{ width: ITEM_WIDTH * 30, height: CHART_HEIGHT }}>
               {fiberData.map((item, index) => {
                 const barHeight = getBarH(item.fiber);
@@ -243,6 +268,29 @@ export default function FiberChartDays({ navigation, route }) {
                   >
                     <Svg width={ITEM_WIDTH} height={CHART_HEIGHT}>
                       <G>
+                        {item.key === TODAY_KEY && (
+                          <>
+                            <SvgText
+                              x={ITEM_WIDTH / 2}
+                              y={12}
+                              fontSize="8"
+                              fill="#8FAF78"
+                              textAnchor="middle"
+                              fontFamily={fontFamily.montserratSemiBold}
+                            >
+                              TODAY
+                            </SvgText>
+
+                            <Rect
+                              x={(ITEM_WIDTH - 6) / 2}
+                              y={18}
+                              width={6}
+                              height={6}
+                              fill="#8FAF78"
+                              rx={3}
+                            />
+                          </>
+                        )}
                         <Rect
                           x={(ITEM_WIDTH - BAR_WIDTH) / 2}
                           y={CHART_HEIGHT - PADDING - barHeight}
@@ -310,7 +358,11 @@ export default function FiberChartDays({ navigation, route }) {
         {/* Stats */}
         <View style={styles.statsCard}>
           <StatRow emoji="📊" label="Avg Fiber" value={`${avg.toFixed(1)}g`} />
-          <StatRow emoji="🎯" label="Target Range" value="25g – 38g" />
+          <StatRow
+            emoji="🎯"
+            label="Target Range"
+            value={`${goalRange?.min}g - ${goalRange?.max}g`}
+          />
           <StatRow
             emoji="🔮"
             label="Required Avg"

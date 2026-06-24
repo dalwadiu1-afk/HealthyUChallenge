@@ -387,7 +387,6 @@ export default function HabitsList({ navigation }) {
   const [selectionMode, setSelectionMode] = useState(true);
   const [confirmVisible, setConfirmVisible] = useState(false);
 
-  
   const ALL_HABITS = [
     {
       id: 1,
@@ -431,7 +430,6 @@ export default function HabitsList({ navigation }) {
       screenName: 'WeeklyFitnessClass',
       category: 'Fitness',
       key: 'fitness',
-      showInput: 'Enter classes per week (max 9)',
     },
     {
       id: 6,
@@ -503,7 +501,7 @@ export default function HabitsList({ navigation }) {
     },
     {
       id: 14,
-      title: 'Workout Buddy',
+      title: 'workout with a friend',
       description: 'Exercise with a friend 4 times',
       screenName: 'FriendWorkoutChallenge',
       category: 'Fitness',

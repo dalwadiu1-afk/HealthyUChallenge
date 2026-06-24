@@ -670,6 +670,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 24,
+    zIndex: 1,
   },
   backBtn: {
     width: 40,

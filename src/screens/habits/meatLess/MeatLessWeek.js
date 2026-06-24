@@ -332,7 +332,6 @@ export default function MeatlessChallenge({ navigation, route }) {
       <Header
         header={'Meatless Challenge'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />

@@ -410,7 +410,6 @@ export default function SnackSystemUI({ navigation, route }) {
       <Header
         header={'Healthy Snack'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />

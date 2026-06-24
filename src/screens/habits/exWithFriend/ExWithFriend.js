@@ -451,7 +451,6 @@ export default function FriendWorkoutChallenge({ navigation, route }) {
       <Header
         header={'Workout with Friend'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />

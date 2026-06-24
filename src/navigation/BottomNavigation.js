@@ -4,8 +4,8 @@ import SocialStack from './SocialStack';
 import CustomTabBar from '../components/common/customTabBar';
 import HabitsStack from './HabitsStack';
 import ResourceStack from './ResourceStack';
+import DashBoardStack from './DashBoardStack';
 import ProfileStack from './ProfileStack';
-import WalkingRewardBoard from './../screens/habits/dailySteps/WalkingRewardBoard';
 
 const Tab = createBottomTabNavigator();
 
@@ -18,7 +18,7 @@ export default function BottomNavigation() {
     >
       <Tab.Screen name="Habits" component={HabitsStack} />
       <Tab.Screen name="SocialStack" component={SocialStack} />
-      <Tab.Screen name="Dashboard" component={WalkingRewardBoard} />
+      <Tab.Screen name="Dashboard" component={DashBoardStack} />
       <Tab.Screen name="Resources" component={ResourceStack} />
       <Tab.Screen name="Profile" component={ProfileStack} />
     </Tab.Navigator>

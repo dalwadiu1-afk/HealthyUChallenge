@@ -260,7 +260,6 @@ export default function Leaderboard() {
         disableLeft={false}
         headerContainer={{
           paddingHorizontal: 23,
-          marginTop: StatusBar.currentHeight,
         }}
       />
 

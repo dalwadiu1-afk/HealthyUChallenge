@@ -132,18 +132,28 @@ const getUserReminderTime = user => {
 };
 
 const sendPushNotification = async ({
+  uid,
   token,
   title,
   body,
   screen = 'QuizBoard',
 }) => {
-  try {
-    if (!token) return;
+  if (!token) return;
 
+  try {
     const message = {
       token,
-      notification: { title, body },
-      data: { screen },
+
+      notification: {
+        title,
+        body,
+      },
+
+      data: {
+        screen: String(screen),
+        title: String(title),
+        body: String(body),
+      },
 
       android: {
         priority: 'high',
@@ -157,16 +167,33 @@ const sendPushNotification = async ({
         payload: {
           aps: {
             sound: 'default',
-            contentAvailable: true,
+            'content-available': 1,
           },
         },
       },
     };
 
-    await admin.messaging().send(message);
-    logger.log('Notification sent:', title);
+    const response = await admin.messaging().send(message);
+
+    logger.log('Notification sent', {
+      uid,
+      title,
+      response,
+    });
   } catch (e) {
-    logger.error('SEND ERROR:', e);
+    logger.error('FCM Error', {
+      uid,
+      code: e.code,
+      message: e.message,
+    });
+
+    if (
+      uid &&
+      (e.code === 'messaging/registration-token-not-registered' ||
+        e.code === 'messaging/invalid-registration-token')
+    ) {
+      await db.ref(`/users/${uid}/fcmToken`).remove();
+    }
   }
 };
 
@@ -180,6 +207,7 @@ exports.tuesdayQuizReminder = onSchedule(
     timeZone: 'America/New_York',
   },
   async () => {
+    logger.log('Tuesday Reminder Started');
     const usersSnap = await db.ref('/users').once('value');
     const users = usersSnap.val() || {};
 
@@ -202,6 +230,7 @@ exports.tuesdayQuizReminder = onSchedule(
       ) {
         promises.push(
           sendPushNotification({
+            uid,
             token,
             title: '🔥 Wellness Quiz Tomorrow!',
             body: 'Don’t miss tomorrow’s quiz for double points!',
@@ -246,6 +275,7 @@ exports.wednesdayDoublePoints = onSchedule(
       ) {
         promises.push(
           sendPushNotification({
+            uid,
             token,
             title: '🏆 Wellness Wednesday',
             body: 'Double points active today!',
@@ -290,7 +320,8 @@ exports.smartLeaderboardPush = onSchedule(
       if (rank <= 10 && user.token) {
         promises.push(
           sendPushNotification({
-            token: user.token,
+            uid: user?.uid,
+            token: user?.token,
             title: `🔥 You're Rank #${rank}`,
             body: 'Keep pushing to stay on top!',
           }),
@@ -317,7 +348,7 @@ exports.quizExpiryReminder = onSchedule(
 
     const promises = [];
 
-    Object.values(users).forEach(user => {
+    Object.entries(users).forEach(([uid, user]) => {
       const token = user?.fcmToken;
       if (!token) return;
 
@@ -333,6 +364,7 @@ exports.quizExpiryReminder = onSchedule(
       if (isReminder) {
         promises.push(
           sendPushNotification({
+            uid,
             token,
             title: '⏳ Quiz Ending Soon!',
             body: 'Your quiz expires in 1 hour.',
@@ -343,6 +375,7 @@ exports.quizExpiryReminder = onSchedule(
       if (isWednesday && isReminder) {
         promises.push(
           sendPushNotification({
+            uid,
             token,
             title: '🏆 Bonus Quiz Ending Soon!',
             body: 'Double points waiting!',
@@ -365,12 +398,13 @@ exports.habitReminderEngine = onSchedule(
     timeZone: 'America/New_York',
   },
   async () => {
+    logger.log('Habit Reminder Engine Started');
     const usersSnap = await db.ref('/users').once('value');
     const users = usersSnap.val() || {};
 
     const promises = [];
 
-    Object.values(users).forEach(user => {
+    Object.entries(users).forEach(([uid, user]) => {
       const token = user?.fcmToken;
       if (!token) return;
 
@@ -379,22 +413,42 @@ exports.habitReminderEngine = onSchedule(
 
       const currentTime = now.format('HH:mm');
 
-      const selectedGoals = user?.goal?.selectedgoal || [];
+      const selectedGoals = Array.isArray(user?.goal?.selectedGoals)
+        ? user.goal.selectedGoals
+        : [];
       const settings = user?.notificationSettings || {};
 
-      selectedGoals.forEach(goalKey => {
-        const goalSetting = settings?.[goalKey];
-        if (!goalSetting?.enabled) return;
+      selectedGoals.forEach(goal => {
+        const goalKey = goal?.key;
 
-        if (goalSetting.time === currentTime) {
+        if (!goalKey) return;
+
+        const goalSetting = settings?.[goalKey] || {};
+
+        const enabled =
+          goalSetting.enabled === undefined ? true : goalSetting.enabled;
+
+        if (!enabled) return;
+
+        const reminderTime = goalSetting.time
+          ? moment(goalSetting.time, ['H:mm', 'HH:mm', 'h:mm A']).format(
+              'HH:mm',
+            )
+          : '21:00';
+
+        if (reminderTime === currentTime) {
           const habit = ALL_HABITS.find(h => h.key === goalKey);
 
           promises.push(
             sendPushNotification({
+              uid,
               token,
-              title: `⏰ ${habit?.title || 'Reminder'}`,
-              body: habit?.description || 'Time for your habit!',
-              screen: habit?.screenName || 'Habits',
+              title: `⏰ ${habit?.title || goal?.title || 'Reminder'}`,
+              body:
+                habit?.description ||
+                goal?.description ||
+                'Time for your habit!',
+              screen: habit?.screenName || goal?.screenName || 'Habits',
             }),
           );
         }
@@ -404,3 +458,42 @@ exports.habitReminderEngine = onSchedule(
     await Promise.all(promises);
   },
 );
+
+const { onRequest } = require('firebase-functions/v2/https');
+
+exports.testPush = onRequest(async (req, res) => {
+  try {
+    const token = req.query.token;
+
+    if (!token) {
+      return res.status(400).send({
+        success: false,
+        error: 'Token is required',
+      });
+    }
+
+    const response = await admin.messaging().send({
+      token,
+      notification: {
+        title: 'HealthyU Test',
+        body: 'Notifications are working 🎉',
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'default',
+        },
+      },
+    });
+
+    res.send({
+      success: true,
+      response,
+    });
+  } catch (e) {
+    res.status(500).send({
+      success: false,
+      error: e.message,
+    });
+  }
+});

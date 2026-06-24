@@ -17,12 +17,12 @@ import Animated, {
   withDelay,
   Easing,
 } from 'react-native-reanimated';
-import { SafeAreaProvider, SafeAreaView,useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { colors } from '../../constant';
-
-
-
-
 
 const { height, width } = Dimensions.get('window');
 export function Wrapper({
@@ -42,9 +42,7 @@ export function Wrapper({
   safeAreaPops,
   disableLayout,
 }) {
-const insets = useSafeAreaInsets();
-
-console.log('TOP INSET:', );
+  const insets = useSafeAreaInsets();
 
   function FloatingOrb({ size, color, style, delay = 0 }) {
     const translateY = useSharedValue(0);
@@ -96,7 +94,6 @@ console.log('TOP INSET:', );
   return (
     <View
       style={{
-       
         flex: 1,
         backgroundColor: colors.dark,
       }}
@@ -199,7 +196,6 @@ console.log('TOP INSET:', );
               edges={['top', !onlyTop && 'bottom']}
               {...safeAreaPops}
             >
-              
               <View
                 style={
                   disableLayout
@@ -209,7 +205,6 @@ console.log('TOP INSET:', );
                         flex: 1,
                         ...containerStyle,
                         paddingBottom: height / 12,
-                        
                       }
                 }
               >
@@ -223,7 +218,6 @@ console.log('TOP INSET:', );
             edges={['top', !onlyTop && 'bottom']}
             {...safeAreaPops}
           >
-           
             <View
               style={
                 disableLayout

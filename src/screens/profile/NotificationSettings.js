@@ -522,13 +522,9 @@ export default function NotificationSettings() {
      UI
   ========================= */
   return (
-    <View style={{backgroundColor:colors.dark ,flex:1,}}>
-<Header
-  header="Reminders"
-  headerContainer={{ paddingHorizontal: 23 }}
-/>
-    <Wrapper     safeAreaPops={{ edges: ['bottom'] }}>
-      <ScrollView style={{}}>
+    <View style={{ backgroundColor: colors.dark, flex: 1 }}>
+      <Header header="Reminders" headerContainer={{ paddingHorizontal: 23 }} />
+      <Wrapper orbsRight safeAreaPops={{ edges: ['bottom'] }}>
         {/* ================= QUIZ ================= */}
         <View style={styles.quizCard}>
           {/* TOP HEADER */}
@@ -689,8 +685,7 @@ export default function NotificationSettings() {
             onValueChange={onTimeChange}
           />
         )}
-      </ScrollView>
-    </Wrapper>
+      </Wrapper>
     </View>
   );
 }
