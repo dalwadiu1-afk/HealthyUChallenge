@@ -53,7 +53,7 @@ const saveSteps = async steps => {
   const monthKey = `${monthName}_${year}`;
 
   await database()
-    .ref(`users/${uid}/habits/${monthKey}/days/${day}`)
+    .ref(`users/${uid}/habits/steps/${monthKey}/days/${day}`)
     .update({
       progress: steps.toString(),
       completed: steps >= 8000,
@@ -210,6 +210,7 @@ export default function StepsChart30Days({ navigation, route }) {
 
     const listener = ref.on('value', snapshot => {
       const data = snapshot.val();
+      console.log('data :>> ', data);
       if (data?.goal) {
         setDailyGoal(Number(data?.goal));
       }
@@ -256,61 +257,33 @@ export default function StepsChart30Days({ navigation, route }) {
   }, [todaySteps, rawData]);
 
   const transformHabitData = habits => {
-    if (!habits) return [];
+    if (!habits || !start) return [];
 
-    // Get latest month key (sorted)
-    const monthKeys = Object.keys(habits).sort((a, b) => {
-      const [mA, yA] = a.split('_');
-      const [mB, yB] = b.split('_');
+    const result = [];
 
-      const dA = new Date(`${mA} 1, ${yA}`);
-      const dB = new Date(`${mB} 1, ${yB}`);
+    for (let i = 0; i < 30; i++) {
+      const currentDate = moment(start).add(i, 'days');
 
-      return dB - dA; // latest first
-    });
+      const monthKey = currentDate.format('MMMM_YYYY');
+      const dayKey = currentDate.format('D');
 
-    const monthKey = monthKeys[0];
-    const monthData = habits[monthKey];
+      const dayData = habits?.[monthKey]?.days?.[dayKey];
 
-    if (!monthData?.days) return [];
-
-    const [monthName, year] = monthKey.split('_');
-    const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
-
-    return Object.entries(monthData.days).map(([day, val]) => ({
-      dayIndex: Number(day) - 1,
-      date: new Date(year, monthIndex, Number(day)),
-      steps:
-        typeof val === 'object' && val?.progress ? parseFloat(val.progress) : 0,
-      completed: typeof val === 'object' ? val.completed || false : false,
-    }));
-  };
-
-  const fillMissingDays = (data, year, monthIndex) => {
-    const full = [];
-
-    for (let i = 1; i <= 30; i++) {
-      const found = data.find(d => d.date.getDate() === i);
-
-      if (found) {
-        full.push(found);
-      } else {
-        full.push({
-          dayIndex: i - 1,
-          date: new Date(year, monthIndex, i),
-          steps: 0,
-          completed: false,
-        });
-      }
+      result.push({
+        dayIndex: i,
+        date: currentDate.toDate(),
+        steps: dayData?.progress ? parseFloat(dayData.progress) : 0,
+        completed: dayData?.completed || false,
+      });
     }
 
-    return full;
+    return result;
   };
 
   useEffect(() => {
     const uid = auth().currentUser?.uid;
 
-    const ref = database().ref(`users/${uid}/habits`);
+    const ref = database().ref(`users/${uid}/habits/steps`);
 
     const listener = ref.on('value', snapshot => {
       const data = snapshot.val();
@@ -323,27 +296,19 @@ export default function StepsChart30Days({ navigation, route }) {
   // Use real HealthKit data, fall back to empty skeleton while loading
   let data = rawData && rawData.length ? rawData : buildEmptyData(startDate);
 
-  if (habits) {
-    const habitData = transformHabitData(habits);
-
-    if (habitData.length > 0) {
-      const date = habitData[0].date;
-
-      data = fillMissingDays(habitData, date.getFullYear(), date.getMonth());
-    } else {
-      data = buildEmptyData(startDate);
-    }
+  if (habits && start) {
+    data = transformHabitData(habits);
   } else {
-    data = buildEmptyData(startDate);
+    data = buildEmptyData(start ? start.toDate() : new Date());
   }
   // Auto-select the most recent day that has steps once data loads
   useEffect(() => {
     if (!data || data.length === 0) return;
 
-    const lastActiveIdx = [...data].reverse().findIndex(d => d.steps > 0);
+    const todayIndex = moment().diff(start, 'days');
 
-    if (lastActiveIdx !== -1) {
-      setSelected(data.length - 1 - lastActiveIdx);
+    if (todayIndex >= 0 && todayIndex < data.length) {
+      setSelected(todayIndex);
     }
   }, [data]);
 
@@ -373,6 +338,8 @@ export default function StepsChart30Days({ navigation, route }) {
     start && moment(start).isValid()
       ? Math.max(1, today.diff(start, 'days') + 1)
       : 1;
+
+  console.log('dailyGoal :>> ', dailyGoal);
   const goalPct =
     dailyGoal && elapsedDays
       ? Math.min(pastTotal / (dailyGoal * elapsedDays), 1)
@@ -401,10 +368,18 @@ export default function StepsChart30Days({ navigation, route }) {
         style={styles.barWrapper}
       >
         {/* Step count label above bar (only when selected) */}
-        <Text style={[styles.barLabel, { opacity: isActive ? 1 : 0 }]}>
+        <Text
+          style={[
+            styles.barLabel,
+            {
+              color: isActive ? '#8FAF78' : 'rgba(255,255,255,0.7)',
+              fontFamily: fontFamily.montserratBold,
+            },
+          ]}
+        >
           {item.steps >= 1000
             ? `${(item.steps / 1000).toFixed(1)}k`
-            : String(item.steps)}
+            : item.steps}
         </Text>
 
         {/* Bar itself */}
@@ -448,30 +423,28 @@ export default function StepsChart30Days({ navigation, route }) {
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle}>Step Count</Text>
             <Text style={styles.headerSub}>
-              {data.length > 0 && data[0].date
-                ? `${data[0].date.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                  })} — ${data[data.length - 1].date.toLocaleDateString(
-                    'en-US',
-                    { month: 'short', day: 'numeric' },
-                  )}`
+              {start
+                ? `${moment(start).format('MMM D')} — ${moment(start)
+                    .add(29, 'days')
+                    .format('MMM D')}`
                 : '30-day cycle'}
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.refreshBtn}
-            activeOpacity={0.8}
-            // onPress={refetch}
-            onPress={refetch}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size={16} color={colors.secondary} />
-            ) : (
-              <RefreshIcon />
-            )}
-          </TouchableOpacity>
+          {!route?.params?.monthKey && (
+            <TouchableOpacity
+              style={styles.refreshBtn}
+              activeOpacity={0.8}
+              // onPress={refetch}
+              onPress={refetch}
+              disabled={loading || route?.params?.monthKey}
+            >
+              {loading ? (
+                <ActivityIndicator size={16} color={colors.secondary} />
+              ) : (
+                <RefreshIcon />
+              )}
+            </TouchableOpacity>
+          )}
         </Animated.View>
 
         <Wrapper
@@ -629,7 +602,7 @@ export default function StepsChart30Days({ navigation, route }) {
           </Animated.View>
 
           {/* Share button */}
-          <TouchableOpacity style={styles.shareBtn} activeOpacity={0.85}>
+          {/* <TouchableOpacity style={styles.shareBtn} activeOpacity={0.85}>
             <Svg
               width={18}
               height={18}
@@ -646,7 +619,7 @@ export default function StepsChart30Days({ navigation, route }) {
               />
             </Svg>
             <Text style={styles.shareBtnText}>Share Progress</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </Wrapper>
       </View>
     </SafeAreaView>
@@ -720,6 +693,20 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 16,
     gap: 16,
+  },
+  barWrapper: {
+    width: 36, // was 28
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    height: CHART_HEIGHT + 40,
+  },
+
+  barLabel: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 8,
+    fontFamily: fontFamily.montserratMedium,
+    marginBottom: 4,
+    textAlign: 'center',
   },
   ringWrapper: {
     position: 'relative',
@@ -848,7 +835,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   barLabel: {
-    color: '#8FAF78',
+    // color: '#8FAF78',
     fontSize: 8,
     fontFamily: fontFamily.montserratSemiBold,
     marginBottom: 3,
