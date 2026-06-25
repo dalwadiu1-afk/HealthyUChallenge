@@ -20,7 +20,7 @@ import auth from '@react-native-firebase/auth';
 const { height } = Dimensions.get('window');
 
 export default function FeedDetails({ navigation, route }) {
-  const { postId, showComment } = route.params; // ✅ GET POST ID
+  const { postId, showComment, userData } = route.params; // ✅ GET POST ID
   const [commentText, setCommentText] = useState('');
   const [sending, setSending] = useState(false);
   const [showCommentBox, setShowCommentBox] = useState(showComment || false);
@@ -117,8 +117,9 @@ export default function FeedDetails({ navigation, route }) {
       await newRef.set({
         text: commentText,
         userId,
-        name: auth().currentUser?.displayName || 'User',
+        name: userData?.profile?.name || 'User',
         createdAt: Date.now(),
+        avatar: userData?.profile?.avatar || '',
       });
 
       setCommentText('');
@@ -130,13 +131,12 @@ export default function FeedDetails({ navigation, route }) {
   };
 
   return (
-    <>
-      <Wrapper safeAreaPops={{ edges: ['bottom'] }}>
-        <Header
-          headerContainer={{}}
-          header={post?.name ? `${post.name}'s Post` : 'Post'}
-        />
-
+    <View style={{ flex: 1, backgroundColor: colors.dark }}>
+      <Header
+        headerContainer={{ paddingHorizontal: 23 }}
+        header={post?.name ? `${post.name}'s Post` : 'Post'}
+      />
+      <Wrapper orbsRight safeAreaPops={{ edges: ['bottom'] }}>
         {/* ✅ POST */}
         {post && (
           <View style={styles.postWrap}>
@@ -168,7 +168,6 @@ export default function FeedDetails({ navigation, route }) {
         {/* ✅ COMMENTS */}
         <View style={styles.commentsSection}>
           <Text style={styles.commentsLabel}>Comments ({comments.length})</Text>
-
           {comments.map((item, index) => (
             <CommentCard
               key={item.id}
@@ -211,7 +210,7 @@ export default function FeedDetails({ navigation, route }) {
           </TouchableOpacity>
         </View>
       )}
-    </>
+    </View>
   );
 }
 

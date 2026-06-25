@@ -50,6 +50,43 @@ export default function ChatCard({
     onDeletePress?.(item);
   };
 
+  const renderPostContent = item => {
+    const renderers = {
+      snack: () => (
+        <View style={styles.beverageCard}>
+          <Text style={styles.beverageTitle}>🍿 Snack: {item.snackName}</Text>
+          <Text style={styles.typeText}>
+            Snack Approved By: {item?.approvedBy}
+          </Text>
+          <Text style={styles.typeText}>Quantity: {item.qty}</Text>
+          <Text style={styles.typeText}>Healthy Snack Challenge</Text>
+        </View>
+      ),
+
+      beverage: () => (
+        <View style={styles.beverageCard}>
+          <Text style={styles.beverageTitle}>🍹 {item.beverageName}</Text>
+
+          {item.ingredients?.length > 0 && (
+            <View style={styles.ingredientsWrap}>
+              {item.ingredients.map((i, idx) => (
+                <View key={idx} style={styles.ingredientPill}>
+                  <Text style={styles.ingredientText}>#{i}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <Text style={styles.typeText}>Healthy Beverage Challenge</Text>
+        </View>
+      ),
+
+      post: () => null,
+    };
+
+    return renderers[item.type]?.() || null;
+  };
+
   return (
     <>
       <TouchableOpacity
@@ -58,7 +95,12 @@ export default function ChatCard({
         style={styles.card}
       >
         {/* HEADER */}
-        <View style={styles.headerRow}>
+        <View
+          style={{
+            ...styles.headerRow,
+            marginBottom: item?.beverageName ? 0 : 12,
+          }}
+        >
           <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
             {item?.avatar ? (
               <Image
@@ -90,9 +132,16 @@ export default function ChatCard({
         </View>
 
         {/* MESSAGE */}
-        <Text style={styles.message} numberOfLines={3}>
+        <Text
+          style={{
+            ...styles.message,
+          }}
+          numberOfLines={3}
+        >
           {item?.message}
         </Text>
+
+        <View>{renderPostContent(item)}</View>
 
         {/* IMAGE */}
         <Image

@@ -251,7 +251,9 @@ export default function SnackSystemUI({ navigation, route }) {
         requestId,
         userId,
         monthKey: CURRENT_MONTH_KEY,
-        name: snackName.trim(),
+        name: profile?.name,
+        avatar: profile?.avatar,
+        snackName: snackName.trim(),
         qty: qty.trim(),
         image: image || '',
         status: 'pending',
@@ -293,6 +295,7 @@ export default function SnackSystemUI({ navigation, route }) {
         .update({
           status,
           approvedBy: auth().currentUser.uid,
+          approvedDoc: profile?.name,
           updatedAt: moment().valueOf(),
         });
 
@@ -314,19 +317,19 @@ export default function SnackSystemUI({ navigation, route }) {
                 try {
                   const postRef = database().ref('posts').push();
                   const postId = postRef.key;
-
+                  console.log('item :>> ', item);
                   await postRef.set({
                     postId,
                     userId: ownerId,
 
-                    avatar: item.userAvatar || '',
-                    name: item.userName || 'User',
-
+                    avatar: item.avatar || '',
+                    name: item.name || 'User',
+                    approvedBy: profile?.name,
                     requestId: item.id,
 
                     text: `✅ Approved snack: ${item.name}`,
 
-                    snackName: item.name,
+                    snackName: item.snackName,
                     qty: item.qty,
 
                     image: item.image || '',

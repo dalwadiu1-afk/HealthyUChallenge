@@ -145,10 +145,15 @@ export default function App() {
           screen: detail?.notification?.data?.screen || 'unknown',
           source: 'foreground',
         });
+        console.log(
+          'navigationRef.current quit_state :>> ',
+          navigationRef.current,
+          screen,
+        );
 
         if (screen === 'QuizBoard') {
-          navigationRef.current?.navigate('Profile', {
-            screen: 'QuizBoard',
+          navigationRef.current?.navigate('Dashboard', {
+            screen: 'DashBoard',
             params: {},
           });
         }
@@ -166,10 +171,16 @@ export default function App() {
         screen: remoteMessage?.data?.screen || 'unknown',
         source: 'background',
       });
+
+      console.log(
+        'navigationRef.current quit_state :>> ',
+        navigationRef.current,
+        screen,
+      );
       if (screen === 'QuizBoard') {
         setTimeout(() => {
-          navigationRef.current?.navigate('Profile', {
-            screen: 'QuizBoard',
+          navigationRef.current?.navigate('Dashboard', {
+            screen: 'DashBoard',
             params: {},
           });
         }, 1000);
@@ -195,6 +206,11 @@ export default function App() {
           screen: screen || 'unknown',
           source: 'quit_state',
         });
+        console.log(
+          'navigationRef.current quit_state :>> ',
+          navigationRef.current,
+          screen,
+        );
 
         if (screen === 'QuizBoard') {
           setTimeout(() => {

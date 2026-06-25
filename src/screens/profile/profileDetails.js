@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -39,6 +39,47 @@ const SHEET_MIN = height * 0.6;
 const SHEET_MAX = height * 0.86;
 
 const TAB_OPTIONS = ['Feeds', 'Stats', 'Progress'];
+
+const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const HABIT_META = {
+  fiber: { emoji: '🥦', label: 'Fiber' },
+  sleep: { emoji: '😴', label: 'Sleep' },
+  fitness: { emoji: '💪', label: 'Fitness' },
+  beverage: { emoji: '🥤', label: 'Beverage' },
+  dailyFruits: { emoji: '🍎', label: 'Fruits' },
+  snacks: { emoji: '🍪', label: 'Snacks' },
+  cardio: { emoji: '🏃', label: 'Cardio' },
+  sugarIntake: { emoji: '🍬', label: 'Sugar' },
+  weightChallenge: { emoji: '⚖️', label: 'Weight' },
+};
+
+const HABIT_STRUCTURE = {
+  fiber: 'days',
+  sleep: 'days',
+  snacks: 'days_array',
+  fitness: 'weeks',
+  cardio: 'weeks_days',
+  fruits: 'weeks_days',
+};
+
+const EXCLUDE_KEYS = [
+  'booking',
+  'newVeggie',
+  'personalized goal 1',
+  'personalized goal 2',
+  'personalized goal 3',
+  'bodyFatGoal',
+  'fruits',
+  'Snacks',
+  'Beverage',
+  'weightChallenge',
+];
+
+const MAX_BAR_HEIGHT = 120;
+const TOTAL_CHALLENGE_DAYS = 30;
+const DEFAULT_AVATAR =
+  'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -103,14 +144,28 @@ function StatsTab({ statsData = [] }) {
   );
 }
 
+// Resolves the numeric value for a single "week" entry, regardless of which
+// shape that week object happens to be (cardio/sessions/photos/days/weight/generic).
+// Used identically by both the per-week map build and the sorted values array,
+// so the precedence order below must stay in sync in both call sites.
+const resolveWeekValue = week => {
+  if (week?.value !== undefined) {
+    return Number(week.value);
+  }
+
+  if (week?.progress !== undefined) {
+    return Number(week.progress);
+  }
+
+  if (week?.count !== undefined) {
+    return Number(week.count);
+  }
+
+  return 0;
+};
+
 const buildHabitChartData = (habitKey, habits, monthKey = currentMonthKey) => {
   const data = habits?.[habitKey]?.[monthKey] || {};
-  const parseValue = val => {
-    if (!val) return 0;
-    if (typeof val === 'number') return val;
-    const match = String(val).match(/[\d.]+/);
-    return match ? Number(match[0]) : 0;
-  };
 
   const daysObj = data?.days || {};
   const weeksObj = data?.weeks || {};
@@ -122,7 +177,7 @@ const buildHabitChartData = (habitKey, habits, monthKey = currentMonthKey) => {
   const dailyMap = new Map(
     Object.entries(daysObj).map(([date, item]) => [
       date,
-      item?.uri ? 1 : parseValue(item?.progress || item?.sleep || item?.count),
+      Number(item?.value ?? item?.progress ?? item?.count ?? item?.sleep ?? 0),
     ]),
   );
 
@@ -141,50 +196,6 @@ const buildHabitChartData = (habitKey, habits, monthKey = currentMonthKey) => {
   // WEEKLY (FIXED)
   // =========================
 
-  const weekValueMap = new Map();
-
-  Object.entries(weeksObj).forEach(([weekKey, week]) => {
-    let value = 0;
-
-    // 🥇 CARDIO PRIORITY (IMPORTANT FIX)
-    // cardio should ALWAYS use totalMinutes
-    if (week?.totalMinutes !== undefined) {
-      value = Number(week.totalMinutes);
-    }
-
-    // ARRAY TYPE
-    else if (Array.isArray(week)) {
-      value = week.length;
-    }
-
-    // SESSIONS TYPE (non-cardio trackers)
-    else if (week?.sessions !== undefined) {
-      value = Number(week.sessions);
-    }
-
-    // PHOTO ARRAY TYPE
-    else if (week?.workoutPhotos?.length) {
-      value = week.workoutPhotos.length;
-    }
-
-    // DAYS OBJECT TYPE
-    else if (week?.days) {
-      value = Object.keys(week.days || {}).length;
-    }
-
-    // WEIGHT TYPE (optional tracker)
-    else if (week?.weight !== undefined) {
-      value = Number(data?.goal || 0);
-    }
-
-    // GENERIC FALLBACK
-    else {
-      value = Object.keys(week || {}).length;
-    }
-
-    weekValueMap.set(weekKey, value);
-  });
-
   const weekKeys = Object.keys(weeksObj);
 
   if (weekKeys.length === 0) {
@@ -202,40 +213,9 @@ const buildHabitChartData = (habitKey, habits, monthKey = currentMonthKey) => {
     return aNum - bNum;
   });
 
-  const values = sortedWeeks.map(([_, week]) => {
-    // 🥇 CARDIO FIRST
-    if (week?.totalMinutes !== undefined) {
-      return Number(week.totalMinutes);
-    }
-
-    // ARRAY TYPE
-    if (Array.isArray(week)) {
-      return week.length;
-    }
-
-    // SESSIONS TYPE
-    if (week?.sessions !== undefined) {
-      return Number(week.sessions);
-    }
-
-    // PHOTO TYPE
-    if (week?.workoutPhotos?.length) {
-      return week.workoutPhotos.length;
-    }
-
-    // DAYS TYPE
-    if (week?.days) {
-      return Object.keys(week.days || {}).length;
-    }
-
-    // WEIGHT TYPE
-    if (week?.weight !== undefined) {
-      return Number(data?.goal || 0);
-    }
-
-    // FALLBACK
-    return Object.keys(week || {}).length || 0;
-  });
+  const values = sortedWeeks.map(([, week]) =>
+    resolveWeekValue(week, data?.goal),
+  );
 
   // minimum 4 bars so UI never collapses
   const weekly = Array.from({
@@ -268,23 +248,14 @@ function ProgressTab({
   chartMode,
   setChartMode,
 }) {
-  const HABIT_META = {
-    fiber: { emoji: '🥦', label: 'Fiber' },
-    sleep: { emoji: '😴', label: 'Sleep' },
-    fitness: { emoji: '💪', label: 'Fitness' },
-    beverage: { emoji: '🥤', label: 'Beverage' },
-    dailyFruits: { emoji: '🍎', label: 'Fruits' },
-    snacks: { emoji: '🍪', label: 'Snacks' },
-    cardio: { emoji: '🏃', label: 'Cardio' },
-    sugarIntake: { emoji: '🍬', label: 'Sugar' },
-    weightChallenge: { emoji: '⚖️', label: 'Weight' },
-  };
-
   // ✅ SAFE BUILD (critical fix)
-  const chartPack =
-    typeof buildHabitChartData === 'function'
-      ? buildHabitChartData(selectedHabit, habits, currentMonthKey)
-      : { type: 'daily', daily: [], weekly: [] };
+  const chartPack = useMemo(
+    () =>
+      typeof buildHabitChartData === 'function'
+        ? buildHabitChartData(selectedHabit, habits, currentMonthKey)
+        : { type: 'daily', daily: [], weekly: [] },
+    [selectedHabit, habits, currentMonthKey],
+  );
 
   const isMixed = chartPack?.type === 'mixed';
 
@@ -314,7 +285,6 @@ function ProgressTab({
         }));
 
   const values = safeChartData.map(v => Number(v?.value) || 0);
-  const maxValue = values.length ? Math.max(...values) : 1;
 
   const rawTarget = habitTargets?.[selectedHabit];
 
@@ -326,8 +296,6 @@ function ProgressTab({
 
     return Number.isFinite(num) ? num : 8; // 👈 FINAL fallback = 8
   })();
-
-  const MAX_BAR_HEIGHT = 120;
 
   return (
     <View style={styles.progressContainer}>
@@ -409,7 +377,7 @@ function ProgressTab({
           {safeChartData.map((item, i) => {
             const value = Number(item?.value || 0);
             const target = Number(targetValue || 1);
-            const height = Math.min(
+            const barHeight = Math.min(
               Math.max((value / target) * MAX_BAR_HEIGHT, 4),
               MAX_BAR_HEIGHT,
             );
@@ -441,7 +409,7 @@ function ProgressTab({
                     style={[
                       styles.barFillModern,
                       {
-                        height,
+                        height: barHeight,
                         backgroundColor:
                           value > target ? '#EF4444' : colors.secondary,
                       },
@@ -504,28 +472,32 @@ export default function ProfileDetails({ navigation }) {
   // PAN GESTURE
   // =====================================================
 
-  const panGesture = Gesture.Pan()
-    .onChange(event => {
-      let value = translateY.value + event.changeY;
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .onChange(event => {
+          let value = translateY.value + event.changeY;
 
-      // LIMITS
-      if (value < -300) {
-        value = -300;
-      }
+          // LIMITS
+          if (value < -300) {
+            value = -300;
+          }
 
-      if (value > 0) {
-        value = 0;
-      }
+          if (value > 0) {
+            value = 0;
+          }
 
-      translateY.value = value;
-    })
+          translateY.value = value;
+        })
 
-    .onEnd(() => {
-      translateY.value = withSpring(translateY.value < -150 ? -300 : 0, {
-        damping: 18,
-        stiffness: 120,
-      });
-    });
+        .onEnd(() => {
+          translateY.value = withSpring(translateY.value < -150 ? -300 : 0, {
+            damping: 18,
+            stiffness: 120,
+          });
+        }),
+    [translateY],
+  );
 
   // =====================================================
   // AVATAR ANIMATION
@@ -699,199 +671,434 @@ export default function ProfileDetails({ navigation }) {
   // MAIN DATA
   // =====================================================
 
-  // =====================================================
-  // COMPLETE DYNAMIC STATS + PROGRESS LOGIC
-  // SUPPORTS ALL HABITS STRUCTURES
-  // =====================================================
-
-  // =====================================================
-  // MAIN DATA
-  // =====================================================
-
   const profile = userData?.profile || {};
   const habits = userData?.habits || {};
 
-  const excludeKeys = [
-    'booking',
-    'newVeggie',
-    'personalized goal 1',
-    'personalized goal 2',
-    'personalized goal 3',
-    'bodyFatGoal',
-    'fruits',
-    'Snacks',
-    'Beverage',
-    'weightChallenge',
-  ];
-
-  const ALL_HABITS = Object.entries(habits || {}).filter(
-    ([key]) =>
-      !excludeKeys.some(
-        excluded => key?.toLowerCase().trim() === excluded.toLowerCase().trim(),
+  const ALL_HABITS = useMemo(
+    () =>
+      Object.entries(habits || {}).filter(
+        ([key]) =>
+          !EXCLUDE_KEYS.some(
+            excluded =>
+              key?.toLowerCase().trim() === excluded.toLowerCase().trim(),
+          ),
       ),
+    [habits],
   );
 
-  const AVAILABLE_HABITS = ALL_HABITS.filter(
-    ([_, value]) => value?.[currentMonthKey],
-  ).map(([key]) => key);
+  const AVAILABLE_HABITS = useMemo(
+    () =>
+      ALL_HABITS.filter(([, value]) => value?.[currentMonthKey]).map(
+        ([key]) => key,
+      ),
+    [ALL_HABITS],
+  );
 
   // =====================================================
-  // GLOBAL COUNTERS
+  // GLOBAL COUNTERS + HABIT TARGETS
+  // SUPPORTS ALL HABITS STRUCTURES
   // =====================================================
 
-  let totalCompleted = 0;
-  let totalTracked = 0;
-  let totalPhotos = 0;
-  let totalWorkoutSessions = 0;
-  let totalFruitEntries = 0;
-  let totalSnackEntries = 0;
-  let totalBeverages = 0;
-  let totalSugar = 0;
-  let totalWeightLogs = 0;
-  let totalBodyFatLogs = 0;
-  let totalSleepDays = 0;
-  let totalSleepHours = 0;
-  let totalGoalsCreated = 0;
+  const {
+    totalPhotos,
+    totalWorkoutSessions,
+    totalFruitEntries,
+    totalSnackEntries,
+    totalBeverages,
+    totalSugar,
+    totalWeightLogs,
+    totalBodyFatLogs,
+    totalSleepDays,
+    totalSleepHours,
+    dynamicHabitStats,
+    dynamicBadges,
+    habitTargets,
+  } = useMemo(() => {
+    let totalCompleted = 0;
+    let totalTracked = 0;
+    let totalPhotos = 0;
+    let totalWorkoutSessions = 0;
+    let totalFruitEntries = 0;
+    let totalSnackEntries = 0;
+    let totalBeverages = 0;
+    let totalSugar = 0;
+    let totalWeightLogs = 0;
+    let totalBodyFatLogs = 0;
+    let totalSleepDays = 0;
+    let totalSleepHours = 0;
+    let totalGoalsCreated = 0;
 
-  let weeklyProgressMap = {
-    Mon: 0,
-    Tue: 0,
-    Wed: 0,
-    Thu: 0,
-    Fri: 0,
-    Sat: 0,
-    Sun: 0,
-  };
+    let weeklyProgressMap = {
+      Mon: 0,
+      Tue: 0,
+      Wed: 0,
+      Thu: 0,
+      Fri: 0,
+      Sat: 0,
+      Sun: 0,
+    };
 
-  let dynamicHabitStats = [];
-  let dynamicBadges = [];
+    let dynamicHabitStats = [];
+    let dynamicBadges = [];
 
-  const completedDates = [];
-
-  // =====================================================
-  // LOOP THROUGH ALL HABITS
-  // =====================================================
-
-  ALL_HABITS.forEach(([habitKey, habitValue]) => {
-    const monthData = habitValue?.[currentMonthKey];
-
-    if (!monthData) return;
-
-    totalGoalsCreated += 1;
+    const completedDates = [];
 
     // =====================================================
-    // PERSONALIZED GOALS
+    // LOOP THROUGH ALL HABITS
     // =====================================================
 
-    if (habitKey.includes('Personalized Goal')) {
-      const entries = Object.values(monthData || {});
+    ALL_HABITS.forEach(([habitKey, habitValue]) => {
+      const monthData = habitValue?.[currentMonthKey];
 
-      totalTracked += entries.length;
-      totalCompleted += entries.length;
-      totalPhotos += entries.length;
+      if (!monthData) return;
 
-      dynamicHabitStats.push({
-        emoji: '🎯',
-        label: habitKey,
-        value: `${entries.length} uploads`,
-      });
+      totalGoalsCreated += 1;
 
-      entries.forEach(item => {
-        if (item?.createdAt) {
-          const day = moment(item.createdAt).format('ddd');
+      // =====================================================
+      // PERSONALIZED GOALS
+      // =====================================================
 
-          if (weeklyProgressMap[day] !== undefined) {
-            weeklyProgressMap[day] += 1;
+      if (habitKey.includes('Personalized Goal')) {
+        const entries = Object.values(monthData || {});
+
+        totalTracked += entries.length;
+        totalCompleted += entries.length;
+        totalPhotos += entries.length;
+
+        dynamicHabitStats.push({
+          emoji: '🎯',
+          label: habitKey,
+          value: `${entries.length} uploads`,
+        });
+
+        entries.forEach(item => {
+          if (item?.createdAt) {
+            const day = moment(item.createdAt).format('ddd');
+
+            if (weeklyProgressMap[day] !== undefined) {
+              weeklyProgressMap[day] += 1;
+            }
+
+            completedDates.push(moment(item.createdAt).format('YYYY-MM-DD'));
           }
-
-          completedDates.push(moment(item.createdAt).format('YYYY-MM-DD'));
-        }
-      });
-    }
-
-    // =====================================================
-    // BEVERAGE
-    // =====================================================
-
-    if (habitKey === 'beverage') {
-      const days = monthData?.days || {};
-
-      Object.entries(days).forEach(([date, item]) => {
-        totalTracked += 1;
-
-        if (item?.photo || item?.name) {
-          totalCompleted += 1;
-          totalBeverages += 1;
-
-          completedDates.push(date);
-
-          const m = moment(date, ['YYYY-MM-DD', moment.ISO_8601], true);
-
-          if (!m.isValid()) return;
-
-          const day = m.format('ddd');
-
-          if (weeklyProgressMap[day] !== undefined) {
-            weeklyProgressMap[day] += 1;
-          }
-        }
-      });
-
-      dynamicHabitStats.push({
-        emoji: '🥤',
-        label: 'Beverages',
-        value: `${totalBeverages} drinks`,
-      });
-
-      dynamicBadges.push({
-        emoji: '🥤',
-        label: 'Drink Logger',
-      });
-    }
-
-    // =====================================================
-    // BODY FAT
-    // =====================================================
-
-    if (habitKey === 'bodyFatGoal') {
-      const logs = monthData?.logs || {};
-
-      const totalLogs = Object.keys(logs).length;
-
-      totalTracked += totalLogs;
-      totalCompleted += totalLogs;
-      totalBodyFatLogs += totalLogs;
-
-      dynamicHabitStats.push({
-        emoji: '📉',
-        label: 'Body Fat',
-        value: `${totalLogs} check-ins`,
-      });
-
-      if (totalLogs > 0) {
-        dynamicBadges.push({
-          emoji: '📉',
-          label: 'Body Fat Tracker',
         });
       }
-    }
 
-    // =====================================================
-    // CARDIO
-    // =====================================================
+      // =====================================================
+      // WEIGHT TRAINING
+      // =====================================================
 
-    if (habitKey === 'cardio') {
-      const weeks = monthData?.weeks || {};
+      if (habitKey === 'weightTraining') {
+        const weeks = monthData?.weeks || {};
 
-      Object.values(weeks).forEach(week => {
-        totalWorkoutSessions += Number(week?.sessions || 0);
+        let strengthSessions = 0;
+        let strengthPhotos = 0;
 
-        const days = week?.days || {};
+        Object.values(weeks).forEach(week => {
+          const photos = Array.isArray(week?.workoutPhotos)
+            ? week.workoutPhotos
+            : [];
+
+          strengthPhotos += photos.length;
+          strengthSessions += photos.length;
+
+          totalTracked += photos.length;
+          totalCompleted += photos.length;
+
+          photos.forEach(photo => {
+            const date =
+              photo?.timestamp || photo?.uploadedAt || week?.updatedAt;
+
+            if (date) {
+              const m = moment(date);
+
+              if (m.isValid()) {
+                const day = m.format('ddd');
+
+                if (weeklyProgressMap[day] !== undefined) {
+                  weeklyProgressMap[day] += 1;
+                }
+
+                completedDates.push(m.format('YYYY-MM-DD'));
+              }
+            }
+          });
+        });
+
+        totalWorkoutSessions += strengthSessions;
+        totalPhotos += strengthPhotos;
+
+        dynamicHabitStats.push({
+          emoji: '🏋️',
+          label: 'Strength Training',
+          value: `${strengthSessions} sessions`,
+        });
+
+        dynamicHabitStats.push({
+          emoji: '📸',
+          label: 'Strength Photos',
+          value: `${strengthPhotos}`,
+        });
+
+        if (strengthSessions > 0) {
+          dynamicBadges.push({
+            emoji: '🏋️',
+            label: 'Strength Trainer',
+          });
+        }
+      }
+
+      // =====================================================
+      // BEVERAGE
+      // =====================================================
+
+      if (habitKey === 'beverage') {
+        const days = monthData?.days || {};
 
         Object.entries(days).forEach(([date, item]) => {
           totalTracked += 1;
 
-          if (item?.startPhoto || item?.endPhoto) {
+          if (item?.photo || item?.name) {
+            totalCompleted += 1;
+            totalBeverages += 1;
+
+            completedDates.push(date);
+
+            const m = moment(date, ['YYYY-MM-DD', moment.ISO_8601], true);
+
+            if (!m.isValid()) return;
+
+            const day = m.format('ddd');
+
+            if (weeklyProgressMap[day] !== undefined) {
+              weeklyProgressMap[day] += 1;
+            }
+          }
+        });
+
+        dynamicHabitStats.push({
+          emoji: '🥤',
+          label: 'Beverages',
+          value: `${totalBeverages} drinks`,
+        });
+
+        dynamicBadges.push({
+          emoji: '🥤',
+          label: 'Drink Logger',
+        });
+      }
+
+      // =====================================================
+      // BODY FAT
+      // =====================================================
+
+      if (habitKey === 'bodyFatGoal') {
+        const logs = monthData?.logs || {};
+
+        const totalLogs = Object.keys(logs).length;
+
+        totalTracked += totalLogs;
+        totalCompleted += totalLogs;
+        totalBodyFatLogs += totalLogs;
+
+        dynamicHabitStats.push({
+          emoji: '📉',
+          label: 'Body Fat',
+          value: `${totalLogs} check-ins`,
+        });
+
+        if (totalLogs > 0) {
+          dynamicBadges.push({
+            emoji: '📉',
+            label: 'Body Fat Tracker',
+          });
+        }
+      }
+
+      // =====================================================
+      // CARDIO
+      // =====================================================
+
+      if (habitKey === 'cardio') {
+        const weeks = monthData?.weeks || {};
+
+        let cardioSessions = 0;
+        let cardioMinutes = 0;
+        let cardioPhotos = 0;
+
+        Object.values(weeks).forEach(week => {
+          const days = week?.days || {};
+
+          Object.entries(days).forEach(([date, dayData]) => {
+            const sessions = Array.isArray(dayData?.sessions)
+              ? dayData.sessions
+              : [];
+
+            sessions.forEach(session => {
+              cardioSessions += 1;
+              cardioMinutes += Number(session?.duration || 0);
+
+              totalTracked += 1;
+              totalCompleted += 1;
+
+              completedDates.push(date);
+
+              const m = moment(date);
+
+              if (m.isValid()) {
+                const day = m.format('ddd');
+
+                if (weeklyProgressMap[day] !== undefined) {
+                  weeklyProgressMap[day] += 1;
+                }
+              }
+
+              if (session?.startPhoto) {
+                cardioPhotos += 1;
+              }
+
+              if (session?.endPhoto) {
+                cardioPhotos += 1;
+              }
+            });
+          });
+        });
+
+        totalWorkoutSessions += cardioSessions;
+        totalPhotos += cardioPhotos;
+
+        dynamicHabitStats.push({
+          emoji: '🏃',
+          label: 'Cardio',
+          value: `${cardioSessions} Cardio sessions`,
+        });
+
+        dynamicHabitStats.push({
+          emoji: '📸',
+          label: 'Workout Photos',
+          value: `${cardioPhotos}`,
+        });
+
+        dynamicBadges.push({
+          emoji: '🏃',
+          label: 'Cardio Active',
+        });
+      }
+
+      // =====================================================
+      // DAILY FRUITS
+      // =====================================================
+
+      if (habitKey === 'dailyFruits') {
+        const weeks = monthData || {};
+
+        Object.values(weeks).forEach(week => {
+          Object.entries(week || {}).forEach(([date, item]) => {
+            const entries = item?.entries || {};
+
+            const fruitsCount = Object.keys(entries).length;
+
+            totalFruitEntries += fruitsCount;
+            totalTracked += fruitsCount;
+
+            if (fruitsCount > 0) {
+              totalCompleted += fruitsCount;
+
+              completedDates.push(date);
+
+              const m = moment(date, ['YYYY-MM-DD', moment.ISO_8601], true);
+
+              if (!m.isValid()) return;
+
+              const day = m.format('ddd');
+
+              if (weeklyProgressMap[day] !== undefined) {
+                weeklyProgressMap[day] += fruitsCount;
+              }
+            }
+          });
+        });
+
+        dynamicHabitStats.push({
+          emoji: '🍎',
+          label: 'Fruit Intake',
+          value: `${totalFruitEntries} fruits`,
+        });
+
+        dynamicBadges.push({
+          emoji: '🍎',
+          label: 'Fruit Lover',
+        });
+      }
+
+      // =====================================================
+      // EXERCISE WITH FRIEND
+      // =====================================================
+
+      if (habitKey === 'exWithFriend') {
+        const weeks = monthData?.weeks || {};
+
+        let friendSessions = 0;
+
+        Object.values(weeks).forEach(week => {
+          const photos = week?.workoutPhotos || [];
+
+          friendSessions += photos.length;
+
+          totalTracked += photos.length;
+          totalCompleted += photos.length;
+        });
+
+        dynamicHabitStats.push({
+          emoji: '🤝',
+          label: 'Workout with Friend',
+          value: `${friendSessions} sessions`,
+        });
+      }
+
+      // =====================================================
+      // FERMENTED FOOD
+      // =====================================================
+
+      if (habitKey === 'fermentedFood') {
+        const weeks = monthData?.weeks || {};
+
+        let fermentedCount = 0;
+
+        Object.values(weeks).forEach(week => {
+          Object.values(week || {}).forEach(item => {
+            if (item?.done) {
+              fermentedCount += 1;
+              totalTracked += 1;
+              totalCompleted += 1;
+            }
+          });
+        });
+
+        dynamicHabitStats.push({
+          emoji: '🍶',
+          label: 'Fermented Foods',
+          value: `${fermentedCount} completed`,
+        });
+      }
+
+      // =====================================================
+      // FIBER
+      // =====================================================
+
+      if (habitKey === 'fiber') {
+        const days = monthData?.days || {};
+
+        let fiberTotal = 0;
+
+        Object.entries(days).forEach(([date, item]) => {
+          totalTracked += 1;
+
+          const progress = Number(item?.progress || 0);
+
+          fiberTotal += progress;
+
+          if (progress > 0) {
             totalCompleted += 1;
 
             completedDates.push(date);
@@ -907,38 +1114,212 @@ export default function ProfileDetails({ navigation }) {
             }
           }
         });
-      });
 
-      dynamicHabitStats.push({
-        emoji: '🏃',
-        label: 'Cardio',
-        value: `${totalWorkoutSessions} sessions`,
-      });
+        dynamicHabitStats.push({
+          emoji: '🥦',
+          label: 'Fiber',
+          value: `${fiberTotal}g tracked`,
+        });
 
-      dynamicBadges.push({
-        emoji: '🏃',
-        label: 'Cardio Active',
-      });
-    }
+        dynamicBadges.push({
+          emoji: '🥦',
+          label: 'Fiber Goal',
+        });
+      }
 
-    // =====================================================
-    // DAILY FRUITS
-    // =====================================================
+      // =====================================================
+      // FITNESS
+      // =====================================================
 
-    if (habitKey === 'dailyFruits') {
-      const weeks = monthData || {};
+      if (habitKey === 'fitness') {
+        const weeks = monthData?.weeks || {};
 
-      Object.values(weeks).forEach(week => {
-        Object.entries(week || {}).forEach(([date, item]) => {
-          const entries = item?.entries || {};
+        let workoutPhotos = 0;
+        let workoutSessions = 0;
 
-          const fruitsCount = Object.keys(entries).length;
+        Object.values(weeks).forEach(week => {
+          // NEW STRUCTURE
+          const photos = Object.values(week?.workoutPhotos || {});
 
-          totalFruitEntries += fruitsCount;
-          totalTracked += fruitsCount;
+          workoutPhotos += photos.length;
+          workoutSessions += photos.length;
 
-          if (fruitsCount > 0) {
-            totalCompleted += fruitsCount;
+          totalTracked += photos.length;
+          totalCompleted += photos.length;
+
+          photos.forEach(photo => {
+            const date = photo?.uploadedAt;
+
+            if (!date) return;
+
+            const m = moment(date);
+
+            if (m.isValid()) {
+              const day = m.format('ddd');
+
+              if (weeklyProgressMap[day] !== undefined) {
+                weeklyProgressMap[day] += 1;
+              }
+
+              completedDates.push(m.format('YYYY-MM-DD'));
+            }
+          });
+
+          // BACKWARD COMPATIBILITY
+          const days = week?.days || {};
+
+          Object.entries(days).forEach(([date, dayData]) => {
+            const sessions = Array.isArray(dayData?.sessions)
+              ? dayData.sessions
+              : [];
+
+            sessions.forEach(session => {
+              workoutSessions += 1;
+
+              totalTracked += 1;
+              totalCompleted += 1;
+
+              if (session?.startPhoto) {
+                workoutPhotos += 1;
+              }
+
+              if (session?.endPhoto) {
+                workoutPhotos += 1;
+              }
+
+              const m = moment(date);
+
+              if (m.isValid()) {
+                const day = m.format('ddd');
+
+                if (weeklyProgressMap[day] !== undefined) {
+                  weeklyProgressMap[day] += 1;
+                }
+
+                completedDates.push(date);
+              }
+            });
+          });
+        });
+
+        totalPhotos += workoutPhotos;
+        totalWorkoutSessions += workoutSessions;
+
+        dynamicHabitStats.push({
+          emoji: '💪',
+          label: 'Fitness',
+          value: `${workoutSessions} Classes Attended`,
+        });
+
+        dynamicHabitStats.push({
+          emoji: '📸',
+          label: 'Workout Photos',
+          value: `${workoutPhotos}`,
+        });
+
+        if (workoutSessions > 0) {
+          dynamicBadges.push({
+            emoji: '💪',
+            label: 'Fitness Active',
+          });
+        }
+      }
+
+      // =====================================================
+      // HALF PLATE
+      // =====================================================
+
+      if (habitKey === 'halfPlateChallenge') {
+        const days = monthData?.days || {};
+
+        let count = 0;
+
+        Object.values(days).forEach(item => {
+          totalTracked += 1;
+
+          if (item?.completed) {
+            count += 1;
+            totalCompleted += 1;
+          }
+        });
+
+        dynamicHabitStats.push({
+          emoji: '🥗',
+          label: 'Half Plate Fruits / Veggies',
+          value: `${count} meals`,
+        });
+      }
+
+      // =====================================================
+      // MEATLESS
+      // =====================================================
+
+      if (habitKey === 'meatLess') {
+        const weeks = monthData?.weeks || {};
+
+        let meatlessMeals = 0;
+
+        Object.values(weeks).forEach(week => {
+          meatlessMeals += Object.keys(week || {}).length;
+        });
+
+        totalTracked += meatlessMeals;
+        totalCompleted += meatlessMeals;
+
+        dynamicHabitStats.push({
+          emoji: '🌱',
+          label: 'Meatless Meals',
+          value: `${meatlessMeals} meals`,
+        });
+
+        dynamicBadges.push({
+          emoji: '🌱',
+          label: 'Plant Powered',
+        });
+      }
+
+      // =====================================================
+      // NEW VEGGIE
+      // =====================================================
+
+      if (habitKey === 'newVeggie') {
+        const weeks = monthData?.weeks || {};
+
+        let veggieCount = 0;
+
+        Object.values(weeks).forEach(item => {
+          if (item?.uri) {
+            veggieCount += 1;
+          }
+        });
+
+        totalTracked += veggieCount;
+        totalCompleted += veggieCount;
+
+        dynamicHabitStats.push({
+          emoji: '🥕',
+          label: 'New Veggies',
+          value: `${veggieCount} tried`,
+        });
+      }
+
+      // =====================================================
+      // SLEEP
+      // =====================================================
+
+      if (habitKey === 'sleep') {
+        const days = monthData?.days || {};
+
+        Object.entries(days).forEach(([date, item]) => {
+          totalTracked += 1;
+
+          if (item?.sleep) {
+            totalCompleted += 1;
+            totalSleepDays += 1;
+
+            const hrs = parseFloat(item?.sleep || 0);
+
+            totalSleepHours += hrs;
 
             completedDates.push(date);
 
@@ -949,369 +1330,190 @@ export default function ProfileDetails({ navigation }) {
             const day = m.format('ddd');
 
             if (weeklyProgressMap[day] !== undefined) {
-              weeklyProgressMap[day] += fruitsCount;
+              weeklyProgressMap[day] += 1;
             }
           }
         });
-      });
 
-      dynamicHabitStats.push({
-        emoji: '🍎',
-        label: 'Fruit Intake',
-        value: `${totalFruitEntries} fruits`,
-      });
+        dynamicHabitStats.push({
+          emoji: '😴',
+          label: 'Sleep',
+          value: `${totalSleepHours.toFixed(1)} hrs`,
+        });
 
-      dynamicBadges.push({
-        emoji: '🍎',
-        label: 'Fruit Lover',
-      });
-    }
+        dynamicBadges.push({
+          emoji: '😴',
+          label: 'Sleep Focus',
+        });
+      }
 
-    // =====================================================
-    // EXERCISE WITH FRIEND
-    // =====================================================
+      // =====================================================
+      // SNACKS
+      // =====================================================
 
-    if (habitKey === 'exWithFriend') {
-      const weeks = monthData?.weeks || {};
+      if (habitKey === 'snacks') {
+        const days = monthData?.days || {};
 
-      let friendSessions = 0;
+        Object.entries(days).forEach(([date, item]) => {
+          const snacks = item?.snacks || [];
 
-      Object.values(weeks).forEach(week => {
-        const photos = week?.workoutPhotos || [];
+          totalSnackEntries += snacks.length;
 
-        friendSessions += photos.length;
+          totalTracked += snacks.length;
+          totalCompleted += snacks.length;
 
-        totalTracked += photos.length;
-        totalCompleted += photos.length;
-      });
+          if (snacks.length > 0) {
+            completedDates.push(date);
 
-      dynamicHabitStats.push({
-        emoji: '🤝',
-        label: 'Workout Buddy',
-        value: `${friendSessions} sessions`,
-      });
-    }
+            const m = moment(date, ['YYYY-MM-DD', moment.ISO_8601], true);
 
-    // =====================================================
-    // FERMENTED FOOD
-    // =====================================================
+            if (!m.isValid()) return;
 
-    if (habitKey === 'fermentedFood') {
-      const weeks = monthData?.weeks || {};
+            const day = m.format('ddd');
 
-      let fermentedCount = 0;
+            if (weeklyProgressMap[day] !== undefined) {
+              weeklyProgressMap[day] += snacks.length;
+            }
+          }
+        });
 
-      Object.values(weeks).forEach(week => {
-        Object.values(week || {}).forEach(item => {
-          if (item?.done) {
-            fermentedCount += 1;
+        dynamicHabitStats.push({
+          emoji: '🍪',
+          label: 'Snacks',
+          value: `${totalSnackEntries} snacks`,
+        });
+      }
+
+      // =====================================================
+      // SUGAR
+      // =====================================================
+
+      if (habitKey === 'sugarIntake') {
+        const days = monthData?.days || {};
+
+        Object.entries(days).forEach(([date, item]) => {
+          const items = item?.items || [];
+
+          items.forEach(sugarItem => {
+            totalSugar += Number(sugarItem?.sugar || 0);
+          });
+
+          totalTracked += items.length;
+          totalCompleted += items.length;
+        });
+
+        dynamicHabitStats.push({
+          emoji: '🍬',
+          label: 'Sugar Intake',
+          value: `${totalSugar}g`,
+        });
+      }
+
+      // =====================================================
+      // WEIGHT CHALLENGE
+      // =====================================================
+
+      if (habitKey === 'weightChallenge') {
+        const weeks = monthData?.weeks || {};
+
+        Object.values(weeks).forEach(item => {
+          if (item?.weight) {
+            totalWeightLogs += 1;
             totalTracked += 1;
             totalCompleted += 1;
           }
         });
-      });
 
-      dynamicHabitStats.push({
-        emoji: '🥬',
-        label: 'Fermented Foods',
-        value: `${fermentedCount} completed`,
-      });
-    }
-
-    // =====================================================
-    // FIBER
-    // =====================================================
-
-    if (habitKey === 'fiber') {
-      const days = monthData?.days || {};
-
-      let fiberTotal = 0;
-
-      Object.entries(days).forEach(([date, item]) => {
-        totalTracked += 1;
-
-        const progress = Number(item?.progress || 0);
-
-        fiberTotal += progress;
-
-        if (progress > 0) {
-          totalCompleted += 1;
-
-          completedDates.push(date);
-
-          const m = moment(date, ['YYYY-MM-DD', moment.ISO_8601], true);
-
-          if (!m.isValid()) return;
-
-          const day = m.format('ddd');
-
-          if (weeklyProgressMap[day] !== undefined) {
-            weeklyProgressMap[day] += 1;
-          }
-        }
-      });
-
-      dynamicHabitStats.push({
-        emoji: '🥦',
-        label: 'Fiber',
-        value: `${fiberTotal}g tracked`,
-      });
-
-      dynamicBadges.push({
-        emoji: '🥦',
-        label: 'Fiber Goal',
-      });
-    }
-
-    // =====================================================
-    // FITNESS
-    // =====================================================
-
-    if (habitKey === 'fitness') {
-      const weeks = monthData?.weeks || {};
-
-      let workoutPhotos = 0;
-
-      Object.values(weeks).forEach(week => {
-        const photos = week?.workoutPhotos || [];
-
-        workoutPhotos += photos.length;
-
-        totalTracked += photos.length;
-        totalCompleted += photos.length;
-      });
-
-      totalPhotos += workoutPhotos;
-
-      dynamicHabitStats.push({
-        emoji: '💪',
-        label: 'Fitness',
-        value: `${workoutPhotos} workouts`,
-      });
-
-      dynamicBadges.push({
-        emoji: '💪',
-        label: 'Fitness Active',
-      });
-    }
-
-    // =====================================================
-    // HALF PLATE
-    // =====================================================
-
-    if (habitKey === 'halfPlateChallenge') {
-      const days = monthData?.days || {};
-
-      let count = 0;
-
-      Object.values(days).forEach(item => {
-        totalTracked += 1;
-
-        if (item?.completed) {
-          count += 1;
-          totalCompleted += 1;
-        }
-      });
-
-      dynamicHabitStats.push({
-        emoji: '🥗',
-        label: 'Half Plate',
-        value: `${count} meals`,
-      });
-    }
-
-    // =====================================================
-    // MEATLESS
-    // =====================================================
-
-    if (habitKey === 'meatLess') {
-      const weeks = monthData?.weeks || {};
-
-      let meatlessMeals = 0;
-
-      Object.values(weeks).forEach(week => {
-        meatlessMeals += Object.keys(week || {}).length;
-      });
-
-      totalTracked += meatlessMeals;
-      totalCompleted += meatlessMeals;
-
-      dynamicHabitStats.push({
-        emoji: '🌱',
-        label: 'Meatless Meals',
-        value: `${meatlessMeals} meals`,
-      });
-
-      dynamicBadges.push({
-        emoji: '🌱',
-        label: 'Plant Powered',
-      });
-    }
-
-    // =====================================================
-    // NEW VEGGIE
-    // =====================================================
-
-    if (habitKey === 'newVeggie') {
-      const weeks = monthData?.weeks || {};
-
-      let veggieCount = 0;
-
-      Object.values(weeks).forEach(item => {
-        if (item?.uri) {
-          veggieCount += 1;
-        }
-      });
-
-      totalTracked += veggieCount;
-      totalCompleted += veggieCount;
-
-      dynamicHabitStats.push({
-        emoji: '🥕',
-        label: 'New Veggies',
-        value: `${veggieCount} tried`,
-      });
-    }
-
-    // =====================================================
-    // SLEEP
-    // =====================================================
-
-    if (habitKey === 'sleep') {
-      const days = monthData?.days || {};
-
-      Object.entries(days).forEach(([date, item]) => {
-        totalTracked += 1;
-
-        if (item?.sleep) {
-          totalCompleted += 1;
-          totalSleepDays += 1;
-
-          const hrs = parseFloat(item?.sleep || 0);
-
-          totalSleepHours += hrs;
-
-          completedDates.push(date);
-
-          const m = moment(date, ['YYYY-MM-DD', moment.ISO_8601], true);
-
-          if (!m.isValid()) return;
-
-          const day = m.format('ddd');
-
-          if (weeklyProgressMap[day] !== undefined) {
-            weeklyProgressMap[day] += 1;
-          }
-        }
-      });
-
-      dynamicHabitStats.push({
-        emoji: '😴',
-        label: 'Sleep',
-        value: `${totalSleepHours.toFixed(1)} hrs`,
-      });
-
-      dynamicBadges.push({
-        emoji: '😴',
-        label: 'Sleep Focus',
-      });
-    }
-
-    // =====================================================
-    // SNACKS
-    // =====================================================
-
-    if (habitKey === 'snacks') {
-      const days = monthData?.days || {};
-
-      Object.entries(days).forEach(([date, item]) => {
-        const snacks = item?.snacks || [];
-
-        totalSnackEntries += snacks.length;
-
-        totalTracked += snacks.length;
-        totalCompleted += snacks.length;
-
-        if (snacks.length > 0) {
-          completedDates.push(date);
-
-          const m = moment(date, ['YYYY-MM-DD', moment.ISO_8601], true);
-
-          if (!m.isValid()) return;
-
-          const day = m.format('ddd');
-
-          if (weeklyProgressMap[day] !== undefined) {
-            weeklyProgressMap[day] += snacks.length;
-          }
-        }
-      });
-
-      dynamicHabitStats.push({
-        emoji: '🍪',
-        label: 'Snacks',
-        value: `${totalSnackEntries} snacks`,
-      });
-    }
-
-    // =====================================================
-    // SUGAR
-    // =====================================================
-
-    if (habitKey === 'sugarIntake') {
-      const days = monthData?.days || {};
-
-      Object.entries(days).forEach(([date, item]) => {
-        const items = item?.items || [];
-
-        items.forEach(sugarItem => {
-          totalSugar += Number(sugarItem?.sugar || 0);
+        dynamicHabitStats.push({
+          emoji: '⚖️',
+          label: 'Weight Logs',
+          value: `${totalWeightLogs} entries`,
         });
 
-        totalTracked += items.length;
-        totalCompleted += items.length;
-      });
-
-      dynamicHabitStats.push({
-        emoji: '🍬',
-        label: 'Sugar Intake',
-        value: `${totalSugar}g`,
-      });
-    }
+        dynamicBadges.push({
+          emoji: '⚖️',
+          label: 'Weight Tracker',
+        });
+      }
+    });
 
     // =====================================================
-    // WEIGHT CHALLENGE
+    // HABIT TARGETS
     // =====================================================
 
-    if (habitKey === 'weightChallenge') {
-      const weeks = monthData?.weeks || {};
+    const habitTargets = {};
 
-      Object.values(weeks).forEach(item => {
-        if (item?.weight) {
-          totalWeightLogs += 1;
-          totalTracked += 1;
-          totalCompleted += 1;
-        }
-      });
+    ALL_HABITS.forEach(([habitKey, habitValue]) => {
+      const monthData = habitValue?.[currentMonthKey];
 
-      dynamicHabitStats.push({
-        emoji: '⚖️',
-        label: 'Weight Logs',
-        value: `${totalWeightLogs} entries`,
-      });
+      if (!monthData) return;
+      console.log('monthData?.target :>> ', monthData);
+      // direct target
 
-      dynamicBadges.push({
-        emoji: '⚖️',
-        label: 'Weight Tracker',
-      });
-    }
-  });
+      // nested config target
+      if (monthData?.config?.target) {
+        habitTargets[habitKey] = monthData.config.target;
+      }
+
+      // sleep
+      else if (habitKey === 'sleep') {
+        habitTargets[habitKey] = monthData.goal || monthData.target || '8';
+      }
+
+      // fiber
+      else if (habitKey === 'weightTraining') {
+        habitTargets[habitKey] = monthData.goal || monthData.target || '4';
+      } else if (habitKey === 'fitness') {
+        habitTargets[habitKey] = monthData.goal || monthData.target || '25';
+      }
+
+      // fiber
+      else if (habitKey === 'fiber') {
+        habitTargets[habitKey] = monthData.goal || monthData.target || '25';
+      }
+
+      // cardio
+      else if (habitKey === 'cardio') {
+        habitTargets[habitKey] =
+          monthData?.weeklyGoal || monthData.goal || monthData.target || '5';
+      }
+
+      // beverage
+      else if (habitKey === 'beverage') {
+        habitTargets[habitKey] =
+          monthData?.dailyGoal || monthData.goal || monthData.target || '8';
+      } else if (monthData?.target) {
+        habitTargets[habitKey] = monthData.goal || monthData.target;
+      }
+    });
+
+    return {
+      totalCompleted,
+      totalTracked,
+      totalPhotos,
+      totalWorkoutSessions,
+      totalFruitEntries,
+      totalSnackEntries,
+      totalBeverages,
+      totalSugar,
+      totalWeightLogs,
+      totalBodyFatLogs,
+      totalSleepDays,
+      totalSleepHours,
+      totalGoalsCreated,
+      weeklyProgressMap,
+      dynamicHabitStats,
+      dynamicBadges,
+      completedDates,
+      habitTargets,
+    };
+  }, [ALL_HABITS]);
 
   // =====================================================
   // UNIQUE DATES
   // =====================================================
-
-  const uniqueDates = [...new Set(completedDates)].sort();
+  // (uniqueDates retained for parity with original; not otherwise referenced)
+  // const uniqueDates = [...new Set(completedDates)].sort();
 
   // =====================================================
   // STREAK
@@ -1328,10 +1530,8 @@ export default function ProfileDetails({ navigation }) {
 
   // =====================================================
   // PROFILE STATS
-  // ===========
-  // ==========================================
+  // =====================================================
   let remainingDays = 0;
-  const TOTAL_CHALLENGE_DAYS = 30;
   const startDay = userData?.goal?.startDate;
   if (startDay) {
     const start = new Date(startDay);
@@ -1363,96 +1563,91 @@ export default function ProfileDetails({ navigation }) {
   // ACTIVITY STATS
   // =====================================================
 
-  const uniqueStatsMap = {};
+  const ACTIVITY_STATS_DYNAMIC = useMemo(() => {
+    const uniqueStatsMap = {};
 
-  [
-    {
-      emoji: '🔥',
-      label: 'Current Streak',
-      value: `${currentStreak} days`,
-    },
+    [
+      {
+        emoji: '🔥',
+        label: 'Quiz Current Streak',
+        value: `${currentStreak} days`,
+      },
 
-    {
-      emoji: '🏆',
-      label: 'Longest Streak',
-      value: `${longestStreak} days`,
-    },
+      {
+        emoji: '🏆',
+        label: 'Quiz Longest Streak',
+        value: `${longestStreak} days`,
+      },
+      {
+        emoji: '📸',
+        label: 'Personalized Photos Uploaded',
+        value: `${Number(totalPhotos || 0)}`,
+      },
 
-    {
-      emoji: '✅',
-      label: 'Completed Tasks',
-      value: `${totalCompleted}`,
-    },
+      {
+        emoji: '🍪',
+        label: 'Snacks Logged',
+        value: `${totalSnackEntries}`,
+      },
 
-    {
-      emoji: '📈',
-      label: 'Completion Rate',
-      value: `${completionRate}%`,
-    },
+      {
+        emoji: '🥤',
+        label: 'Beverages',
+        value: `${totalBeverages}`,
+      },
 
-    {
-      emoji: '📸',
-      label: 'Photos Uploaded',
-      value: `${totalPhotos}`,
-    },
+      {
+        emoji: '😴',
+        label: 'Sleep Hours',
+        value: `${totalSleepHours.toFixed(1)} hrs`,
+      },
 
-    {
-      emoji: '🍎',
-      label: 'Fruit Entries',
-      value: `${totalFruitEntries}`,
-    },
+      {
+        emoji: '🍬',
+        label: 'Sugar Intake',
+        value: `${totalSugar}g`,
+      },
 
-    {
-      emoji: '🍪',
-      label: 'Snacks Logged',
-      value: `${totalSnackEntries}`,
-    },
+      {
+        emoji: '🏃',
+        label: 'Workout Sessions',
+        value: `${totalWorkoutSessions}`,
+      },
 
-    {
-      emoji: '🥤',
-      label: 'Beverages',
-      value: `${totalBeverages}`,
-    },
+      {
+        emoji: '⚖️',
+        label: 'Weight Logs',
+        value: `${totalWeightLogs}`,
+      },
 
-    {
-      emoji: '😴',
-      label: 'Sleep Hours',
-      value: `${totalSleepHours.toFixed(1)} hrs`,
-    },
+      {
+        emoji: '📉',
+        label: 'Body Fat Logs',
+        value: `${totalBodyFatLogs}`,
+      },
 
-    {
-      emoji: '🍬',
-      label: 'Sugar Intake',
-      value: `${totalSugar}g`,
-    },
+      ...dynamicHabitStats,
+    ].forEach(item => {
+      // USE LABEL AS UNIQUE KEY
+      if (!uniqueStatsMap[item.label]) {
+        uniqueStatsMap[item.label] = item;
+      }
+    });
 
-    {
-      emoji: '🏃',
-      label: 'Workout Sessions',
-      value: `${totalWorkoutSessions}`,
-    },
-
-    {
-      emoji: '⚖️',
-      label: 'Weight Logs',
-      value: `${totalWeightLogs}`,
-    },
-
-    {
-      emoji: '📉',
-      label: 'Body Fat Logs',
-      value: `${totalBodyFatLogs}`,
-    },
-
-    ...dynamicHabitStats,
-  ].forEach(item => {
-    // USE LABEL AS UNIQUE KEY
-    if (!uniqueStatsMap[item.label]) {
-      uniqueStatsMap[item.label] = item;
-    }
-  });
-
-  const ACTIVITY_STATS_DYNAMIC = Object.values(uniqueStatsMap);
+    return Object.values(uniqueStatsMap);
+  }, [
+    currentStreak,
+    longestStreak,
+    totalPhotos,
+    totalSnackEntries,
+    totalBeverages,
+    totalSleepHours,
+    totalSugar,
+    totalWorkoutSessions,
+    totalWeightLogs,
+    totalBodyFatLogs,
+    dynamicHabitStats,
+  ]);
 
   // =====================================================
   // BADGES
@@ -1508,12 +1703,6 @@ export default function ProfileDetails({ navigation }) {
   ];
 
   // =====================================================
-  // WEEKLY DATA
-  // =====================================================
-
-  const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-  // =====================================================
   // MEMBER SINCE
   // =====================================================
 
@@ -1526,7 +1715,7 @@ export default function ProfileDetails({ navigation }) {
   // LIKE
   // =====================================================
 
-  const toggleLike = async postId => {
+  const toggleLike = useCallback(async postId => {
     const ref = database().ref(`posts/${postId}/likes/${userId}`);
 
     const snapshot = await ref.once('value');
@@ -1536,55 +1725,70 @@ export default function ProfileDetails({ navigation }) {
     } else {
       await ref.set(true);
     }
-  };
+  }, []);
+
+  const deletePost = useCallback(async postId => {
+    try {
+      if (!postId) return;
+
+      await database().ref(`/posts/${postId}`).remove();
+
+      console.log('Post deleted:', postId);
+    } catch (error) {
+      console.log('Delete error:', error);
+    }
+  }, []);
 
   // =====================================================
   // FEED ITEM
   // =====================================================
 
-  const renderFeed = ({ item, index }) => (
-    <ChatCard
-      item={{
-        ...item,
-        name: item?.name,
-        message: item?.message || item?.text,
-        picture: item?.image,
-        time: formatTime(item?.createdAt),
+  const renderFeed = useCallback(
+    ({ item, index }) => (
+      <ChatCard
+        item={{
+          ...item,
+          name: item?.name,
+          message: item?.message || item?.text,
+          picture: item?.image,
+          time: formatTime(item?.createdAt),
 
-        likes: item?.likesCount,
-        comments: item?.commentsCount,
-        isLiked: item?.isLiked,
+          likes: item?.likesCount,
+          comments: item?.commentsCount,
+          isLiked: item?.isLiked,
 
-        beverageName: item?.beverageName,
-        snackName: item?.snackName,
+          beverageName: item?.beverageName,
+          snackName: item?.snackName,
 
-        ingredients: item?.ingredients || [],
+          ingredients: item?.ingredients || [],
 
-        qty: item?.qty,
-        type: item?.type,
-      }}
-      index={index}
-      isUser={userId == item?.userId || userData?.profile?.role == 'admin'}
-      onDeletePress={() => deletePost(item?.id)}
-      onLikePress={() => toggleLike(item.id)}
-      onCardPress={() =>
-        navigation.navigate('SocialStack', {
-          screen: 'FeedDetails',
-          params: {
-            postId: item?.id,
-          },
-        })
-      }
-      onCommentPress={() =>
-        navigation.navigate('SocialStack', {
-          screen: 'FeedDetails',
-          params: {
-            postId: item?.id,
-            showComment: true,
-          },
-        })
-      }
-    />
+          qty: item?.qty,
+          type: item?.type,
+        }}
+        index={index}
+        isUser={userId == item?.userId || userData?.profile?.role == 'admin'}
+        onDeletePress={() => deletePost(item?.id)}
+        onLikePress={() => toggleLike(item.id)}
+        onCardPress={() =>
+          navigation.navigate('SocialStack', {
+            screen: 'FeedDetails',
+            params: {
+              postId: item?.id,
+            },
+          })
+        }
+        onCommentPress={() =>
+          navigation.navigate('SocialStack', {
+            screen: 'FeedDetails',
+            params: {
+              postId: item?.id,
+              showComment: true,
+            },
+          })
+        }
+      />
+    ),
+    [userData?.profile?.role, deletePost, toggleLike, navigation],
   );
 
   const normalizeDate = date => {
@@ -1610,15 +1814,6 @@ export default function ProfileDetails({ navigation }) {
         isToday: date.isSame(moment(), 'day'),
       };
     });
-  };
-
-  const HABIT_STRUCTURE = {
-    fiber: 'days',
-    sleep: 'days',
-    snacks: 'days_array',
-    fitness: 'weeks',
-    cardio: 'weeks_days',
-    fruits: 'weeks_days',
   };
 
   const normalizeHabitData = (habitKey, monthData) => {
@@ -1703,68 +1898,6 @@ export default function ProfileDetails({ navigation }) {
     }));
   };
 
-  // =====================================================
-  // HABIT TARGETS
-  // =====================================================
-
-  const habitTargets = {};
-
-  ALL_HABITS.forEach(([habitKey, habitValue]) => {
-    const monthData = habitValue?.[currentMonthKey];
-
-    if (!monthData) return;
-    console.log('monthData?.target :>> ', monthData);
-    // direct target
-
-    // nested config target
-    if (monthData?.config?.target) {
-      habitTargets[habitKey] = monthData.config.target;
-    }
-
-    // sleep
-    else if (habitKey === 'sleep') {
-      habitTargets[habitKey] = monthData.goal || monthData.target || '8';
-    }
-
-    // fiber
-    else if (habitKey === 'weightTraining') {
-      habitTargets[habitKey] = monthData.goal || monthData.target || '25';
-    } else if (habitKey === 'fitness') {
-      habitTargets[habitKey] = monthData.goal || monthData.target || '25';
-    }
-
-    // fiber
-    else if (habitKey === 'fiber') {
-      habitTargets[habitKey] = monthData.goal || monthData.target || '25';
-    }
-
-    // cardio
-    else if (habitKey === 'cardio') {
-      habitTargets[habitKey] =
-        monthData?.weeklyGoal || monthData.goal || monthData.target || '5';
-    }
-
-    // beverage
-    else if (habitKey === 'beverage') {
-      habitTargets[habitKey] =
-        monthData?.dailyGoal || monthData.goal || monthData.target || '8';
-    } else if (monthData?.target) {
-      habitTargets[habitKey] = monthData.goal || monthData.target;
-    }
-  });
-
-  const deletePost = async postId => {
-    try {
-      if (!postId) return;
-
-      await database().ref(`/posts/${postId}`).remove();
-
-      console.log('Post deleted:', postId);
-    } catch (error) {
-      console.log('Delete error:', error);
-    }
-  };
-
   return (
     <GestureHandlerRootView style={styles.root}>
       <Header
@@ -1773,7 +1906,6 @@ export default function ProfileDetails({ navigation }) {
           paddingHorizontal: 23,
         }}
         textStyle={[styles.navTitle, navTitleStyle]}
-        showRightBtn
       />
 
       <View style={styles.heroContent}>
@@ -1783,10 +1915,7 @@ export default function ProfileDetails({ navigation }) {
         <Animated.View style={[styles.avatarWrap, avatarStyle]}>
           <Image
             source={{
-              uri:
-                profile?.avatar ||
-                profile?.image ||
-                'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
+              uri: profile?.avatar || profile?.image || DEFAULT_AVATAR,
             }}
             style={{
               width: '100%',
@@ -2129,12 +2258,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
-  statValue: {
-    color: colors.white,
-    fontSize: 16,
-    fontFamily: fontFamily.montserratBold,
-    lineHeight: 20,
-  },
 
   statDivider: {
     width: 1,
@@ -2154,9 +2277,10 @@ const styles = StyleSheet.create({
   },
 
   progressTitle: {
-    color: colors.white,
-    fontSize: 18,
-    fontFamily: fontFamily.montserratBold,
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 11,
+    fontFamily: fontFamily.montserratMedium,
+    letterSpacing: 2,
   },
 
   progressSubtitle: {
@@ -2164,21 +2288,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 4,
     fontFamily: fontFamily.montserratMedium,
-  },
-
-  progressBadge: {
-    backgroundColor: 'rgba(143,175,120,0.14)',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(143,175,120,0.2)',
-  },
-
-  progressBadgeText: {
-    color: colors.secondary,
-    fontFamily: fontFamily.montserratBold,
-    fontSize: 13,
   },
 
   habitSelectorList: {
@@ -2219,43 +2328,10 @@ const styles = StyleSheet.create({
     color: colors.dark,
   },
 
-  chartCard: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    padding: 18,
-  },
-
-  chartHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-
-  chartTitle: {
-    color: colors.white,
-    fontSize: 15,
-    fontFamily: fontFamily.montserratBold,
-  },
-
   chartValue: {
     color: colors.secondary,
     fontSize: 22,
     fontFamily: fontFamily.montserratBold,
-  },
-
-  barChartModern: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    height: 180,
-  },
-
-  barColumn: {
-    alignItems: 'center',
-    flex: 1,
   },
 
   barTopValue: {
@@ -2265,14 +2341,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.montserratSemiBold,
   },
 
-  barTrackModern: {
-    width: 26,
-    height: 120,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 20,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
   modeToggle: {
     flexDirection: 'row',
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -2301,11 +2369,7 @@ const styles = StyleSheet.create({
   modeTextActive: {
     color: '#000',
   },
-  barFillModern: {
-    width: '100%',
 
-    borderRadius: 20,
-  },
   targetText: {
     fontSize: 10,
     color: 'rgba(255,255,255,0.6)',
@@ -2320,13 +2384,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: fontFamily?.montserratSemiBold,
   },
-  barDay: {
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 10,
-    marginTop: 10,
-    fontFamily: fontFamily.montserratMedium,
-    textAlign: 'center',
-  },
+
   // CTA buttons
   ctaRow: {
     flexDirection: 'row',
@@ -2447,16 +2505,8 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.montserratRegular,
   },
 
-  // Progress tab
-  progressTitle: {
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: 11,
-    fontFamily: fontFamily.montserratMedium,
-    letterSpacing: 2,
-  },
   barChart: {
     flexDirection: 'row',
-    // height: 110,
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderRadius: 16,
     borderWidth: 1,
@@ -2495,19 +2545,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  progressBadge: {
-    backgroundColor: 'rgba(143,175,120,0.12)',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(143,175,120,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  progressBadgeText: {
-    color: colors.secondary,
-    fontSize: 12,
-    fontFamily: fontFamily.montserratSemiBold,
   },
 
   barChartModern: {

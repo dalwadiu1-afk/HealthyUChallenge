@@ -153,9 +153,12 @@ export default function EditProfile({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <Wrapper>
-        {/* HEADER */}
-        <Header header="Edit Profile" />
+      {/* HEADER */}
+      <Header
+        header="Edit Profile"
+        headerContainer={{ paddingHorizontal: 23 }}
+      />
+      <Wrapper orbsRight>
         {/* <Text style={styles.header}>Edit Profile</Text> */}
 
         {/* AVATAR */}

@@ -2,23 +2,19 @@ import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
-  StatusBar,
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  TextInput,
   Animated,
   Dimensions,
 } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { colors } from '../../constant/colors';
 import { fontFamily as ff } from '../../constant';
 import ChatCard from '../../components/social/chatCard';
 import auth from '@react-native-firebase/auth';
-import ProfileHeader from '../../components/profile/ProfileHeader';
 import { Header, Wrapper } from '../../components';
 import database, { onValue } from '@react-native-firebase/database';
-import moment from 'moment';
+import Svg, { Circle, Rect, Path } from 'react-native-svg';
 
 const { height } = Dimensions.get('window');
 
@@ -252,6 +248,7 @@ export default function Feeds({ navigation }) {
           // }
 
           renderItem={({ item, index }) => {
+            console.log('object :>> ', item);
             return (
               <ChatCard
                 item={{
@@ -269,18 +266,23 @@ export default function Feeds({ navigation }) {
                   type: item.type,
 
                   snackName: item?.snackName,
+                  snackApproverName: item?.approvedBy,
                   qty: item?.qty,
                   type: item?.type,
                 }}
                 index={index}
                 onLikePress={() => toggleLike(item.id)}
                 onCardPress={() =>
-                  navigation.navigate('FeedDetails', { postId: item?.id })
+                  navigation.navigate('FeedDetails', {
+                    postId: item?.id,
+                    userData: userData,
+                  })
                 }
                 onCommentPress={() =>
                   navigation.navigate('FeedDetails', {
                     postId: item?.id,
                     showComment: true,
+                    userData: userData,
                   })
                 }
                 isUser={
@@ -291,18 +293,90 @@ export default function Feeds({ navigation }) {
             );
           }}
           ListEmptyComponent={
-            <Text
-              style={{ color: 'white', textAlign: 'center', marginTop: 40 }}
-            >
-              No posts yet 🚀
-            </Text>
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptySvgContainer}>
+                <Svg width={150} height={150} viewBox="0 0 150 150">
+                  {/* Glow Circle */}
+                  <Circle
+                    cx="75"
+                    cy="75"
+                    r="60"
+                    fill="rgba(143,175,120,0.08)"
+                  />
+
+                  {/* Card */}
+                  <Rect
+                    x="35"
+                    y="35"
+                    width="80"
+                    height="90"
+                    rx="18"
+                    fill="rgba(255,255,255,0.04)"
+                    stroke="rgba(143,175,120,0.35)"
+                    strokeWidth="1.5"
+                  />
+
+                  {/* Image Placeholder */}
+                  <Rect
+                    x="48"
+                    y="48"
+                    width="54"
+                    height="36"
+                    rx="10"
+                    fill="rgba(143,175,120,0.18)"
+                  />
+
+                  {/* Lines */}
+                  <Rect
+                    x="48"
+                    y="95"
+                    width="42"
+                    height="6"
+                    rx="3"
+                    fill="rgba(255,255,255,0.2)"
+                  />
+
+                  <Rect
+                    x="48"
+                    y="108"
+                    width="28"
+                    height="6"
+                    rx="3"
+                    fill="rgba(255,255,255,0.15)"
+                  />
+
+                  {/* Floating Plus */}
+                  <Circle cx="108" cy="48" r="16" fill={colors.secondary} />
+
+                  <Path
+                    d="M108 41V55M101 48H115"
+                    stroke="#fff"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                  />
+                </Svg>
+              </View>
+
+              <Text style={styles.emptyTitle}>Your Story Starts Here</Text>
+
+              <Text style={styles.emptyDescription}>
+                Share workouts, healthy meals, achievements, and inspire the
+                HealthyU community.
+              </Text>
+
+              <View style={styles.emptyBadge}>
+                <Text style={styles.emptyBadgeText}>
+                  Create your first post 🚀
+                </Text>
+              </View>
+            </View>
           }
         />
       </Wrapper>
       {/* FAB — add post (outside FlatList so absolute positioning is relative to root View) */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => navigation.navigate('AddPost')}
+        onPress={() => navigation.navigate('AddPost', { userData: userData })}
         activeOpacity={0.85}
       >
         <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
@@ -485,5 +559,47 @@ const styles = StyleSheet.create({
     elevation: 12,
     borderWidth: 1.5,
     borderColor: 'rgba(143,175,120,0.4)',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 30,
+    height: height / 1.5,
+  },
+
+  emptySvgContainer: {
+    marginBottom: 10,
+  },
+
+  emptyTitle: {
+    color: colors.white,
+    fontSize: 24,
+    fontFamily: ff.montserratBold,
+    textAlign: 'center',
+  },
+
+  emptyDescription: {
+    marginTop: 10,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    lineHeight: 22,
+    fontSize: 13,
+    fontFamily: ff.montserratMedium,
+  },
+
+  emptyBadge: {
+    marginTop: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(143,175,120,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.25)',
+  },
+
+  emptyBadgeText: {
+    color: colors.secondary,
+    fontSize: 12,
+    fontFamily: ff.montserratSemiBold,
   },
 });

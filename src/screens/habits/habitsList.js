@@ -132,78 +132,78 @@ function FlipCard({
     // ======================
     // SELECTION MODE
     // ======================
-    if (selectionMode) {
-      const alreadySelected = tempSelected.some(g => g.id === item.id);
+    // if (selectionMode) {
+    //   const alreadySelected = tempSelected.some(g => g.id === item.id);
 
-      if (alreadySelected) {
-        setTempSelected(prev => prev.filter(g => g.id !== item.id));
+    //   if (alreadySelected) {
+    //     setTempSelected(prev => prev.filter(g => g.id !== item.id));
 
-        return;
-      }
+    //     return;
+    //   }
 
-      if (tempSelected.length >= 3 && !alreadySelected) return;
+    //   if (tempSelected.length >= 3 && !alreadySelected) return;
 
-      const updated = [...tempSelected, item];
+    //   const updated = [...tempSelected, item];
 
-      setTempSelected(updated);
+    //   setTempSelected(updated);
 
-      // VISUAL TEMP FLIP
-      flipCard();
+    //   // VISUAL TEMP FLIP
+    //   flipCard();
 
-      setTimeout(() => {
-        Animated.spring(animVal, {
-          toValue: 0,
-          friction: 8,
-          useNativeDriver: true,
-        }).start();
+    //   setTimeout(() => {
+    //     Animated.spring(animVal, {
+    //       toValue: 0,
+    //       friction: 8,
+    //       useNativeDriver: true,
+    //     }).start();
 
-        setFlipped(false);
-      }, 700);
+    //     setFlipped(false);
+    //   }, 700);
 
-      if (updated.length === 3) {
-        setTimeout(() => {
-          setConfirmVisible(true);
-        }, 800);
-      }
+    //   if (updated.length === 3) {
+    //     setTimeout(() => {
+    //       setConfirmVisible(true);
+    //     }, 800);
+    //   }
 
-      return;
-    }
+    //   return;
+    // }
 
-    // ======================
-    // AFTER CONFIRM
-    // ======================
+    // // ======================
+    // // AFTER CONFIRM
+    // // ======================
 
-    // ======================
-    // AFTER CONFIRM
-    // ======================
+    // // ======================
+    // // AFTER CONFIRM
+    // // ======================
 
-    const allowed = selectedGoals.some(g => g.id === item.id);
-    if (!allowed) return;
+    // const allowed = selectedGoals.some(g => g.id === item.id);
+    // if (!allowed) return;
 
-    // ======================
-    // NO INPUT REQUIRED
-    // DIRECT NAVIGATION
-    // ======================
+    // // ======================
+    // // NO INPUT REQUIRED
+    // // DIRECT NAVIGATION
+    // // ======================
 
-    if (!item?.showInput || goalAlreadySet) {
-      flipCard();
+    // if (!item?.showInput || goalAlreadySet) {
+    //   flipCard();
 
-      setTimeout(() => {
-        navigation?.navigate(item.screenName, {
-          goalTitle: item.title,
-          goalId: item.id,
-        });
-      }, 300);
+    //   setTimeout(() => {
+    navigation?.navigate(item.screenName, {
+      goalTitle: item.title,
+      goalId: item.id,
+    });
+    //   }, 300);
 
-      return;
-    }
+    //   return;
+    // }
 
-    // ======================
-    // INPUT REQUIRED
-    // SHOW FLIP INPUT
-    // ======================p
+    // // ======================
+    // // INPUT REQUIRED
+    // // SHOW FLIP INPUT
+    // // ======================p
 
-    flipCard();
+    // flipCard();
   };
 
   const shouldShowGoalInput =
