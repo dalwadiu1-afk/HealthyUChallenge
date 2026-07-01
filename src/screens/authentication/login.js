@@ -85,20 +85,20 @@ export default function Login({ navigation }) {
     let valid = true;
 
     // EMAIL VALIDATION
-    if (!email) {
-      setError(prev => ({
-        ...prev,
-        email: 'Email is required.',
-      }));
-      valid = false;
-    } else if (!isValidEmail(email)) {
-      setError(prev => ({
-        ...prev,
-        email:
-          'Only users with a montclair.edu email address can access this feature!',
-      }));
-      valid = false;
-    }
+    // if (!email) {
+    //   setError(prev => ({
+    //     ...prev,
+    //     email: 'Email is required.',
+    //   }));
+    //   valid = false;
+    // } else if (!isValidEmail(email)) {
+    //   setError(prev => ({
+    //     ...prev,
+    //     email:
+    //       'Only users with a montclair.edu email address can access this feature!',
+    //   }));
+    //   valid = false;
+    // }
 
     // PASSWORD VALIDATION
     if (!password) {

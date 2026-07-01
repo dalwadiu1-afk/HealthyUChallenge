@@ -222,7 +222,7 @@ export default function StepsChart30Days({ navigation, route }) {
       const data = snapshot.val();
 
       if (data?.startDate) {
-        setStart(moment(data.startDate));
+        setStart(moment(data.startDate).format('YYYY-MM-DD'));
       }
     });
 
@@ -237,7 +237,18 @@ export default function StepsChart30Days({ navigation, route }) {
     loading,
     startDate,
     refetch,
-  } = useStepCount();
+  } = useStepCount({ goalStartDate: start });
+
+  const requestActivityPermission = async () => {
+    if (Platform.OS === 'android' && Platform.Version >= 29) {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACTIVITY_RECOGNITION,
+      );
+
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    }
+    return true;
+  };
 
   const [selected, setSelected] = useState(0);
   const [habits, setHabits] = useState(null);

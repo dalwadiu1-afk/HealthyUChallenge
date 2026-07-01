@@ -689,12 +689,9 @@ export default function SleepClock({ navigation }) {
             </View>
           ))}
         </View>
-        {console.log(
-          'sleepData?.goal?.selectedGoal >> ',
-          sleepData?.goal?.selectedGoal,
-        )}
+
         {/* ── Monthly goal input ── */}
-        {!sleepData?.goal?.selectedGoal ? (
+        {/* {!sleepData?.goal?.selectedGoal ? (
           <View style={styles.goalCard}>
             <Text style={styles.goalCardLabel}>Monthly Goal</Text>
             <TextInput
@@ -707,7 +704,7 @@ export default function SleepClock({ navigation }) {
           </View>
         ) : (
           <View />
-        )}
+        )} */}
 
         {/* ── Set Goal button ── */}
         {(tab == 'manually' || !sleepData?.goal?.selectedGoal) && (

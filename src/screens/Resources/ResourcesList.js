@@ -5,85 +5,15 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  StatusBar,
   Animated,
-  Dimensions,
+  Linking,
+  Alert,
 } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors, fontFamily } from '../../constant';
 import { Wrapper } from '../../components';
 import firestore from '@react-native-firebase/firestore';
 
-const { width } = Dimensions.get('window');
-
-const CATEGORIES = ['All', 'Articles', 'Videos', 'Tips', 'Podcasts'];
-
-const RESOURCES = [
-  {
-    id: 1,
-    category: 'Articles',
-    emoji: '🥗',
-    readTime: '5 min read',
-    title: 'The Science of Balanced Nutrition',
-    desc: 'Learn how macros and micros work together to fuel your body and mind throughout the day.',
-  },
-  {
-    id: 2,
-    category: 'Videos',
-    emoji: '🏃',
-    readTime: '12 min watch',
-    title: '10-Minute Morning Mobility Routine',
-    desc: 'Start your day with this guided mobility routine designed for all fitness levels.',
-  },
-  {
-    id: 3,
-    category: 'Tips',
-    emoji: '💧',
-    readTime: '2 min read',
-    title: 'How Much Water Do You Really Need?',
-    desc: 'Hydration myths debunked — find out the right daily water intake for your body type.',
-  },
-  {
-    id: 4,
-    category: 'Podcasts',
-    emoji: '🧠',
-    readTime: '28 min listen',
-    title: 'Mental Health & Physical Wellness Link',
-    desc: 'Explore the deep connection between your mental state and your ability to exercise.',
-  },
-  {
-    id: 5,
-    category: 'Articles',
-    emoji: '😴',
-    readTime: '6 min read',
-    title: 'Sleep: The Ultimate Recovery Tool',
-    desc: 'Why 7–9 hours is non-negotiable and how sleep directly affects your fitness goals.',
-  },
-  {
-    id: 6,
-    category: 'Tips',
-    emoji: '🌿',
-    readTime: '3 min read',
-    title: '5 Stress-Reducing Habits for Busy People',
-    desc: 'Simple daily habits that take under 10 minutes to dramatically lower cortisol levels.',
-  },
-  {
-    id: 7,
-    category: 'Videos',
-    emoji: '💪',
-    readTime: '18 min watch',
-    title: 'Beginner Strength Training Guide',
-    desc: 'No gym required — build real strength at home with just bodyweight exercises.',
-  },
-  {
-    id: 8,
-    category: 'Podcasts',
-    emoji: '🍎',
-    readTime: '35 min listen',
-    title: 'Gut Health & Your Overall Wellbeing',
-    desc: 'A deep dive into the microbiome and how your diet shapes your entire health system.',
-  },
-];
+const CATEGORIES = ['All', 'Articles', 'Podcasts', 'Flyers'];
 
 const CATEGORY_COLOR = {
   Articles: { bg: 'rgba(90,150,255,0.15)', text: '#5A96FF' },
@@ -93,10 +23,63 @@ const CATEGORY_COLOR = {
 };
 
 export default function ResourcesList({ navigation }) {
-  const [activeCategory, setActiveCategory] = useState('All');
+  const [activeCategory, setActiveCategory] = useState('all');
   const [resources, setResources] = useState([]);
-  const [featured, setFeatured] = useState(null);
   const headerAnim = useRef(new Animated.Value(0)).current;
+  const [flyers, setFlyers] = useState([]);
+  const [featured, setFeatured] = useState(null);
+
+  const animation = useRef(new Animated.Value(0)).current;
+  const slide = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.9)).current;
+
+  const animationIndex = useRef(0);
+  const flyerIndex = useRef(0);
+
+  const fadeAnimation = () => {
+    animation.setValue(0);
+
+    Animated.timing(animation, {
+      toValue: 1,
+      duration: 700,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const slideAnimation = () => {
+    slide.setValue(80);
+
+    Animated.timing(slide, {
+      toValue: 0,
+      duration: 700,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const bounceAnimation = () => {
+    scale.setValue(0.7);
+
+    Animated.sequence([
+      Animated.spring(scale, {
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const scaleAnimation = () => {
+    scale.setValue(0.8);
+
+    Animated.spring(scale, {
+      toValue: 1,
+      friction: 6,
+      useNativeDriver: true,
+    }).start();
+  };
 
   useEffect(() => {
     Animated.timing(headerAnim, {
@@ -111,42 +94,68 @@ export default function ResourcesList({ navigation }) {
       .collection('resources')
       .onSnapshot(snapshot => {
         let allResources = [];
-        let featuredData = null;
+        let flyerItems = [];
 
         snapshot.forEach(doc => {
           const data = doc.data();
 
-          // 👇 HANDLE FEATURED CARD
-          if (doc.id === 'featured') {
-            featuredData = data;
-            return;
-          }
-
-          // 👇 HANDLE CATEGORY ITEMS
           if (data.items && Array.isArray(data.items)) {
-            const itemsWithCategory = data.items.map((item, index) => ({
+            const items = data.items.map((item, index) => ({
               ...item,
               category: doc.id,
               id: `${doc.id}-${index}`,
             }));
 
-            allResources = [...allResources, ...itemsWithCategory];
+            allResources.push(...items);
+
+            if (doc.id.toLowerCase() === 'flyers') {
+              flyerItems = items;
+            }
           }
         });
 
         setResources(allResources);
-        setFeatured(featuredData);
+        setFlyers(flyerItems);
+
+        if (flyerItems.length > 0) {
+          setFeatured(flyerItems[0]);
+        }
       });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
+  useEffect(() => {
+    if (!flyers.length) return;
+
+    const animations = [
+      fadeAnimation,
+      slideAnimation,
+      scaleAnimation,
+      bounceAnimation,
+    ];
+
+    fadeAnimation();
+
+    const timer = setInterval(() => {
+      flyerIndex.current = (flyerIndex.current + 1) % flyers.length;
+
+      setFeatured(flyers[flyerIndex.current]);
+
+      animations[animationIndex.current]();
+
+      animationIndex.current = (animationIndex.current + 1) % animations.length;
+    }, 10000);
+
+    return () => clearInterval(timer);
+  }, [flyers]);
+
   const filtered =
-    activeCategory === 'All'
+    activeCategory === 'all'
       ? resources
       : resources.filter(r => r.category === activeCategory);
-
-  const onCardPress = () => {};
 
   function ResourceCard({ item, index }) {
     const anim = useRef(new Animated.Value(0)).current;
@@ -172,13 +181,12 @@ export default function ResourcesList({ navigation }) {
         },
       ],
     };
-
     return (
       <Animated.View style={animStyle}>
         <TouchableOpacity
           style={styles.card}
           activeOpacity={0.85}
-          onPress={onCardPress}
+          onPress={() => openLink(item?.link)}
         >
           {/* Left emoji block */}
           <View style={[styles.emojiBox, { backgroundColor: cat.bg }]}>
@@ -207,6 +215,26 @@ export default function ResourcesList({ navigation }) {
     );
   }
 
+  const openLink = async url => {
+    console.log('url :>> ', url);
+    try {
+      const supported = await Linking.canOpenURL(url);
+      console.log('supported :>> ', supported);
+      if (!supported) {
+        Alert.alert(
+          'Unable to Open',
+          'No application found to handle this link.',
+        );
+        return;
+      }
+
+      await Linking.openURL(url);
+    } catch (error) {
+      console.log('Open URL Error:', error);
+      Alert.alert('Error', 'Something went wrong while opening the link.');
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Wrapper>
@@ -228,31 +256,38 @@ export default function ResourcesList({ navigation }) {
 
               {/* Featured card */}
               {featured && (
-                <TouchableOpacity
-                  style={styles.featuredCard}
-                  activeOpacity={0.88}
-                  onPress={onCardPress}
+                <Animated.View
+                  style={{
+                    opacity: animation,
+                    transform: [{ translateX: slide }, { scale }],
+                  }}
                 >
-                  <View style={styles.featuredBadge}>
-                    <Text style={styles.featuredBadgeText}>
-                      {featured.badge || '⭐ Featured'}
-                    </Text>
-                  </View>
-
-                  <Text style={styles.featuredTitle}>{featured.title}</Text>
-
-                  <Text style={styles.featuredDesc}>{featured.desc}</Text>
-
-                  <View style={styles.featuredMeta}>
-                    <Text style={styles.featuredMetaText}>
-                      📖 {featured.readTime}
-                    </Text>
-
-                    <View style={styles.featuredBtn}>
-                      <Text style={styles.featuredBtnText}>Read →</Text>
+                  <TouchableOpacity
+                    style={styles.featuredCard}
+                    activeOpacity={0.88}
+                    onPress={() => openLink(featured?.link)}
+                  >
+                    <View style={styles.featuredBadge}>
+                      <Text style={styles.featuredBadgeText}>
+                        {featured.emoji || '📄 Flyer'}
+                      </Text>
                     </View>
-                  </View>
-                </TouchableOpacity>
+
+                    <Text style={styles.featuredTitle}>{featured.title}</Text>
+
+                    <Text style={styles.featuredDesc}>{featured.desc}</Text>
+
+                    <View style={styles.featuredMeta}>
+                      <Text style={styles.featuredMetaText}>
+                        📖 {featured.readTime}
+                      </Text>
+
+                      <View style={styles.featuredBtn}>
+                        <Text style={styles.featuredBtnText}>Learn More →</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </Animated.View>
               )}
 
               {/* Category filter */}
@@ -263,7 +298,7 @@ export default function ResourcesList({ navigation }) {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.filterRow}
                 renderItem={({ item: cat }) => {
-                  const isActive = cat === activeCategory;
+                  const isActive = cat?.toLowerCase() === activeCategory;
                   const cc = CATEGORY_COLOR[cat];
                   return (
                     <TouchableOpacity
@@ -274,7 +309,7 @@ export default function ResourcesList({ navigation }) {
                           borderColor: cc ? cc.text : colors.secondary,
                         },
                       ]}
-                      onPress={() => setActiveCategory(cat)}
+                      onPress={() => setActiveCategory(cat?.toLowerCase())}
                       activeOpacity={0.75}
                     >
                       <Text
@@ -294,7 +329,7 @@ export default function ResourcesList({ navigation }) {
 
               <Text style={styles.sectionLabel}>
                 {filtered.length}{' '}
-                {activeCategory === 'All' ? 'Resources' : activeCategory}
+                {activeCategory === 'all' ? 'Resources' : activeCategory}
               </Text>
             </Animated.View>
           }
@@ -351,7 +386,7 @@ const styles = StyleSheet.create({
   },
   featuredBadgeText: {
     color: '#FFC15A',
-    fontSize: 11,
+    fontSize: 20,
     fontFamily: fontFamily.montserratSemiBold,
   },
   featuredTitle: {
