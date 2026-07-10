@@ -112,7 +112,7 @@ const getSmartTips = fiberData => {
 
   if (avg < 20 || lowDays > 3) {
     return [
-      'You are below fiber target — increase vegetables daily',
+      // 'You are below fiber target — increase vegetables daily',
       'Eat oats or overnight oats for high fiber breakfast',
       'Add chia or flax seeds to meals or smoothies',
       'Eat apples with skin for extra fiber',

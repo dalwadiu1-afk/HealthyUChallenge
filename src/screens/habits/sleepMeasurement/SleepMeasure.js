@@ -76,9 +76,16 @@ const describeArc = (startAngle, endAngle) => {
 };
 
 const timeToAngle = time => {
-  const [h, m] = time.split(':').map(Number);
-  const hour12 = h % 12;
-  return ((hour12 * 60 + m) / (12 * 60)) * 360;
+  const parsed = moment(time, ['HH:mm', 'hh:mm A', 'h:mm A'], true);
+
+  if (!parsed.isValid()) {
+    return 0; // or return the previous angle
+  }
+
+  const h = parsed.hour();
+  const m = parsed.minute();
+
+  return (((h % 12) * 60 + m) / (12 * 60)) * 360;
 };
 
 const angleToTime = angle => {
@@ -86,7 +93,10 @@ const angleToTime = angle => {
   let h = Math.floor(total / 60);
   let m = Math.floor(total % 60);
   if (h === 0) h = 12;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  return moment(
+    `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
+    'HH:mm',
+  ).format('hh:mm A');
 };
 
 const minutesToAngle = min => {
@@ -96,12 +106,11 @@ const minutesToAngle = min => {
 
 const getNowTime = () => {
   const d = new Date();
-  return d.toTimeString().slice(0, 5);
+  return moment().format('hh:mm A');
 };
 
 const isAM = time => {
-  const [h] = time.split(':').map(Number);
-  return h < 12;
+  return moment(time, ['HH:mm', 'hh:mm A']).hour() < 12;
 };
 const getDuration = (startAngle, endAngle) => {
   let diff = endAngle - startAngle;
@@ -124,8 +133,8 @@ export default function SleepClock({ navigation }) {
   const [sleepLogs, setSleepLogs] = useState({});
   const [date, setDate] = useState(moment().format('ddd, MMMM Do'));
   const [show, setShow] = useState(false);
-  const [bedTime, setBedTime] = useState('22:00');
-  const [wakeTime, setWakeTime] = useState('06:00');
+  const [bedTime, setBedTime] = useState('11:00 PM');
+  const [wakeTime, setWakeTime] = useState('06:00 AM');
   const [started, setStarted] = useState(false);
   const [goalInput, setGoalInput] = useState('');
   const [startTime, setStartTime] = useState(null);
@@ -134,11 +143,23 @@ export default function SleepClock({ navigation }) {
   const [bedAngle, setBedAngle] = useState(timeToAngle('22:00'));
   const [wakeAngle, setWakeAngle] = useState(timeToAngle('06:00'));
   const [sleepDateKey, setSleepDateKey] = useState(null);
-  const [tab, setTab] = useState('timer');
+  const [tab, setTab] = useState('manually');
   const tabs = [
     { key: 'timer', label: 'Timer' },
     { key: 'manually', label: 'Manually' },
   ];
+
+  const formatTo12Hour = time => {
+    if (!time) return '';
+
+    return moment(time, 'HH:mm').format('hh:mm A');
+  };
+
+  const formatTo24Hour = time => {
+    if (!time) return '';
+
+    return moment(time, ['hh:mm A', 'h:mm A']).format('HH:mm');
+  };
 
   const monthKey = moment().format('MMMM_YYYY');
   const dayKey = moment().format('YYYY-MM-DD');
@@ -171,8 +192,8 @@ export default function SleepClock({ navigation }) {
       const todayLog = data.sleepLogs?.[today];
 
       if (todayLog) {
-        setBedTime(todayLog.bedTime || '22:00');
-        setWakeTime(todayLog.wakeTime || '06:00');
+        setBedTime(formatTo12Hour(todayLog.bedTime || '22:00'));
+        setWakeTime(formatTo12Hour(todayLog.wakeTime || '06:00'));
       }
     });
 
@@ -250,15 +271,27 @@ export default function SleepClock({ navigation }) {
 
   const handleBedChange = text => {
     setBedTime(text);
-    if (/^\d{2}:\d{2}$/.test(text)) setBedAngle(timeToAngle(text));
+
+    if (moment(text, ['HH:mm', 'hh:mm A', 'h:mm A'], true).isValid()) {
+      setBedAngle(timeToAngle(text));
+    }
   };
 
   const handleWakeChange = text => {
     setWakeTime(text);
-    if (/^\d{2}:\d{2}$/.test(text)) setWakeAngle(timeToAngle(text));
+
+    if (moment(text, ['HH:mm', 'hh:mm A', 'h:mm A'], true).isValid()) {
+      setWakeAngle(timeToAngle(text));
+    }
   };
 
   const handleManualSave = async () => {
+    if (
+      !moment(bedTime, ['hh:mm A', 'h:mm A'], true).isValid() ||
+      !moment(wakeTime, ['hh:mm A', 'h:mm A'], true).isValid()
+    ) {
+      return;
+    }
     if (!bedTime || !wakeTime) return;
 
     const startAngle = timeToAngle(bedTime);
@@ -287,8 +320,8 @@ export default function SleepClock({ navigation }) {
       .update({
         sleep: `${totalHours.toFixed(1)} hr`,
         completed: totalHours >= targetHours,
-        bedTime,
-        wakeTime,
+        bedTime: formatTo24Hour(bedTime),
+        wakeTime: formatTo24Hour(wakeTime),
         type: 'manual',
         updatedAt: Date.now(),
       });
@@ -443,7 +476,7 @@ export default function SleepClock({ navigation }) {
       />
       <Wrapper orbsRight safeAreaPops={{ edges: ['bottom'] }}>
         {/* Tabs */}
-        <View style={styles.tabRow}>
+        {/* <View style={styles.tabRow}>
           {tabs.map((t, index) => (
             <TouchableOpacity
               key={index}
@@ -457,7 +490,7 @@ export default function SleepClock({ navigation }) {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </View> */}
         {/* ── Time inputs ── */}
         <View
           style={{
@@ -496,7 +529,7 @@ export default function SleepClock({ navigation }) {
                 style={styles.timeInput}
                 value={bedTime}
                 onChangeText={handleBedChange}
-                placeholder="22:00"
+                placeholder="11:00 PM"
                 placeholderTextColor="rgba(255,255,255,0.25)"
                 keyboardType="numbers-and-punctuation"
                 editable={tab == 'timer' ? false : true}
@@ -509,7 +542,7 @@ export default function SleepClock({ navigation }) {
                 style={styles.timeInput}
                 value={wakeTime}
                 onChangeText={handleWakeChange}
-                placeholder="06:00"
+                placeholder="06:00 AM"
                 placeholderTextColor="rgba(255,255,255,0.25)"
                 keyboardType="numbers-and-punctuation"
                 editable={tab == 'timer' ? false : true}
@@ -720,9 +753,7 @@ export default function SleepClock({ navigation }) {
               r={16}
               horizontal
             />
-            <Text style={styles.setGoalText}>
-              {sleepData?.goal?.selectedGoal ? 'Upload Sleep Data' : 'Set Goal'}
-            </Text>
+            <Text style={styles.setGoalText}>Upload Sleep Data</Text>
           </TouchableOpacity>
         )}
         {show && (

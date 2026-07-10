@@ -286,12 +286,12 @@ export default function Profile({ navigation }) {
   // STATS FOR UI
   const STATS = [
     {
-      label: 'Streak',
+      label: 'Current Streak',
       value: streak,
       emoji: '🔥',
     },
     {
-      label: 'Longest',
+      label: 'Longest Streak',
       value: longestStreak,
       emoji: '🏆',
     },
@@ -338,7 +338,7 @@ export default function Profile({ navigation }) {
         }
       : {
           emoji: '✅',
-          title: 'Challenge Verification',
+          title: 'Challenge Completion Verification',
           subtitle: 'Verify completion of your challenge',
           screenName: 'ChallengeVerification',
           badge: profileData?.profile?.challengeVerified
@@ -346,10 +346,16 @@ export default function Profile({ navigation }) {
             : 'Pending',
         },
     {
-      emoji: '🏋️',
-      title: 'Workout History',
+      emoji: '🎯',
+      title: 'Goal Archive',
       subtitle: 'View completed workouts and progress',
       screenName: 'ArchivedGoals',
+    },
+    {
+      emoji: '📘',
+      title: 'Guidelines',
+      subtitle: 'Everything you need to know before you start',
+      screenName: 'Guidelines',
     },
     {
       emoji: '🧠',

@@ -37,10 +37,10 @@ const DEFAULT_MAX_MEALS = 4;
 const today = moment();
 
 const getClosestMealGoal = value => {
-  const num = Number(value) || 4;
+  const num = Number(value) || 2;
 
-  if (num <= 3) return 3;
-  if (num >= 5) return 5;
+  if (num <= 2) return 2;
+  if (num >= 6) return 6;
 
   return Math.round(num);
 };
@@ -129,10 +129,7 @@ export default function MeatlessChallenge({ navigation, route }) {
   };
 
   const openCamera = async () => {
-    setImagePickerVisible(false);
-
     const granted = await requestCameraPermission();
-
     if (!granted) return;
 
     launchCamera(
@@ -145,7 +142,6 @@ export default function MeatlessChallenge({ navigation, route }) {
         if (res.didCancel || res.errorCode) return;
 
         const localUri = res?.assets?.[0]?.uri;
-
         if (!localUri) return;
 
         await processMealUpload(selectedWeekKey, localUri);
@@ -154,7 +150,8 @@ export default function MeatlessChallenge({ navigation, route }) {
   };
 
   const openGallery = async () => {
-    setImagePickerVisible(false);
+    const granted = await requestCameraPermission?.();
+    if (granted === false) return;
 
     launchImageLibrary(
       {
@@ -166,7 +163,6 @@ export default function MeatlessChallenge({ navigation, route }) {
         if (res.didCancel || res.errorCode) return;
 
         const localUri = res?.assets?.[0]?.uri;
-
         if (!localUri) return;
 
         await processMealUpload(selectedWeekKey, localUri);

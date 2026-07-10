@@ -188,26 +188,31 @@ export default function Social() {
               <Text style={styles.teamButtonText}>View Team</Text>
             </TouchableOpacity>
           </View>
-
           {/* Services */}
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Services</Text>
 
             <View style={styles.servicesWrap}>
               <View style={styles.serviceChip}>
-                <Text style={styles.serviceText}>🍎 Nutrition Coaching</Text>
+                <Text style={styles.serviceText}>🥗 Dietitian Services</Text>
               </View>
 
               <View style={styles.serviceChip}>
-                <Text style={styles.serviceText}>🥗 Meal Planning</Text>
+                <Text style={styles.serviceText}>
+                  🎓 Student Success & Wellness
+                </Text>
               </View>
 
               <View style={styles.serviceChip}>
-                <Text style={styles.serviceText}>💪 Healthy Habits</Text>
+                <Text style={styles.serviceText}>🍎 Nutrition Counseling</Text>
               </View>
 
               <View style={styles.serviceChip}>
-                <Text style={styles.serviceText}>📚 Wellness Education</Text>
+                <Text style={styles.serviceText}>🎯 Goal Setting</Text>
+              </View>
+
+              <View style={styles.serviceChip}>
+                <Text style={styles.serviceText}>🏫 Campus Dining Support</Text>
               </View>
             </View>
           </View>

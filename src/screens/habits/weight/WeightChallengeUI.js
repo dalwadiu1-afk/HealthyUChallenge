@@ -344,7 +344,6 @@ export default function WeightChallengeUI({ route }) {
 
         <View style={styles.chartCard}>
           <Text style={styles.chartTitle}>Weight Progress</Text>
-          {console.log('chartData >> ', chartData)}
           <LineChart
             data={chartData}
             width={SCREEN_WIDTH - 64}
@@ -385,13 +384,13 @@ export default function WeightChallengeUI({ route }) {
 
           <View style={styles.statDivider} />
 
-          <View style={styles.feedbackRow}>
+          {/* <View style={styles.feedbackRow}>
             <Text style={styles.statLabel}>{feedback.icon} Feedback</Text>
 
             <Text style={[styles.feedbackText, { color: feedback.color }]}>
               {feedback.text}
             </Text>
-          </View>
+          </View> */}
         </View>
 
         {/* INPUT */}

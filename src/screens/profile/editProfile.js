@@ -17,19 +17,29 @@ import { requestCameraPermission } from '../../utils/helper';
 import auth from '@react-native-firebase/auth';
 import storage from '@react-native-firebase/storage';
 
-const uploadImageToFirebase = async uri => {
-  const user = auth().currentUser;
-  if (!user) throw new Error('No user logged in');
+const normalizeUri = uri => {
+  if (!uri) return null;
+  return uri.startsWith('file://') ? uri : `file://${uri}`;
+};
 
-  const cleanUri = Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
+const uploadImageToFirebase = async (uri) => {
+  try {
+    const user = auth().currentUser;
+    if (!user) throw new Error('No user logged in');
 
-  const fileName = `profile/${user.uid}/${Date.now()}.jpg`;
+    const fileUri = uri;
 
-  const ref = storage().ref(fileName);
+    const fileName = `profile/${user.uid}/${Date.now()}.jpg`;
 
-  await ref.putFile(cleanUri);
+    const ref = storage().ref(fileName);
 
-  return await ref.getDownloadURL();
+    await ref.putFile(fileUri);
+
+    return await ref.getDownloadURL();
+  } catch (e) {
+    console.log('Storage upload error:', e);
+    throw e;
+  }
 };
 
 export default function EditProfile({ navigation }) {
@@ -51,37 +61,26 @@ export default function EditProfile({ navigation }) {
 
   // CAMERA
   const handleCamera = async () => {
-    const hasPermission = await requestCameraPermission();
+  const hasPermission = await requestCameraPermission();
+  if (!hasPermission) return;
 
-    if (!hasPermission) {
-      console.log('Camera permission denied');
-      return;
+  launchCamera({mediaType: 'photo', quality: 0.8}, async response => {
+    if (response.didCancel || response.errorCode) return;
+
+    const uri = response?.assets?.[0]?.uri;
+    console.log('Camera URI:', uri);
+
+    if (!uri) return;
+
+    try {
+      const url = await uploadImageToFirebase(uri);
+      updateField('avatar', url);
+      actionSheetRef.current?.hide();
+    } catch (e) {
+      console.log('Upload error:', e);
     }
-
-    const options = {
-      mediaType: 'photo',
-      quality: 0.8,
-      saveToPhotos: true,
-    };
-
-    launchCamera(options, async response => {
-      console.log('Camera Response:', response); // 🔥 DEBUG
-
-      if (response.didCancel) return;
-      if (response.errorCode) {
-        console.log('Camera Error:', response.errorMessage);
-        return;
-      }
-
-      const uri = response.assets?.[0]?.uri;
-
-      if (uri) {
-        const url = await uploadImageToFirebase(uri);
-        updateField('image', url);
-        actionSheetRef.current?.hide();
-      }
-    });
-  };
+  });
+};
 
   const updateField = (key, value) => {
     setForm(prev => ({
@@ -92,26 +91,23 @@ export default function EditProfile({ navigation }) {
 
   // GALLERY
   const handleGallery = () => {
-    const options = {
-      mediaType: 'photo',
-      quality: 0.8,
-    };
+  launchImageLibrary({mediaType: 'photo', quality: 0.8}, async response => {
+    if (response.didCancel || response.errorCode) return;
 
-    launchImageLibrary(options, async response => {
-      if (response.didCancel) return;
-      if (response.errorCode) {
-        console.log('Gallery Error:', response.errorMessage);
-        return;
-      }
+    const uri = response?.assets?.[0]?.uri;
+    console.log('Gallery URI:', uri);
 
-      const uri = response.assets?.[0]?.uri;
-      if (uri) {
-        const url = await uploadImageToFirebase(uri);
-        updateField('image', url); // store Firebase URL
-        actionSheetRef.current?.hide();
-      }
-    });
-  };
+    if (!uri) return;
+
+    try {
+      const url = await uploadImageToFirebase(uri);
+      updateField('avatar', url);
+      actionSheetRef.current?.hide();
+    } catch (e) {
+      console.log('Upload error:', e);
+    }
+  });
+};
 
   // SAVE
   const handleSave = async () => {

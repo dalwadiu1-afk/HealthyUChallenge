@@ -398,64 +398,118 @@ exports.habitReminderEngine = onSchedule(
     timeZone: 'America/New_York',
   },
   async () => {
-    logger.log('Habit Reminder Engine Started');
+    logger.log('========== Habit Reminder Engine Started ==========');
+
     const usersSnap = await db.ref('/users').once('value');
     const users = usersSnap.val() || {};
 
     const promises = [];
 
-    Object.entries(users).forEach(([uid, user]) => {
-      const token = user?.fcmToken;
-      if (!token) return;
+    for (const [uid, user] of Object.entries(users)) {
+      try {
+        const token = user?.fcmToken;
 
-      const timezone = user?.timezone || 'America/New_York';
-      const now = moment().tz(timezone);
+        if (!token) {
+          logger.log(`${uid}: No FCM token`);
+          continue;
+        }
 
-      const currentTime = now.format('HH:mm');
+        const timezone = user?.timezone || 'America/New_York';
+        const now = moment().tz(timezone);
 
-      const selectedGoals = Array.isArray(user?.goal?.selectedGoals)
-        ? user.goal.selectedGoals
-        : [];
-      const settings = user?.notificationSettings || {};
+        const currentTime = now.format('HH:mm');
 
-      selectedGoals.forEach(goal => {
-        const goalKey = goal?.key;
+        logger.log(`${uid}: Current Time = ${currentTime}`);
 
-        if (!goalKey) return;
+        const selectedGoals = Array.isArray(user?.goal?.selectedGoals)
+          ? user.goal.selectedGoals
+          : [];
 
-        const goalSetting = settings?.[goalKey] || {};
+        if (!selectedGoals.length) {
+          logger.log(`${uid}: No selected goals`);
+          continue;
+        }
 
-        const enabled =
-          goalSetting.enabled === undefined ? true : goalSetting.enabled;
+        // *************** FIX ****************
+        const settings = user?.notificationSettings?.habits || {};
+        // ***********************************
 
-        if (!enabled) return;
+        for (const goal of selectedGoals) {
+          const goalKey =
+            goal?.key ||
+            goal?.id ||
+            goal?.value ||
+            (typeof goal === 'string' ? goal : null);
 
-        const reminderTime = goalSetting.time
-          ? moment(goalSetting.time, ['H:mm', 'HH:mm', 'h:mm A']).format(
-              'HH:mm',
-            )
-          : '21:00';
+          if (!goalKey) {
+            logger.log(`${uid}: Invalid goal`, goal);
+            continue;
+          }
 
-        if (reminderTime === currentTime) {
           const habit = ALL_HABITS.find(h => h.key === goalKey);
+
+          if (!habit) {
+            logger.log(`${uid}: Habit not found -> ${goalKey}`);
+            continue;
+          }
+
+          const goalSetting = settings[goalKey] || {};
+
+          const enabled =
+            goalSetting.enabled === undefined ? true : goalSetting.enabled;
+
+          if (!enabled) {
+            logger.log(`${uid}: ${goalKey} disabled`);
+            continue;
+          }
+
+          let reminderTime = '21:00';
+
+          if (goalSetting.time) {
+            const parsed = moment(
+              goalSetting.time,
+              ['HH:mm', 'H:mm', 'hh:mm A', 'h:mm A'],
+              true,
+            );
+
+            if (parsed.isValid()) {
+              reminderTime = parsed.format('HH:mm');
+            }
+          }
+
+          logger.log({
+            uid,
+            goalKey,
+            reminderTime,
+            currentTime,
+          });
+
+          if (reminderTime !== currentTime) {
+            continue;
+          }
+
+          logger.log(`Sending reminder -> ${uid} -> ${goalKey}`);
 
           promises.push(
             sendPushNotification({
               uid,
               token,
-              title: `⏰ ${habit?.title || goal?.title || 'Reminder'}`,
-              body:
-                habit?.description ||
-                goal?.description ||
-                'Time for your habit!',
-              screen: habit?.screenName || goal?.screenName || 'Habits',
+              title: `⏰ ${habit.title}`,
+              body: habit.description,
+              screen: habit.screenName,
             }),
           );
         }
-      });
-    });
+      } catch (e) {
+        logger.error(`Habit reminder failed for ${uid}`, e);
+      }
+    }
 
     await Promise.all(promises);
+
+    logger.log(
+      `Habit Reminder Finished. Notifications sent: ${promises.length}`,
+    );
   },
 );
 

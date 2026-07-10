@@ -54,7 +54,24 @@ const getWeekUnlockData = (goalStartDate, weekNumber) => {
   };
 };
 
-const uploadImageToFirebase = async localUri => {
+
+
+const VeggieChallenge = ({ navigation, route }) => {
+  const CURRENT_MONTH_KEY =
+    route?.params?.monthKey ?? moment().format('MMMM_YYYY');
+  const isArchivedMonth = CURRENT_MONTH_KEY !== moment().format('MMMM_YYYY');
+  const userId = auth().currentUser?.uid;
+
+  const [goalStartDate, setGoalStartDate] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [weeks, setWeeks] = useState({});
+  const [labels, setLabels] = useState({});
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [selectedWeek, setSelectedWeek] = useState(null);
+
+
+  const uploadImageToFirebase = async localUri => {
+
   try {
     const extension = localUri.split('.').pop();
 
@@ -72,20 +89,6 @@ const uploadImageToFirebase = async localUri => {
     return null;
   }
 };
-
-const VeggieChallenge = ({ navigation, route }) => {
-  const CURRENT_MONTH_KEY =
-    route?.params?.monthKey ?? moment().format('MMMM_YYYY');
-  const isArchivedMonth = CURRENT_MONTH_KEY !== moment().format('MMMM_YYYY');
-  const userId = auth().currentUser?.uid;
-
-  const [goalStartDate, setGoalStartDate] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [weeks, setWeeks] = useState({});
-  const [labels, setLabels] = useState({});
-  const [pickerVisible, setPickerVisible] = useState(false);
-  const [selectedWeek, setSelectedWeek] = useState(null);
-
   useEffect(() => {
     if (!userId) return;
 
@@ -225,75 +228,69 @@ const VeggieChallenge = ({ navigation, route }) => {
     }
   };
   const saveImage = async localUri => {
-    try {
-      setUploading(true);
+  if (!selectedWeek) return;
 
-      const imageUrl = await uploadImageToFirebase(localUri);
+  try {
+    setUploading(true);
 
-      if (!imageUrl || !selectedWeek) {
-        setUploading(false);
-        return;
-      }
+    const imageUrl = await uploadImageToFirebase(localUri);
+    if (!imageUrl) return;
 
+    setWeeks(prev => {
       const updated = {
-        ...weeks,
+        ...prev,
         [selectedWeek]: {
-          ...weeks[selectedWeek],
+          ...prev[selectedWeek],
           uri: imageUrl,
-          label: weeks[selectedWeek]?.label || '',
-          timestamp: moment().valueOf(),
+          label: prev[selectedWeek]?.label || '',
+          timestamp: Date.now(),
           locked: false,
         },
       };
 
-      setWeeks(updated);
+      updateWeeks(updated);
+      return updated;
+    });
 
-      await updateWeeks(updated);
+    setSelectedWeek(null);
+  } catch (error) {
+    console.log('SAVE IMAGE ERROR', error);
+  } finally {
+    setUploading(false);
+  }
+};
 
-      setSelectedWeek(null);
-    } catch (error) {
-      console.log('SAVE IMAGE ERROR', error);
-    } finally {
-      setUploading(false);
-    }
-  };
+ const openGallery = async () => {
+  const granted = await requestCameraPermission();
+  if (!granted) return;
 
-  const openGallery = async () => {
-    setPickerVisible(false);
+  launchImageLibrary(
+    {
+      mediaType: 'photo',
+      selectionLimit: 1,
+      quality: 0.8,
+    },
+    async response => {
+      console.log('Gallery response:', response);
 
-    const granted = await requestCameraPermission();
+      if (response.didCancel || response.errorCode) return;
 
-    if (!granted) return;
+      const uri = response?.assets?.[0]?.uri;
+      if (!uri) return;
 
-    launchImageLibrary(
-      {
-        mediaType: 'photo',
-        selectionLimit: 1,
-        quality: 0.8,
-      },
-      async response => {
-        if (response.didCancel || response.errorCode) return;
-
-        const uri = response?.assets?.[0]?.uri;
-
-        if (!uri) return;
-
-        const uploadUri =
-          Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
-
-        await saveImage(uploadUri);
-      },
-    );
-  };
-
+      await saveImage(uri);
+    },
+  );
+};
   // there is issue with camera opening
 
   const openCamera = async () => {
-    setPickerVisible(false);
+  const granted = await requestCameraPermission();
+  if (!granted) return;
 
-    const granted = await requestCameraPermission();
-    if (!granted) return;
+  setPickerVisible(false);
 
+  requestAnimationFrame(() => {
     launchCamera(
       {
         mediaType: 'photo',
@@ -303,7 +300,6 @@ const VeggieChallenge = ({ navigation, route }) => {
         if (response.didCancel || response.errorCode) return;
 
         const uri = response?.assets?.[0]?.uri;
-
         if (!uri) return;
 
         const uploadUri =
@@ -312,7 +308,8 @@ const VeggieChallenge = ({ navigation, route }) => {
         await saveImage(uploadUri);
       },
     );
-  };
+  });
+};
 
   const safeWeeks = Object.values(weeks || {});
   const activeWeekIndex = Object.values(weeks).findIndex(
@@ -400,6 +397,7 @@ const VeggieChallenge = ({ navigation, route }) => {
                           }}
                           style={styles.entryImg}
                         />
+                        {console.log('dsj',week)}
                         <TextInput
                           value={labels[weekKey] ?? week?.label}
                           onChangeText={t =>

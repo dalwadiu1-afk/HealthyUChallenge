@@ -357,7 +357,7 @@ export default function FiberChartDays({ navigation, route }) {
 
         {/* Stats */}
         <View style={styles.statsCard}>
-          <StatRow emoji="📊" label="Avg Fiber" value={`${avg.toFixed(1)}g`} />
+          {/* <StatRow emoji="📊" label="Avg Fiber" value={`${avg.toFixed(1)}g`} /> */}
           <StatRow
             emoji="🎯"
             label="Target Range"

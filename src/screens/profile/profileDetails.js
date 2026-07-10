@@ -34,23 +34,16 @@ import moment from 'moment';
 import { logo } from '../../assets/images';
 
 const userId = auth().currentUser?.uid;
+// const currentMonthKey = 'June_2026';
 const currentMonthKey = moment().format('MMMM_YYYY');
 const { height, width } = Dimensions.get('window');
 const SHEET_MIN = height * 0.6;
 const SHEET_MAX = height * 0.86;
 
-const TAB_OPTIONS = ['Feeds', 'Stats', 'Progress'];
+const TAB_OPTIONS = ['Feeds', 'Stats'];
+// const TAB_OPTIONS = ['Feeds', 'Stats', 'Progress'];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function StatPill({ label, value }) {
-  return (
-    <View style={styles.statPill}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
 
 const formatTime = timestamp => {
   if (!timestamp) return '';
@@ -974,7 +967,7 @@ export default function ProfileDetails({ navigation }) {
 
       dynamicHabitStats.push({
         emoji: '🤝',
-        label: 'Workout Buddy',
+        label: 'Workout With Friend',
         value: `${friendSessions} sessions`,
       });
     }
@@ -999,7 +992,7 @@ export default function ProfileDetails({ navigation }) {
       });
 
       dynamicHabitStats.push({
-        emoji: '🥬',
+        emoji: '🧀 || 🥣',
         label: 'Fermented Foods',
         value: `${fermentedCount} completed`,
       });
@@ -1102,7 +1095,7 @@ export default function ProfileDetails({ navigation }) {
 
       dynamicHabitStats.push({
         emoji: '🥗',
-        label: 'Half Plate',
+        label: 'Half Plate Fruits/Veg',
         value: `${count} meals`,
       });
     }
@@ -1332,8 +1325,8 @@ export default function ProfileDetails({ navigation }) {
 
   const PROFILE_STATS = [
     {
-      label: 'Streak',
-      value: `${currentStreak}`,
+      label: 'Goals',
+      value: `${totalGoalsCreated}`,
       emoji: '🔥',
     },
     {
@@ -1355,7 +1348,7 @@ export default function ProfileDetails({ navigation }) {
   [
     {
       emoji: '🔥',
-      label: 'Current Streak',
+      label: 'Quiz Streak',
       value: `${currentStreak} days`,
     },
 
@@ -1365,17 +1358,17 @@ export default function ProfileDetails({ navigation }) {
       value: `${longestStreak} days`,
     },
 
-    {
-      emoji: '✅',
-      label: 'Completed Tasks',
-      value: `${totalCompleted}`,
-    },
+    // {
+    //   emoji: '✅',
+    //   label: 'Completed Tasks',
+    //   value: `${totalCompleted}`,
+    // },
 
-    {
-      emoji: '📈',
-      label: 'Completion Rate',
-      value: `${completionRate}%`,
-    },
+    // {
+    //   emoji: '📈',
+    //   label: 'Completion Rate',
+    //   value: `${completionRate}%`,
+    // },
 
     {
       emoji: '📸',
@@ -1383,11 +1376,11 @@ export default function ProfileDetails({ navigation }) {
       value: `${totalPhotos}`,
     },
 
-    {
-      emoji: '🍎',
-      label: 'Fruit Entries',
-      value: `${totalFruitEntries}`,
-    },
+    // {
+    //   emoji: '🍎',
+    //   label: 'Fruit Entries',
+    //   value: `${totalFruitEntries}`,
+    // },
 
     {
       emoji: '🍪',
@@ -1415,7 +1408,7 @@ export default function ProfileDetails({ navigation }) {
 
     {
       emoji: '🏃',
-      label: 'Workout Sessions',
+      label: 'Strength Training Workout',
       value: `${totalWorkoutSessions}`,
     },
 

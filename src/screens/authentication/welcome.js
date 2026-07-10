@@ -171,8 +171,8 @@ export default function Welcome({ navigation }) {
             {/* Headline */}
             <Animated.View style={headlineAnimStyle}>
               <Text style={styles.headline}>
-                Find Balance{'\n'}in your life with{'\n'}
-                <Text style={styles.headlineAccent}>Equilibrium.</Text>
+                Build Healthy {'\n'}Habits With Your {'\n'}
+                <Text style={styles.headlineAccent}>Campus Dietitians</Text>
               </Text>
             </Animated.View>
 

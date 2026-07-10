@@ -129,6 +129,7 @@ const BodyFatGoalScreen = ({ navigation }) => {
   const [editable, setEditable] = useState(false);
   const [locked, setLocked] = useState(true);
   const [otpVerified, setOtpVerified] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
   const otpSheetRef = useRef(null);
   const [otp, setOtp] = useState(['', '', '', '']);
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -212,41 +213,7 @@ const BodyFatGoalScreen = ({ navigation }) => {
       title: 'Body Fat',
       target: 'Twice a month',
     });
-    await database()
-      .ref(`${baseURL}/sessionCode`)
-      .update({
-        code,
-        createdAt: now,
-        expiresAt: moment().add(10, 'minutes').valueOf(), // 10 min expiry
-        used: false,
-      });
   };
-
-  // const uploadData = async () => {
-  //   const user = auth().currentUser;
-
-  //   if (!user) {
-  //     console.log('User not logged in');
-  //     return;
-  //   }
-
-  //   try {
-  //     await database()
-  //       .ref(`/users/${user.uid}/habits/${CURRENT_MONTH_KEY}`)
-  //       .update({
-  //         startBFP,
-  //         targetBFP,
-  //         goalType,
-  //         createdAt: Date.now(),
-  //       });
-  //     console.log('Saved successfully');
-
-  //     setLocked(true);
-  //     setEditable(false);
-  //   } catch (e) {
-  //     console.log('Upload error:', e);
-  //   }
-  // };
 
   useEffect(() => {
     if (goalType === 'decrease' && targetBFP >= startBFP) {
@@ -320,10 +287,11 @@ const BodyFatGoalScreen = ({ navigation }) => {
         status: {
           locked: true,
           editable: false,
-          otpVerified,
+          otpVerified: true,
           completed: false,
+          verified: true,
+          verifiedAt: moment().format('YYYY-MM-DD HH:mm:ss'),
         },
-
         createdAt: now,
         updatedAt: now,
       };
@@ -389,14 +357,6 @@ const BodyFatGoalScreen = ({ navigation }) => {
             createdAt: now,
           },
         },
-      };
-
-      // 🔹 SESSION CODE
-      updates[`users/${user.uid}/habits/bodyFatGoal/sessionCode`] = {
-        code: generateCode(),
-        createdAt: now,
-        expiresAt: now + 10 * 60 * 1000,
-        used: false,
       };
 
       // 🔥 SINGLE FIREBASE WRITE
@@ -491,7 +451,7 @@ const BodyFatGoalScreen = ({ navigation }) => {
               label="Target"
             />
           </View>
-          <View style={styles.ringsFooter}>
+          {/* <View style={styles.ringsFooter}>
             <View
               style={[
                 styles.catChip,
@@ -527,7 +487,7 @@ const BodyFatGoalScreen = ({ navigation }) => {
                 {targetCat.label}
               </Text>
             </View>
-          </View>
+          </View> */}
         </View>
 
         {/* Sliders card */}
@@ -690,7 +650,7 @@ const BodyFatGoalScreen = ({ navigation }) => {
         )}
 
         {/* Category guide */}
-        <View style={styles.guideCard}>
+        {/* <View style={styles.guideCard}>
           <Text style={styles.guideTitle}>Body Fat Categories</Text>
           <View style={styles.guideRow}>
             {RANGES.map((r, i) => (
@@ -715,7 +675,7 @@ const BodyFatGoalScreen = ({ navigation }) => {
               </View>
             ))}
           </View>
-        </View>
+        </View> */}
         {/* Save button */}
         <TouchableOpacity
           style={[styles.saveBtn, !!validationMsg && styles.saveBtnDisabled]}
@@ -743,93 +703,98 @@ const BodyFatGoalScreen = ({ navigation }) => {
             backgroundColor: '#161D15',
             borderTopLeftRadius: 28,
             borderTopRightRadius: 28,
-            paddingHorizontal: 24,
-            paddingTop: 10,
-            // paddingBottom: 40,
+            padding: 24,
             borderWidth: 1,
             borderBottomWidth: 0,
             borderColor: 'rgba(255,255,255,0.08)',
           }}
         >
-          <Text style={styles.otpTitle}>Enter Confirmation Code</Text>
+          <Text style={styles.modalEmoji}>🏆</Text>
 
-          <Text style={styles.otpSub}>
-            Enter the 4-digit code provided by your practitioner
+          <Text style={styles.modalTitle}>Verify Body Fat Goal</Text>
+
+          <Text style={styles.modalSubtitle}>
+            Enter the verification code provided by your practitioner.
           </Text>
 
-          <View style={styles.otpRow}>
-            {otp.map((digit, i) => (
-              <TextInput
-                key={i}
-                ref={inputs[i]}
-                style={[styles.otpBox, digit && styles.otpBoxFilled]}
-                value={digit}
-                onChangeText={val => handleOtpChange(val.slice(-1), i)}
-                onKeyPress={e => handleOtpBackspace(e, i)}
-                keyboardType="number-pad"
-                maxLength={1}
-                textAlign="center"
-                placeholder="·"
-                placeholderTextColor="rgba(255,255,255,0.15)"
-                selectionColor={colors.secondary}
-              />
-            ))}
-          </View>
+          <TextInput
+            value={verificationCode}
+            onChangeText={text => setVerificationCode(text.toUpperCase())}
+            placeholder="ENTER CODE"
+            placeholderTextColor="rgba(255,255,255,0.35)"
+            style={styles.codeInput}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={6}
+          />
 
           <TouchableOpacity
-            style={[
-              styles.otpConfirmBtn,
-              !otpFilled && styles.otpConfirmBtnDisabled,
-            ]}
-            disabled={!otpFilled}
-            activeOpacity={0.85}
-            onPress={() => {
-              const enteredOtp = otp.join('');
+            style={styles.verifyBtn}
+            onPress={async () => {
+              const enteredCode = verificationCode.trim().toUpperCase();
 
-              database()
-                .ref(`/users/${USER_ID}/habits/bodyFatGoal/sessionCode`)
-                .once('value')
-                .then(snapshot => {
-                  const data = snapshot.val();
+              const adminUsers = await database()
+                .ref('/users')
+                .orderByChild('profile/role')
+                .equalTo('admin')
+                .once('value');
 
-                  if (
-                    data?.code === enteredOtp &&
-                    !data?.used &&
-                    moment().isBefore(moment(data?.expiresAt))
-                  ) {
-                    setEditable(true);
-                    setOtpVerified(true);
+              let adminUid = null;
+              let validCode = null;
 
-                    database()
-                      .ref(`/users/${USER_ID}/habits/bodyFatGoal/sessionCode`)
-                      .update({ used: true });
-                  } else {
-                    setEditable(false);
-                    setOtpVerified(false);
-                  }
+              adminUsers.forEach(child => {
+                const codeData = child.val()?.profile?.verificationCode;
+
+                if (codeData?.code === enteredCode && !codeData?.used) {
+                  adminUid = child.key;
+                  validCode = codeData;
+                }
+              });
+
+              if (!validCode) {
+                Alert.alert(
+                  'Invalid Code',
+                  'Please enter a valid verification code.',
+                );
+                return;
+              }
+
+              setEditable(true);
+              setOtpVerified(true);
+
+              const newCode = Math.random()
+                .toString(36)
+                .substring(2, 8)
+                .toUpperCase();
+
+              await database()
+                .ref(`/users/${adminUid}/profile/verificationCode`)
+                .set({
+                  code: newCode,
+                  used: false,
+                  createdAt: moment().format('YYYY-MM-DD HH:mm:ss'),
                 });
 
+              setVerificationCode('');
               otpSheetRef.current?.hide();
             }}
           >
-            {otpFilled && (
-              <GradientBg
-                id="otpConfirm"
-                c1="#6A9455"
-                c2="#3A5A2A"
-                r={14}
-                horizontal
-              />
-            )}
+            <GradientBg
+              id="verifyBtn"
+              c1="#6A9455"
+              c2="#3A5A2A"
+              r={16}
+              horizontal
+            />
 
-            <Text
-              style={[
-                styles.otpConfirmText,
-                !otpFilled && styles.otpConfirmTextDisabled,
-              ]}
-            >
-              Confirm
-            </Text>
+            <Text style={styles.verifyBtnText}>Verify & Unlock</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => otpSheetRef.current?.hide()}
+            style={{ marginTop: 18 }}
+          >
+            <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
         </ActionSheet>
       </Wrapper>
@@ -944,6 +909,61 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
     padding: 18,
     marginBottom: 14,
+  },
+  modalEmoji: {
+    fontSize: 48,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 22,
+    fontFamily: fontFamily.montserratBold,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+
+  modalSubtitle: {
+    color: 'rgba(255,255,255,0.55)',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+
+  codeInput: {
+    width: '100%',
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    color: colors.white,
+    textAlign: 'center',
+    letterSpacing: 4,
+    fontSize: 20,
+    fontFamily: fontFamily.montserratBold,
+    marginBottom: 20,
+  },
+
+  verifyBtn: {
+    width: '100%',
+    height: 54,
+    borderRadius: 16,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  verifyBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  cancelText: {
+    color: 'rgba(255,255,255,0.45)',
+    textAlign: 'center',
   },
   sliderBlock: { marginBottom: 4 },
   sliderLabelRow: {

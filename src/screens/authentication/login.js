@@ -221,7 +221,7 @@ export default function Login({ navigation }) {
         <Animated.View style={[styles.greetSection, greetAnimStyle]}>
           <Text style={styles.tagline}>WELCOME BACK</Text>
           <Text style={styles.headline}>
-            Glad to see{'\n'}you!,{' '}
+            Glad to see{'\n'}you!{' '}
             {/* <Text style={styles.headlineAccent}>Again!</Text> */}
           </Text>
           <Text style={styles.subtitle}>

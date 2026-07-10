@@ -132,78 +132,78 @@ function FlipCard({
     // ======================
     // SELECTION MODE
     // ======================
-    // if (selectionMode) {
-    //   const alreadySelected = tempSelected.some(g => g.id === item.id);
+    if (selectionMode) {
+      const alreadySelected = tempSelected.some(g => g.id === item.id);
 
-    //   if (alreadySelected) {
-    //     setTempSelected(prev => prev.filter(g => g.id !== item.id));
+      if (alreadySelected) {
+        setTempSelected(prev => prev.filter(g => g.id !== item.id));
 
-    //     return;
-    //   }
+        return;
+      }
 
-    //   if (tempSelected.length >= 3 && !alreadySelected) return;
+      if (tempSelected.length >= 3 && !alreadySelected) return;
 
-    //   const updated = [...tempSelected, item];
+      const updated = [...tempSelected, item];
 
-    //   setTempSelected(updated);
+      setTempSelected(updated);
 
-    //   // VISUAL TEMP FLIP
-    //   flipCard();
+      // VISUAL TEMP FLIP
+      flipCard();
 
-    //   setTimeout(() => {
-    //     Animated.spring(animVal, {
-    //       toValue: 0,
-    //       friction: 8,
-    //       useNativeDriver: true,
-    //     }).start();
+      setTimeout(() => {
+        Animated.spring(animVal, {
+          toValue: 0,
+          friction: 8,
+          useNativeDriver: true,
+        }).start();
 
-    //     setFlipped(false);
-    //   }, 700);
+        setFlipped(false);
+      }, 700);
 
-    //   if (updated.length === 3) {
-    //     setTimeout(() => {
-    //       setConfirmVisible(true);
-    //     }, 800);
-    //   }
+      if (updated.length === 3) {
+        setTimeout(() => {
+          setConfirmVisible(true);
+        }, 800);
+      }
 
-    //   return;
-    // }
+      return;
+    }
 
-    // // ======================
-    // // AFTER CONFIRM
-    // // ======================
+    // ======================
+    // AFTER CONFIRM
+    // ======================
 
-    // // ======================
-    // // AFTER CONFIRM
-    // // ======================
+    // ======================
+    // AFTER CONFIRM
+    // ======================
 
-    // const allowed = selectedGoals.some(g => g.id === item.id);
-    // if (!allowed) return;
+    const allowed = selectedGoals.some(g => g.id === item.id);
+    if (!allowed) return;
 
-    // // ======================
-    // // NO INPUT REQUIRED
-    // // DIRECT NAVIGATION
-    // // ======================
+    // ======================
+    // NO INPUT REQUIRED
+    // DIRECT NAVIGATION
+    // ======================
 
-    // if (!item?.showInput || goalAlreadySet) {
-    //   flipCard();
+    if (!item?.showInput || goalAlreadySet) {
+      flipCard();
 
-    //   setTimeout(() => {
-    navigation?.navigate(item.screenName, {
-      goalTitle: item.title,
-      goalId: item.id,
-    });
-    //   }, 300);
+      setTimeout(() => {
+        navigation?.navigate(item.screenName, {
+          goalTitle: item.title,
+          goalId: item.id,
+        });
+      }, 300);
 
-    //   return;
-    // }
+      return;
+    }
 
-    // // ======================
-    // // INPUT REQUIRED
-    // // SHOW FLIP INPUT
-    // // ======================p
+    // ======================
+    // INPUT REQUIRED
+    // SHOW FLIP INPUT
+    // ======================p
 
-    // flipCard();
+    flipCard();
   };
 
   const shouldShowGoalInput =
@@ -447,7 +447,7 @@ export default function HabitsList({ navigation }) {
       screenName: 'WeightChallengeUI',
       category: 'Wellness',
       key: 'weightChallenge',
-      showInput: 'Enter target weight loss (Max 1-3)',
+      showInput: 'Weekly Weight Loss (Max 2lb)',
     },
     {
       id: 8,
@@ -464,7 +464,7 @@ export default function HabitsList({ navigation }) {
       screenName: 'MeatlessChallenge',
       category: 'Nutrition',
       key: 'meatLess',
-      showInput: 'Enter meatless meals per week (4 - 6)',
+      showInput: 'Enter meatless meals per week (2 - 6)',
     },
     {
       id: 10,
@@ -501,7 +501,7 @@ export default function HabitsList({ navigation }) {
     },
     {
       id: 14,
-      title: 'workout with a friend',
+      title: 'Workout With A Friend',
       description: 'Exercise with a friend 4 times',
       screenName: 'FriendWorkoutChallenge',
       category: 'Fitness',
@@ -601,36 +601,44 @@ export default function HabitsList({ navigation }) {
       const savedGoals = data?.selectedGoals || [];
       const createdAt = data?.createdAt;
 
-      // no goals yet
+      // No goals selected yet
       if (!savedGoals.length) {
         setSelectionMode(true);
         setSelectedGoals([]);
         return;
       }
 
-      // check 30 days expiry
-      const expired =
-        createdAt && moment().diff(moment(createdAt), 'days') >= 30;
+      if (createdAt) {
+        const start = moment(createdAt);
 
-      if (expired) {
-        const archiveMonth = moment(createdAt).format('MMMM_YYYY');
+        // Last day of the month when goals were created
+        const endOfGoalMonth = start.clone().endOf('month');
 
-        const archiveData = {
-          goals: savedGoals,
-          startDate: createdAt,
-          endDate: moment(createdAt).add(30, 'days').format('YYYY-MM-DD'),
-          archivedAt: moment().format('YYYY-MM-DD HH:mm:ss'),
-        };
+        // Archive only AFTER the month has completely ended
+        const expired = moment().isAfter(endOfGoalMonth);
 
-        await database()
-          .ref(`/users/${uid}/previousGoals/${archiveMonth}`)
-          .set(archiveData);
+        if (expired) {
+          const archiveMonth = start.format('MMMM_YYYY');
 
-        await ref.remove();
+          const archiveData = {
+            goals: savedGoals,
+            startDate: start.format('YYYY-MM-DD'),
+            endDate: endOfGoalMonth.format('YYYY-MM-DD'),
+            archivedAt: moment().format('YYYY-MM-DD HH:mm:ss'),
+          };
 
-        setSelectedGoals([]);
-        setSelectionMode(true);
-        return;
+          // Save previous goals
+          await database()
+            .ref(`/users/${uid}/previousGoals/${archiveMonth}`)
+            .set(archiveData);
+
+          // Remove current goals
+          await ref.remove();
+
+          setSelectedGoals([]);
+          setSelectionMode(true);
+          return;
+        }
       }
 
       setSelectedGoals(savedGoals);
@@ -638,7 +646,7 @@ export default function HabitsList({ navigation }) {
     });
 
     return () => ref.off('value', listener);
-  }, []);
+  }, [uid]);
 
   const confirmGoalSelection = async () => {
     if (tempSelected.length !== 3) return;

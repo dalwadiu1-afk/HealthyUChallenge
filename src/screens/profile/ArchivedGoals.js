@@ -133,185 +133,187 @@ export default function ArchivedGoals({ navigation }) {
   };
 
   return (
-    <View style ={{flex:1, backgroundColor:colors.dark}}>
-      <Header header="Goal Archive" headerContainer={{paddingHorizontal:23}}/>
-    <Wrapper orbsRight safeAreaPops={{ edges: ['bottom'] }}>
+    <View style={{ flex: 1, backgroundColor: colors.dark }}>
+      <Header
+        header="Goal Archive"
+        headerContainer={{ paddingHorizontal: 23 }}
+      />
+      <Wrapper orbsRight safeAreaPops={{ edges: ['bottom'] }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
+        >
+          {/* HERO */}
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
-      >
-        {/* HERO */}
+          <View style={styles.heroCard}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroTitle}>🏆 Goal Archive</Text>
 
-        <View style={styles.heroCard}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.heroTitle}>🏆 Goal Archive</Text>
-
-            <Text style={styles.heroSub}>
-              Review your completed challenge journey and celebrate your
-              progress.
-            </Text>
-          </View>
-
-          <View style={styles.heroBadge}>
-            <Text style={styles.heroBadgeNumber}>
-              {Object.values(archiveData).flat().length}
-            </Text>
-
-            <Text style={styles.heroBadgeLabel}>Goals</Text>
-          </View>
-        </View>
-        {Object.keys(archiveData).map(month => {
-          const expanded = expandedMonths[month];
-
-          return (
-            <View key={month}>
-              {/* MONTH */}
-
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => toggleMonth(month)}
-                style={styles.monthCard}
-              >
-                <View>
-                  <Text style={styles.monthTitle}>
-                    🗓 {month?.replace('_', ' ')}
-                  </Text>
-
-                  <Text style={styles.monthSub}>
-                    {archiveData[month].length} Archived Goals
-                  </Text>
-                </View>
-
-                <Text style={styles.monthArrow}>{expanded ? '▼' : '▶'}</Text>
-              </TouchableOpacity>
-
-              {/* GOALS */}
-
-              {expanded &&
-                archiveData[month].map(goal => {
-                  const color = getGoalColor(goal?.category);
-                  const icon = getGoalIcon(goal?.key);
-
-                  return (
-                    <TouchableOpacity
-                      key={goal.title}
-                      activeOpacity={0.85}
-                      style={[
-                        styles.goalCard,
-                        {
-                          borderColor: color,
-                          backgroundColor: `${color}15`,
-                        },
-                      ]}
-                      onPress={() => {
-                        if (skipHabits.includes(goal?.key)) {
-                          setBlockedGoal(goal);
-                          setShowBlockedModal(true);
-                          return;
-                        }
-
-                        navigation.navigate('Habits', {
-                          screen: goal?.screenName,
-                          params: {
-                            readOnly: true,
-                            archivedGoal: goal,
-                            monthKey: month,
-                            goalTitle: goal?.title || '',
-                            ...goal,
-                          },
-                        });
-                      }}
-                    >
-                      <View style={styles.goalTop}>
-                        <Text style={styles.goalEmoji}>{icon}</Text>
-
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.goalTitle}>{goal.title}</Text>
-
-                          <Text style={styles.goalCategory}>
-                            {goal.category}
-                          </Text>
-                        </View>
-
-                        <View
-                          style={[
-                            styles.checkCircle,
-                            {
-                              borderColor: color,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={{
-                              color,
-                              fontSize: 16,
-                            }}
-                          >
-                            ✓
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.divider} />
-
-                      <View style={styles.goalBottom}>
-                        <View>
-                          <Text style={styles.statValue}>
-                            {goal.completedDays}
-                          </Text>
-
-                          <Text style={styles.statLabel}>Days Completed</Text>
-                        </View>
-
-                        <View>
-                          <Text style={styles.statValue}>{goal.endDate}</Text>
-
-                          <Text style={styles.statLabel}>Finished</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.viewRow}>
-                        <Text style={styles.viewText}>View History →</Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
+              <Text style={styles.heroSub}>
+                Review your completed challenge journey and celebrate your
+                progress.
+              </Text>
             </View>
-          );
-        })}
-      </ScrollView>
-      <Modal
-        isVisible={showBlockedModal}
-        backdropOpacity={0.85}
-        animationIn="zoomIn"
-        animationOut="zoomOut"
-        onBackdropPress={() => false}
-        onBackButtonPress={() => false}
-      >
-        <View style={styles.modalCard}>
-          <Text style={styles.modalEmoji}>📦</Text>
 
-          <Text style={styles.modalTitle}>Archived Goal</Text>
+            <View style={styles.heroBadge}>
+              <Text style={styles.heroBadgeNumber}>
+                {Object.values(archiveData).flat().length}
+              </Text>
 
-          <Text style={styles.modalSubtitle}>
-            History for{' '}
-            <Text style={styles.goalName}>{blockedGoal?.title}</Text>
-            {'\n'}
-            is no longer available because this goal does not store
-            month-by-month activity data.
-          </Text>
+              <Text style={styles.heroBadgeLabel}>Goals</Text>
+            </View>
+          </View>
+          {Object.keys(archiveData).map(month => {
+            const expanded = expandedMonths[month];
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.modalButton}
-            onPress={() => setShowBlockedModal(false)}
-          >
-            <Text style={styles.modalButtonText}>Understood</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
-    </Wrapper>
+            return (
+              <View key={month}>
+                {/* MONTH */}
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => toggleMonth(month)}
+                  style={styles.monthCard}
+                >
+                  <View>
+                    <Text style={styles.monthTitle}>
+                      🗓 {month?.replace('_', ' ')}
+                    </Text>
+
+                    <Text style={styles.monthSub}>
+                      {archiveData[month].length} Archived Goals
+                    </Text>
+                  </View>
+
+                  <Text style={styles.monthArrow}>{expanded ? '▼' : '▶'}</Text>
+                </TouchableOpacity>
+
+                {/* GOALS */}
+
+                {expanded &&
+                  archiveData[month].map(goal => {
+                    const color = getGoalColor(goal?.category);
+                    const icon = getGoalIcon(goal?.key);
+
+                    return (
+                      <TouchableOpacity
+                        key={goal.title}
+                        activeOpacity={0.85}
+                        style={[
+                          styles.goalCard,
+                          {
+                            borderColor: color,
+                            backgroundColor: `${color}15`,
+                          },
+                        ]}
+                        onPress={() => {
+                          if (skipHabits.includes(goal?.key)) {
+                            setBlockedGoal(goal);
+                            setShowBlockedModal(true);
+                            return;
+                          }
+
+                          navigation.navigate('Habits', {
+                            screen: goal?.screenName,
+                            params: {
+                              readOnly: true,
+                              archivedGoal: goal,
+                              monthKey: month,
+                              goalTitle: goal?.title || '',
+                              ...goal,
+                            },
+                          });
+                        }}
+                      >
+                        <View style={styles.goalTop}>
+                          <Text style={styles.goalEmoji}>{icon}</Text>
+
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.goalTitle}>{goal.title}</Text>
+
+                            <Text style={styles.goalCategory}>
+                              {goal.category}
+                            </Text>
+                          </View>
+
+                          <View
+                            style={[
+                              styles.checkCircle,
+                              {
+                                borderColor: color,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={{
+                                color,
+                                fontSize: 16,
+                              }}
+                            >
+                              ✓
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.divider} />
+
+                        <View style={styles.goalBottom}>
+                          <View>
+                            <Text style={styles.statValue}>
+                              {goal.completedDays}
+                            </Text>
+
+                            <Text style={styles.statLabel}>Days Completed</Text>
+                          </View>
+
+                          <View>
+                            <Text style={styles.statValue}>{goal.endDate}</Text>
+
+                            <Text style={styles.statLabel}>Finished</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.viewRow}>
+                          <Text style={styles.viewText}>View History →</Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+              </View>
+            );
+          })}
+        </ScrollView>
+        <Modal
+          isVisible={showBlockedModal}
+          backdropOpacity={0.85}
+          animationIn="zoomIn"
+          animationOut="zoomOut"
+          onBackdropPress={() => false}
+          onBackButtonPress={() => false}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalEmoji}>📦</Text>
+
+            <Text style={styles.modalTitle}>Archived Goal</Text>
+
+            <Text style={styles.modalSubtitle}>
+              History for{' '}
+              <Text style={styles.goalName}>{blockedGoal?.title}</Text>
+              {'\n'}
+              is no longer available because this goal does not store
+              month-by-month activity data.
+            </Text>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.modalButton}
+              onPress={() => setShowBlockedModal(false)}
+            >
+              <Text style={styles.modalButtonText}>Understood</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
+      </Wrapper>
     </View>
   );
 }

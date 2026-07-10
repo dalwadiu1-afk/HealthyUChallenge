@@ -543,12 +543,12 @@ export default function DashBoard({ navigation, route }) {
 
   const STATS = [
     {
-      label: 'Streak',
+      label: 'Quiz Streak',
       value: currentStreak,
       emoji: '🔥',
     },
     {
-      label: 'Longest',
+      label: 'Longest Streak',
       value: longestStreak,
       emoji: '🏆',
     },
