@@ -17,7 +17,11 @@ import Animated, {
   withDelay,
   Easing,
 } from 'react-native-reanimated';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { colors } from '../../constant';
 
 const { height, width } = Dimensions.get('window');
@@ -36,7 +40,10 @@ export function Wrapper({
   onlyTop = false,
   scrollProps = {},
   safeAreaPops,
+  disableLayout,
 }) {
+  const insets = useSafeAreaInsets();
+
   function FloatingOrb({ size, color, style, delay = 0 }) {
     const translateY = useSharedValue(0);
     const opacity = useSharedValue(0);
@@ -189,13 +196,17 @@ export function Wrapper({
               edges={['top', !onlyTop && 'bottom']}
               {...safeAreaPops}
             >
-              <StatusBar
-                translucent={translucent}
-                backgroundColor={statusBarColor}
-                barStyle={barStyle}
-              />
               <View
-                style={{ paddingHorizontal: 23, flex: 1, ...containerStyle }}
+                style={
+                  disableLayout
+                    ? containerStyle
+                    : {
+                        paddingHorizontal: 23,
+                        flex: 1,
+                        ...containerStyle,
+                        paddingBottom: height / 12,
+                      }
+                }
               >
                 {children}
               </View>
@@ -207,17 +218,16 @@ export function Wrapper({
             edges={['top', !onlyTop && 'bottom']}
             {...safeAreaPops}
           >
-            <StatusBar
-              translucent={translucent}
-              backgroundColor={statusBarColor}
-              barStyle={barStyle}
-            />
             <View
-              style={{
-                paddingHorizontal: 23,
-                flex: 1,
-                ...containerStyle,
-              }}
+              style={
+                disableLayout
+                  ? containerStyle
+                  : {
+                      paddingHorizontal: 23,
+                      flex: 1,
+                      ...containerStyle,
+                    }
+              }
             >
               {children}
             </View>

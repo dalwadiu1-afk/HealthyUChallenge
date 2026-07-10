@@ -1,389 +1,4 @@
-// import { useState, useEffect, useRef } from 'react';
-// import {
-//   View,
-//   Text,
-//   StyleSheet,
-//   Image,
-//   Dimensions,
-//   FlatList,
-//   ScrollView,
-//   StatusBar,
-// } from 'react-native';
-// import { Header, SvgImg, Wrapper } from '../../components';
-// import { colors, fontFamily } from '../../constant';
-// import { downIcon, upIcon } from '../../assets/images';
-
-// const { height, width } = Dimensions.get('window');
-// export default function Leaderboard() {
-//   const order = [3, 1, 2];
-//   const mineData = {
-//     currentRank: 12,
-//     name: 'Linh Nguyen',
-//     point: 4,
-//     previousRank: 12,
-//     me: true,
-//   };
-//   const topThree = [
-//     {
-//       rank: 1,
-//       name: 'Linh Nguyen',
-//       point: 100,
-//     },
-//     {
-//       rank: 2,
-//       name: 'Linh Nguyen',
-//       point: 90,
-//     },
-//     {
-//       rank: 3,
-//       name: 'Linh Nguyen',
-//       point: 80,
-//     },
-//   ];
-//   const data = [
-//     {
-//       currentRank: 4,
-//       name: 'Linh Nguyen',
-//       point: 70,
-//       previousRank: 2,
-//     },
-//     {
-//       currentRank: 5,
-//       name: 'Linh Nguyen',
-//       point: 60,
-//       previousRank: 5,
-//     },
-//     {
-//       currentRank: 6,
-//       name: 'Linh Nguyen',
-//       point: 50,
-//       previousRank: 7,
-//     },
-//     {
-//       currentRank: 7,
-//       name: 'Linh Nguyen Linh Nguyen  Linh Nguyen',
-//       point: 40,
-//       previousRank: 6,
-//     },
-//     {
-//       currentRank: 8,
-//       name: 'Linh Nguyen',
-//       point: 30,
-//       previousRank: 10,
-//     },
-
-//     {
-//       currentRank: 9,
-//       name: 'Linh Nguyen',
-//       point: 20,
-//       previousRank: 8,
-//     },
-//     {
-//       currentRank: 10,
-//       name: 'Linh Nguyen',
-//       point: 10,
-//       previousRank: 9,
-//     },
-//     { currentRank: 11, name: 'Linh Nguyen', point: 5, previousRank: 11 },
-//     {
-//       currentRank: 12,
-//       name: 'Linh Nguyen',
-//       point: 4,
-//       previousRank: 12,
-//       me: true,
-//     },
-//     {
-//       currentRank: 13,
-//       name: 'Linh Nguyen',
-//       point: 3,
-//       previousRank: 13,
-//     },
-//     {
-//       currentRank: 14,
-//       name: 'Linh Nguyen',
-//       point: 2,
-//       previousRank: 14,
-//     },
-//   ];
-//   const [ranking, setRanking] = useState([]);
-
-//   useEffect(() => {
-//     const sortedData = order.map(rank =>
-//       topThree.find(item => item.rank === rank),
-//     );
-//     console.log('sortedData :>> ', sortedData);
-//     setRanking(sortedData);
-//   }, []);
-
-//   const TopRankingCard = ({ rank, name, point, profileContainer }) => {
-//     return (
-//       <View>
-//         <>
-//           <View style={{ ...styles.profileContainer, ...profileContainer }}>
-//             <Image
-//               source={{
-//                 uri: 'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-//               }}
-//               style={{
-//                 width: '100%',
-//                 height: '100%',
-//               }}
-//               resizeMode="cover"
-//             />
-//           </View>
-//           <Text
-//             style={{
-//               ...styles.profileText,
-//               fontSize: rank == 1 ? 14 : rank == 2 ? 12 : 11,
-//               width:
-//                 rank == 1
-//                   ? height * 0.14
-//                   : rank == 2
-//                   ? height * 0.12
-//                   : height * 0.1,
-//             }}
-//             numberOfLines={1}
-//           >
-//             {name}
-//           </Text>
-//           <Text
-//             style={{
-//               ...styles.profileText,
-//               fontSize: rank == 1 ? 14 : rank == 2 ? 12 : 11,
-//               fontFamily: fontFamily.montserratBold,
-
-//               width:
-//                 rank == 1
-//                   ? height * 0.14
-//                   : rank == 2
-//                   ? height * 0.12
-//                   : height * 0.1,
-//             }}
-//             numberOfLines={1}
-//           >
-//             {point} points
-//           </Text>
-//         </>
-//         <View
-//           style={{
-//             ...styles.tags,
-//             backgroundColor:
-//               rank == 1 ? 'gold' : rank == 2 ? 'silver' : 'brown',
-//             left: (rank == 1 && height * 0.01) || (rank == 3 && height * 0),
-//             right: rank == 2 && height * 0.01,
-//           }}
-//         >
-//           <Text
-//             style={{
-//               fontFamily: fontFamily.montserratSemiBold,
-//               fontSize: 12,
-//               color: rank == 2 || rank == 1 ? colors.textPrimary : colors.white,
-//             }}
-//           >
-//             {rank}
-//           </Text>
-//         </View>
-//       </View>
-//     );
-//   };
-
-//   const RankingCard = ({ item, index }) => {
-//     return (
-//       <View
-//         key={index}
-//         style={{
-//           marginTop: index == 0 ? 20 : 0,
-//           ...styles.rankingContainer,
-//           marginBottom: index == data?.length - 1 ? height * 0.12 : 10,
-//           backgroundColor: item?.me ? '#75a796' : colors.white,
-//         }}
-//       >
-//         <Text
-//           style={{
-//             fontFamily: fontFamily.montserratSemiBold,
-//             fontSize: 16,
-//           }}
-//         >
-//           {item.currentRank}
-//         </Text>
-//         <View style={styles.picContainer}>
-//           <Image
-//             source={{
-//               uri: 'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-//             }}
-//             style={styles.profile}
-//           />
-//           <Text
-//             style={{
-//               fontFamily: fontFamily.montserratMedium,
-//               fontSize: 16,
-//               width: width * 0.4,
-//             }}
-//             numberOfLines={1}
-//           >
-//             {item?.name}
-//           </Text>
-//         </View>
-//         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-//           <Text
-//             style={{
-//               fontFamily: fontFamily.montserratSemiBold,
-//               fontSize: 16,
-//               marginRight: 6,
-//             }}
-//           >
-//             {item.point}pts
-//           </Text>
-//           {item?.currentRank != item?.previousRank ? (
-//             <SvgImg
-//               iconName={
-//                 item?.currentRank > item?.previousRank ? upIcon : downIcon
-//               }
-//               height={14}
-//               width={14}
-//             />
-//           ) : (
-//             <View style={{ width: 14, height: 14 }} />
-//           )}
-//         </View>
-//       </View>
-//     );
-//   };
-
-//   return (
-//     <View style={{ backgroundColor: colors.dark, flex: 1 }}>
-//       <Header
-//         header={`Leaderboard`}
-//         showRightBtn={true}
-//         textStyle={styles.textStyle}
-//         disableLeft={false}
-//         headerContainer={{
-//           paddingHorizontal: 23,
-//           marginTop: StatusBar.currentHeight,
-//         }}
-//       />
-
-//       <View style={styles.container}>
-//         <View style={styles.topRankingContainer}>
-//           {ranking.map((player, index) => (
-//             <TopRankingCard
-//               key={index}
-//               rank={player.rank}
-//               name={player.name}
-//               point={player.point}
-//               profileContainer={{
-//                 width:
-//                   player.rank == 1
-//                     ? height * 0.14
-//                     : player.rank == 2
-//                     ? height * 0.13
-//                     : height * 0.1,
-//                 height:
-//                   player.rank == 1
-//                     ? height * 0.14
-//                     : player.rank == 2
-//                     ? height * 0.13
-//                     : height * 0.1,
-//                 borderColor:
-//                   player.rank == 1
-//                     ? 'gold'
-//                     : player.rank == 2
-//                     ? 'silver'
-//                     : 'brown',
-//               }}
-//             />
-//           ))}
-//         </View>
-
-//         <View style={styles.content}>
-//           <FlatList
-//             data={data}
-//             renderItem={({ item, index }) => {
-//               return <RankingCard key={index} item={item} index={index} />;
-//             }}
-//             showsVerticalScrollIndicator={false}
-//             nestedScrollEnabled
-//           />
-//           <View style={{ position: 'absolute', bottom: 0, width: '100%' }}>
-//             {mineData && (
-//               <RankingCard item={mineData} index={mineData.currentRank} />
-//             )}
-//           </View>
-//         </View>
-//       </View>
-//     </View>
-//   );
-// }
-// const styles = StyleSheet.create({
-//   textStyle: {
-//     fontSize: 16,
-//     lineHeight: 26,
-//     textAlign: 'center',
-//     fontFamily: fontFamily.montserratSemiBold,
-//   },
-//   container: {
-//     flex: 1,
-//   },
-//   profileContainer: {
-//     width: height * 0.15,
-//     height: height * 0.15,
-//     borderRadius: 100,
-//     overflow: 'hidden',
-//     borderWidth: 2,
-//   },
-//   profileText: {
-//     fontFamily: fontFamily.montserratMedium,
-//     fontSize: 16,
-//     color: colors.white,
-//     textAlign: 'center',
-//   },
-//   tags: {
-//     zIndex: 1,
-//     alignItems: 'center',
-//     position: 'absolute',
-//     height: 18,
-//     width: 18,
-//     borderRadius: 100,
-//     alignContent: 'center',
-//     top: height * 0.012,
-//   },
-//   profile: {
-//     height: height * 0.06,
-//     width: height * 0.06,
-//     borderRadius: 100,
-//     marginRight: 10,
-//   },
-//   topRankingContainer: {
-//     flexDirection: 'row',
-//     justifyContent: 'space-between',
-//     alignItems: 'flex-end',
-//     paddingHorizontal: 23,
-//   },
-//   rankingContainer: {
-//     flexDirection: 'row',
-//     alignItems: 'center',
-//     paddingHorizontal: 20,
-//     paddingVertical: 17,
-//     backgroundColor: colors.white,
-//     marginBottom: 10,
-//     borderRadius: 100,
-//     marginHorizontal: 17,
-//   },
-//   content: {
-//     flex: 1,
-//     marginTop: 20,
-//     backgroundColor: colors.accent,
-//     borderTopLeftRadius: 20,
-//     borderTopRightRadius: 20,
-//   },
-//   picContainer: {
-//     flexDirection: 'row',
-//     alignItems: 'center',
-//     marginLeft: 16,
-//     flex: 1,
-//   },
-// });
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -393,10 +8,17 @@ import {
   StatusBar,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
+import analytics from '@react-native-firebase/analytics';
+import auth from '@react-native-firebase/auth';
+import database from '@react-native-firebase/database';
+import { useSelector } from 'react-redux';
+
 import Svg, { Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
+
 import { colors, fontFamily } from '../../constant';
-import { SvgImg } from '../../components';
+import { Header, SvgImg, Wrapper } from '../../components';
 import { downIcon, upIcon } from '../../assets/images';
 
 const { height, width } = Dimensions.get('window');
@@ -416,72 +38,159 @@ function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
           <Stop offset="1" stopColor={c2} stopOpacity="1" />
         </LinearGradient>
       </Defs>
+
       <Rect width="100%" height="100%" fill={`url(#${id})`} rx={r} />
     </Svg>
   );
 }
 
 export default function Leaderboard({ navigation }) {
+  const userId =
+    useSelector(state => state.user?.uid) || auth()?.currentUser?.uid;
+  const [leaderboardData, setLeaderboardData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // ✅ FIXED: previousRank logic (NO OVERWRITE LOOP)
+  useEffect(() => {
+    const leaderboardRef = database().ref('/leaderboards');
+
+    const onValueChange = leaderboardRef.on('value', snapshot => {
+      const data = snapshot.val() || {};
+
+      if (!snapshot.exists()) {
+        setLeaderboardData([]);
+        setLoading(false);
+        return;
+      }
+
+      const formatted = Object.entries(data).map(([uid, item]) => {
+        const challenge = item?.challenge || {};
+        const days = challenge?.days || {};
+
+        const todayKey = new Date().toISOString().split('T')[0];
+        const todayData = days?.[todayKey] || {};
+
+        // total quizzes completed
+
+        const quizCompleted = item?.status?.quizCompleted || 0;
+
+        // completed active days
+        const completedDays = item?.status?.completedDays || 0;
+
+        // consistency
+        const consistency = item?.status?.consistency || 0;
+        const durationDays = challenge?.durationDays || 1;
+
+        // weekly points
+        const weeklyPoints = Object.values(days).reduce((acc, day) => {
+          return acc + (day?.points || 0);
+        }, 0);
+
+        return {
+          uid,
+
+          name: item?.name || 'User',
+
+          avatar: item?.avatar || item?.profile || 'https://i.pravatar.cc/300',
+
+          // MAIN TOTAL
+          totalPoints: challenge?.totalChallengePoints || 0,
+
+          // STREAKS
+          streak: challenge?.streak || 0,
+          longestStreak: challenge?.longestStreak || 0,
+
+          // TODAY
+          todayPoints: todayData?.points || 0,
+          todayNormalPoints: todayData?.normalPoints || 0,
+          todayBonusPoints: todayData?.bonusPoints || 0,
+
+          // QUIZZES
+          quizCompleted,
+
+          // CONSISTENCY
+          consistency,
+          completedDays,
+
+          // WEEK
+          weeklyPoints,
+
+          // CHALLENGE
+          durationDays: challenge?.durationDays || 0,
+          startDate: challenge?.startDate || '',
+          endDate: challenge?.endDate || '',
+
+          previousRank:
+            typeof item?.previousRank === 'number' ? item.previousRank : null,
+
+          challenge,
+        };
+      });
+
+      // SORT
+      const sorted = formatted.sort(
+        (a, b) => (b.totalPoints || 0) - (a.totalPoints || 0),
+      );
+
+      // ADD RANK
+      const ranked = sorted.map((item, index) => ({
+        ...item,
+        currentRank: index + 1,
+        previousRank: item.previousRank == null ? index + 1 : item.previousRank,
+      }));
+
+      setLeaderboardData(ranked);
+      setLoading(false);
+
+      // 👇 ADD ANALYTICS HERE
+      const me = ranked?.find(i => i?.uid === userId);
+
+      if (me) {
+        analytics().logEvent('leaderboard_view', {
+          uid: userId,
+          rank: me?.currentRank,
+          score: me?.totalPoints,
+          total_users: ranked?.length,
+        });
+      }
+    });
+
+    return () => leaderboardRef.off('value', onValueChange);
+  }, []);
+
   const order = [3, 1, 2];
 
-  const mineData = {
-    currentRank: 12,
-    name: 'Linh Nguyen',
-    point: 4,
-    previousRank: 12,
-    me: true,
-  };
+  const topThree = useMemo(
+    () => leaderboardData.slice(0, 3),
+    [leaderboardData],
+  );
 
-  const topThree = [
-    { rank: 1, name: 'Linh Nguyen', point: 100 },
-    { rank: 2, name: 'Linh Nguyen', point: 90 },
-    { rank: 3, name: 'Linh Nguyen', point: 80 },
-  ];
+  const data1 = useMemo(() => leaderboardData.slice(3), [leaderboardData]);
 
-  const data = [
-    { currentRank: 4, name: 'Linh Nguyen', point: 70, previousRank: 2 },
-    { currentRank: 5, name: 'Linh Nguyen', point: 60, previousRank: 5 },
-    { currentRank: 6, name: 'Linh Nguyen', point: 50, previousRank: 7 },
-    {
-      currentRank: 7,
-      name: 'Linh Nguyen Linh Nguyen',
-      point: 40,
-      previousRank: 6,
-    },
-    { currentRank: 8, name: 'Linh Nguyen', point: 30, previousRank: 10 },
-    { currentRank: 9, name: 'Linh Nguyen', point: 20, previousRank: 8 },
-    { currentRank: 10, name: 'Linh Nguyen', point: 10, previousRank: 9 },
-    { currentRank: 11, name: 'Linh Nguyen', point: 5, previousRank: 11 },
-    {
-      currentRank: 12,
-      name: 'Linh Nguyen',
-      point: 4,
-      previousRank: 12,
-      me: true,
-    },
-    { currentRank: 13, name: 'Linh Nguyen', point: 3, previousRank: 13 },
-    { currentRank: 14, name: 'Linh Nguyen', point: 2, previousRank: 14 },
-  ];
+  const mineData = useMemo(
+    () => leaderboardData.find(item => item.uid === userId),
+    [leaderboardData, userId],
+  );
 
-  const [ranking, setRanking] = useState([]);
-
-  useEffect(() => {
-    const sorted = order.map(rank => topThree.find(item => item.rank === rank));
-    setRanking(sorted);
-  }, []);
+  const ranking = useMemo(() => {
+    return order
+      .map(rank => topThree.find(item => item.currentRank === rank))
+      .filter(Boolean);
+  }, [topThree]);
 
   const medalColor = rank =>
     rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : '#CD7F32';
 
-  const TopRankingCard = ({ rank, name, point, profileContainer }) => {
+  const TopRankingCard = ({ rank, item }) => {
+    const isMe = item?.uid === userId;
     const size =
       rank === 1 ? height * 0.13 : rank === 2 ? height * 0.11 : height * 0.09;
+
     return (
       <View style={styles.topCard}>
         <View
           style={[
             styles.topAvatarWrap,
-            profileContainer,
             {
               width: size,
               height: size,
@@ -492,151 +201,178 @@ export default function Leaderboard({ navigation }) {
         >
           <Image
             source={{
-              uri: 'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
+              uri: item?.avatar || 'https://i.pravatar.cc/300',
             }}
-            style={{ width: '100%', height: '100%' }}
+            style={{ width: '100%', height: '100%', borderRadius: 100 }}
             resizeMode="cover"
           />
+
           <View
             style={[styles.medalTag, { backgroundColor: medalColor(rank) }]}
           >
             <Text
               style={[
                 styles.medalNum,
-                { color: rank === 3 ? colors.white : '#1A1A1A' },
+                {
+                  color: rank === 3 ? colors.white : '#1A1A1A',
+                },
               ]}
             >
               {rank}
             </Text>
           </View>
         </View>
+
         <Text
           style={[styles.topName, { fontSize: rank === 1 ? 13 : 11 }]}
           numberOfLines={1}
         >
-          {name}
+          {item?.name}
         </Text>
-        <Text
-          style={[styles.topPts, { fontSize: rank === 1 ? 13 : 11 }]}
-          numberOfLines={1}
-        >
-          {point} pts
+
+        <Text style={[styles.topPts, { fontSize: rank === 1 ? 13 : 11 }]}>
+          {item?.totalPoints || 0} pts
         </Text>
       </View>
     );
   };
 
-  const RankingRow = ({ item, isMe }) => (
-    <View style={[styles.rankRow, isMe && styles.rankRowMe]}>
-      {isMe && (
-        <GradientBg
-          id={`me${item.currentRank}`}
-          c1="rgba(106,148,85,0.3)"
-          c2="rgba(58,90,42,0.2)"
-          r={14}
-        />
-      )}
-      <Text style={[styles.rankNum, isMe && styles.rankNumMe]}>
-        {item.currentRank}
-      </Text>
-      <View style={styles.rankAvatarWrap}>
-        <Image
-          source={{
-            uri: 'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-          }}
-          style={styles.rankAvatar}
-          resizeMode="cover"
-        />
-      </View>
-      <Text
-        style={[styles.rankName, isMe && styles.rankNameMe]}
-        numberOfLines={1}
+  const RankingRow = ({ item, isMe, index }) => {
+    const hasMoved =
+      typeof item.previousRank === 'number' &&
+      item.previousRank !== item.currentRank;
+    return (
+      <View
+        style={[
+          styles.rankRow,
+          { marginBottom: index == data1?.length - 1 ? height / 13 : 10 },
+          isMe && styles.rankRowMe,
+        ]}
       >
-        {item?.name}
-      </Text>
-      <View style={styles.rankRight}>
-        <Text style={[styles.rankPts, isMe && styles.rankPtsMe]}>
-          {item.point} pts
-        </Text>
-        {item?.currentRank !== item?.previousRank ? (
-          <SvgImg
-            iconName={
-              item?.currentRank > item?.previousRank ? upIcon : downIcon
-            }
-            height={12}
-            width={12}
+        {isMe && (
+          <GradientBg
+            id={`me${item.currentRank}`}
+            c1="rgba(106,148,85,0.3)"
+            c2="rgba(58,90,42,0.2)"
+            r={14}
           />
-        ) : (
-          <View style={{ width: 12, height: 12 }} />
         )}
+
+        <Text style={[styles.rankNum, isMe && styles.rankNumMe]}>
+          {item.currentRank}
+        </Text>
+
+        <View style={styles.rankAvatarWrap}>
+          <Image
+            source={{
+              uri: item?.avatar || 'https://i.pravatar.cc/300',
+            }}
+            style={styles.rankAvatar}
+          />
+        </View>
+
+        <View style={{ flex: 1 }}>
+          <Text
+            style={[styles.rankName, isMe && styles.rankNameMe]}
+            numberOfLines={1}
+          >
+            {item?.name}
+          </Text>
+          <Text
+            style={{
+              fontSize: 10,
+              fontFamily: fontFamily.montserratRegular,
+              color: colors.white,
+            }}
+            numberOfLines={2}
+          >
+            🎯 {item?.quizCompleted || 0} quizzes · 🔥 {item?.streak || 0}{' '}
+            streak ·{'\n'}
+            📊 {item?.consistency || 0}% consistency
+          </Text>
+        </View>
+
+        <View style={styles.rankRight}>
+          <Text style={[styles.rankPts, isMe && styles.rankPtsMe]}>
+            {item?.totalPoints || 0} pts
+          </Text>
+
+          {hasMoved ? (
+            <SvgImg
+              iconName={
+                item.currentRank < item.previousRank ? upIcon : downIcon
+              }
+              height={12}
+              width={12}
+            />
+          ) : (
+            <View style={{ width: 12, height: 12 }} />
+          )}
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.root,
+          { justifyContent: 'center', alignItems: 'center' },
+        ]}
+      >
+        <ActivityIndicator color={colors.secondary} />
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.root}>
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        barStyle="light-content"
-      />
+    <View style={{ flex: 1 }}>
+      <Wrapper
+        orbsRight
+        containerStyle={{ paddingHorizontal: 0 }}
+        scrollEnable={false}
+        safeAreaPops={{ edges: ['bottom'] }}
+      >
+        <Header
+          header="Quiz Leaderboard"
+          headerContainer={{ paddingHorizontal: 23 }}
+        />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation?.goBack()}
-          activeOpacity={0.8}
-        >
-          <Svg width={9} height={16} viewBox="0 0 9 16" fill="none">
-            <Path
-              d="M8 1L1 8L8 15"
-              stroke="#FFFFFF"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+        <View style={styles.podium}>
+          {ranking.map(item => (
+            <TopRankingCard
+              key={item.uid}
+              rank={item.currentRank}
+              item={item}
             />
-          </Svg>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Leaderboard</Text>
-        <View style={{ width: 44 }} />
-      </View>
-
-      {/* Top 3 podium */}
-      <View style={styles.podium}>
-        {ranking.map(
-          (player, index) =>
-            player && (
-              <TopRankingCard
-                key={index}
-                rank={player.rank}
-                name={player.name}
-                point={player.point}
-              />
-            ),
-        )}
-      </View>
-
-      {/* List */}
-      <View style={styles.listCard}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 80 }}
-        >
-          {data.map((item, index) => (
-            <RankingRow key={index} item={item} isMe={!!item.me} />
           ))}
-        </ScrollView>
+        </View>
 
-        {/* Pinned "me" row */}
+        <View style={styles.listCard}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 100 }}
+          >
+            {data1.map((item, index) => (
+              <RankingRow
+                key={item.uid}
+                item={item}
+                index={index}
+                isMe={false}
+              />
+            ))}
+          </ScrollView>
+        </View>
+      </Wrapper>
+      {mineData && (
         <View style={styles.pinnedMe}>
           <RankingRow item={mineData} isMe />
         </View>
-      </View>
+      )}
     </View>
   );
 }
-
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -680,30 +416,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   topAvatarWrap: {
-    overflow: 'hidden',
     borderWidth: 2,
     marginBottom: 6,
   },
   medalTag: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
+    zIndex: 1,
     alignItems: 'center',
+    position: 'absolute',
+    height: 18,
+    width: 18,
+    borderRadius: 100,
+    alignContent: 'center',
+    top: height * 0.012,
   },
   medalNum: {
     fontSize: 10,
     fontFamily: fontFamily.montserratSemiBold,
   },
-  topName: {
-    color: 'rgba(255,255,255,0.8)',
-    fontFamily: fontFamily.montserratMedium,
-    textAlign: 'center',
-    width: width * 0.25,
-  },
+
   topPts: {
     color: colors.secondary,
     fontFamily: fontFamily.montserratSemiBold,
@@ -726,11 +456,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 14,
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 14,
     marginBottom: 8,
     overflow: 'hidden',
+    minHeight: 74,
   },
   rankRowMe: {
     borderWidth: 1,
@@ -759,16 +490,16 @@ const styles = StyleSheet.create({
   rankName: {
     flex: 1,
     fontSize: 14,
-    fontFamily: fontFamily.poppinsMedium,
+    fontFamily: fontFamily.CircularRegular,
     color: 'rgba(255,255,255,0.8)',
   },
   rankNameMe: {
     color: colors.white,
   },
   rankRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
   },
   rankPts: {
     fontSize: 13,
@@ -782,8 +513,32 @@ const styles = StyleSheet.create({
 
   pinnedMe: {
     position: 'absolute',
-    bottom: 12,
-    left: 16,
-    right: 16,
+    bottom: height / 10,
+    width: '100%',
+    paddingHorizontal: 18,
+  },
+  topSub: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.45)',
+    fontFamily: fontFamily.montserratRegular,
+    marginTop: 2,
+    marginBottom: 2,
+  },
+
+  rankInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+
+  rankSub: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.45)',
+    fontFamily: fontFamily.montserratRegular,
+    marginTop: 2,
+  },
+  topName: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.45)',
+    fontFamily: fontFamily.montserratMedium,
   },
 });

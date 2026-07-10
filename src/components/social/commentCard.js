@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { colors, fontFamily } from '../../constant';
 
 export function CommentCard({ item, index, formatTime, onLikePress }) {
@@ -28,7 +28,12 @@ export function CommentCard({ item, index, formatTime, onLikePress }) {
     <View style={styles.commentItem}>
       <View style={styles.commentHeader}>
         <View style={{ flexDirection: 'row', flex: 1 }}>
-          <View style={styles.commentAvatar} />
+          <View style={styles.commentAvatar}>
+            <Image
+              source={{ uri: item?.avatar || ' ' }}
+              style={{ height: '100%', width: '100%' }}
+            />
+          </View>
 
           <View style={{ marginLeft: 12 }}>
             <Text style={styles.commentName}>{item.name}</Text>
@@ -67,6 +72,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderWidth: 1.5,
     borderColor: 'rgba(143,175,120,0.3)',
+    overflow: 'hidden',
   },
   commentName: {
     fontSize: 14,

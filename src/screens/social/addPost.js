@@ -9,16 +9,20 @@ import {
   ScrollView,
   Image,
   Platform,
+  Dimensions,
 } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import ChatCard from '../../components/social/chatCard';
 import { colors, fontFamily } from '../../constant';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
-import { SvgImg } from '../../components';
+import { Header, SvgImg, Wrapper } from '../../components';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import storage from '@react-native-firebase/storage';
 import { attachIcon, uploadIcon } from '../../assets/images';
+import Modal from 'react-native-modal';
+
+const { height } = Dimensions.get('window');
 
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   return (
@@ -40,216 +44,279 @@ function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   );
 }
 
-export default function AddPost({ navigation }) {
+const uploadImageToFirebase = async uri => {
+  try {
+    const user = auth().currentUser;
+    if (!user) throw new Error('Not logged in');
+
+    const fileName = `posts/${user.uid}/${Date.now()}.jpg`;
+
+    const reference = storage().ref(fileName);
+
+    const uploadUri = Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
+
+    await reference.putFile(uploadUri);
+
+    return await reference.getDownloadURL();
+  } catch (error) {
+    console.log('UPLOAD ERROR:', error);
+    throw error;
+  }
+};
+
+const formatTime = timestamp => {
+  if (!timestamp) return '';
+  const diff = Math.floor((Date.now() - timestamp) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return new Date(timestamp).toLocaleDateString();
+};
+
+export default function AddPost({ navigation, route }) {
   const [message, setMessage] = useState('');
-  const [image, setImage] = useState(null);
+  const [image, setImage] = useState('');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [posts, setPosts] = useState([]);
+  const { userData } = route?.params;
+  useEffect(() => {
+    const user = auth().currentUser;
+    if (!user) return;
+
+    const ref = database()
+      .ref('posts')
+      .orderByChild('userId')
+      .equalTo(user.uid);
+
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (!data) {
+        setPosts([]);
+        return;
+      }
+
+      const formatted = Object.keys(data).map(key => ({
+        id: key,
+        ...data[key],
+      }));
+
+      // latest first
+      formatted.sort((a, b) => b.createdAt - a.createdAt);
+
+      setPosts(formatted);
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
+
+  const handleUpload = async uri => {
+    try {
+      setUploading(true);
+
+      const url = await uploadImageToFirebase(uri);
+
+      setImage(url);
+      setModalVisible(false);
+    } catch (err) {
+      console.log(err);
+      Alert.alert('Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleCreatePost = async () => {
     if (!message.trim() && !image) return;
 
-    const user = auth().currentUser || 'USER_UID';
-    if (!user) return;
-
     try {
-      let imageUrl = '';
+      const user = auth().currentUser;
+      if (!user) return;
 
-      if (image) {
-        // imageUrl = await uploadImage(image); // ✅ upload first
-        imageUrl = image; // ✅ upload first
-      }
+      const ref = database().ref('posts').push();
 
-      console.log('newPost :>> ');
-      const newPostRef = database().ref('posts').push();
-
-      const newPost = {
+      await ref.set({
         userId: user.uid,
-        name: user.displayName || 'User',
-        avatar: user.photoURL || '',
-
-        message: message,
-        image: imageUrl, // ✅ CORRECT
-
+        name: userData?.profile?.name || 'User',
+        avatar: userData?.profile?.avatar || '',
+        message: message.trim(),
+        image: image || '',
         createdAt: Date.now(),
-
-        likes: {}, // ✅ IMPORTANT
-        comments: {}, // ✅ IMPORTANT
-      };
-      console.log('newPost :>> ', newPost);
-      await newPostRef.set(newPost);
+        likes: {},
+        comments: {},
+      });
 
       setMessage('');
-      setImage(null);
-
-      navigation.goBack();
+      setImage('');
     } catch (err) {
-      console.log('Post error:', err);
+      console.log('POST ERROR:', err);
     }
-  };
-
-  const pickImage = async () => {
-    const result = await launchImageLibrary({
-      mediaType: 'photo',
-      quality: 0.7,
-    });
-
-    if (result.didCancel) return;
-
-    const uri = result.assets?.[0]?.uri;
-    setImage(uri);
   };
 
   const openCamera = async () => {
-    const result = await launchCamera({
+    const res = await launchCamera({
       mediaType: 'photo',
-      quality: 0.7,
+      quality: 0.8,
     });
 
-    if (result.didCancel) return;
+    if (res.didCancel) return;
 
-    const uri = result.assets?.[0]?.uri;
-    setImage(uri);
+    const uri = res.assets?.[0]?.uri;
+    if (!uri) return;
+
+    await handleUpload(uri);
   };
 
-  const addComment = async text => {
-    const commentRef = database().ref(`posts/${postId}/comments`).push();
+  const openGallery = async () => {
+    const res = await launchImageLibrary({
+      mediaType: 'photo',
+      quality: 0.8,
+    });
 
-    const newComment = {
-      userId: user.uid,
-      name: user.displayName || 'User',
-      text: text,
-      createdAt: Date.now(),
-      likes: {},
-    };
+    if (res.didCancel) return;
 
-    await commentRef.set(newComment);
+    const uri = res.assets?.[0]?.uri;
+    if (!uri) return;
+
+    await handleUpload(uri);
   };
-
-  const uploadImage = async uri => {
-    try {
-      const fileName = `posts/${Date.now()}.jpg`;
-
-      // ✅ FIX ANDROID PATH ISSUE
-      const uploadUri =
-        Platform.OS === 'android' ? uri.replace('file://', '') : uri;
-
-      const reference = storage().ref(fileName);
-
-      await reference.putFile(uploadUri);
-
-      const url = await reference.getDownloadURL();
-
-      console.log('UPLOAD SUCCESS:', url);
-
-      return url;
-    } catch (error) {
-      console.log('UPLOAD ERROR:', error);
-      return '';
-    }
-  };
-
-  const posts = [
-    {
-      id: 1,
-      name: 'Linh Nguyen',
-      message:
-        'I am very happy to be with Cafit in training sessions and how about you?',
-      time: '10:30 AM || 2s ago',
-      picture:
-        'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-    },
-  ];
 
   return (
     <View style={styles.root}>
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        barStyle="light-content"
-      />
-
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation?.goBack()}
-          activeOpacity={0.8}
-        >
-          <Svg width={9} height={16} viewBox="0 0 9 16" fill="none">
-            <Path
-              d="M8 1L1 8L8 15"
-              stroke="#FFFFFF"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Linh's Post</Text>
-        <View style={{ width: 44 }} />
-      </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
+      <Header
+        header="Share Something"
+        headerContainer={{ paddingHorizontal: 23 }}
+      />
+      <Wrapper
+        orbsRight
+        containerStyle={{ paddingHorizontal: 0 }}
+        scrollEnable={false}
       >
-        {posts.map((item, index) => (
-          <ChatCard key={index} item={item} />
-        ))}
-      </ScrollView>
-      {image && (
-        <View style={styles.imagePreview}>
-          <Image source={{ uri: image }} style={styles.previewImage} />
+        <ScrollView style={{ paddingHorizontal: 23 }}>
+          {posts.map(post => (
+            <ChatCard
+              key={post.id}
+              item={{
+                ...post,
+                name: post?.name,
+                message: post?.message || post?.text,
+                picture: post?.image,
+                time: formatTime(post?.createdAt),
+                likes: post?.likesCount,
+                comments: post?.commentsCount,
+                isLiked: post?.isLiked,
 
+                beverageName: post.beverageName,
+                ingredients: post.ingredients || [],
+                type: post.type,
+
+                snackName: post?.snackName,
+                qty: post?.qty,
+                type: post?.type,
+              }}
+            />
+          ))}
+        </ScrollView>
+
+        {image && (
+          <View style={styles.imagePreview}>
+            <Image source={{ uri: image }} style={styles.previewImage} />
+
+            <TouchableOpacity
+              onPress={() => setImage(null)}
+              style={styles.removeImageBtn}
+            >
+              <Text style={{ color: '#fff', fontSize: 12 }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        {/* Comment input bar */}
+        <View style={{ ...styles.inputBar }}>
+          {/* Attach */}
           <TouchableOpacity
-            onPress={() => setImage(null)}
-            style={styles.removeImageBtn}
+            style={styles.iconBtn}
+            activeOpacity={0.8}
+            onPress={() => setModalVisible(true)}
           >
-            <Text style={{ color: '#fff', fontSize: 12 }}>✕</Text>
+            <SvgImg iconName={attachIcon} height={22} width={22} />
+          </TouchableOpacity>
+
+          {/* Text field */}
+          <TextInput
+            style={styles.textInput}
+            placeholder="What's on your mind?"
+            placeholderTextColor="rgba(255,255,255,0.3)"
+            value={message}
+            onChangeText={setMessage}
+            multiline
+          />
+
+          {/* Send */}
+          <TouchableOpacity
+            disabled={!message.trim() && !image}
+            style={[
+              styles.sendBtn,
+              { opacity: message.trim() || image ? 1 : 0.5 },
+            ]}
+            activeOpacity={0.85}
+            onPress={handleCreatePost}
+          >
+            <GradientBg
+              id="sendGrad"
+              c1="#6A9455"
+              c2="#3A5A2A"
+              r={14}
+              horizontal
+            />
+            <SvgImg iconName={uploadIcon} height={20} width={20} />
           </TouchableOpacity>
         </View>
-      )}
-      {/* Comment input bar */}
-      <View style={styles.inputBar}>
-        {/* Attach */}
-        <TouchableOpacity
-          style={styles.iconBtn}
-          activeOpacity={0.8}
-          onPress={pickImage}
+        <Modal
+          isVisible={modalVisible}
+          onBackdropPress={() => setModalVisible(false)}
+          style={styles.modal}
+          useNativeDriver
+          hideModalContentWhileAnimating
         >
-          <SvgImg iconName={attachIcon} height={22} width={22} />
-        </TouchableOpacity>
+          <View style={styles.sheet}>
+            {/* glow top accent */}
+            <View style={styles.topGlow} />
 
-        {/* Text field */}
-        <TextInput
-          style={styles.textInput}
-          placeholder="What's on your mind?"
-          placeholderTextColor="rgba(255,255,255,0.3)"
-          value={message}
-          onChangeText={setMessage}
-          multiline
-        />
+            {/* handle */}
+            <View style={styles.handle} />
 
-        {/* Send */}
-        <TouchableOpacity
-          disabled={!message.trim() && !image}
-          style={[
-            styles.sendBtn,
-            { opacity: message.trim() || image ? 1 : 0.5 },
-          ]}
-          activeOpacity={0.85}
-          onPress={handleCreatePost}
-        >
-          <GradientBg
-            id="sendGrad"
-            c1="#6A9455"
-            c2="#3A5A2A"
-            r={14}
-            horizontal
-          />
-          <SvgImg iconName={uploadIcon} height={20} width={20} />
-        </TouchableOpacity>
-      </View>
+            <Text style={styles.title}>Add Media</Text>
+            <Text style={styles.subtitle}>
+              Capture or upload something from your journey
+            </Text>
+
+            <View style={styles.options}>
+              <TouchableOpacity style={styles.option} onPress={openCamera}>
+                <View style={styles.iconWrap}>
+                  <Text style={styles.icon}>📸</Text>
+                </View>
+                <Text style={styles.optionText}>Camera</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.option} onPress={openGallery}>
+                <View style={styles.iconWrap}>
+                  <Text style={styles.icon}>🖼</Text>
+                </View>
+                <Text style={styles.optionText}>Gallery</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.cancelText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
+      </Wrapper>
     </View>
   );
 }
@@ -258,7 +325,119 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.dark,
-    paddingTop: (StatusBar.currentHeight || 44) + 8,
+  },
+  modal: {
+    justifyContent: 'flex-end',
+    margin: 0,
+  },
+
+  sheet: {
+    backgroundColor: '#0E0F13',
+    padding: 22,
+    paddingBottom: 30,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.18)',
+
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 20,
+    overflow: 'hidden',
+  },
+
+  topGlow: {
+    position: 'absolute',
+    top: -40,
+    left: 0,
+    right: 0,
+    height: 80,
+    backgroundColor: 'rgba(143,175,120,0.18)',
+    borderRadius: 50,
+    opacity: 0.4,
+  },
+
+  handle: {
+    width: 44,
+    height: 5,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 10,
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+
+  title: {
+    color: '#fff',
+    fontSize: 20,
+    fontFamily: fontFamily.montserratBold,
+    textAlign: 'center',
+  },
+
+  subtitle: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 22,
+  },
+
+  options: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 10,
+  },
+
+  option: {
+    flex: 1,
+    marginHorizontal: 8,
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderRadius: 18,
+
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+
+  iconWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+
+    backgroundColor: 'rgba(143,175,120,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.25)',
+  },
+
+  icon: {
+    fontSize: 22,
+  },
+
+  optionText: {
+    color: '#fff',
+    fontSize: 13,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  cancelBtn: {
+    marginTop: 18,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+  },
+
+  cancelText: {
+    color: '#ff6b6b',
+    fontSize: 14,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 
   header: {
@@ -315,7 +494,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    paddingBottom: 28,
+    paddingBottom: height / 9,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.08)',
     backgroundColor: 'rgba(255,255,255,0.03)',

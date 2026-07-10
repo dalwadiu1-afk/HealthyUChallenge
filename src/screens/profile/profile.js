@@ -6,65 +6,26 @@ import {
   Image,
   Dimensions,
   TouchableOpacity,
-  ScrollView,
-  StatusBar,
   Animated,
+  Alert,
+  TextInput,
+  StatusBar,
 } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import auth from '@react-native-firebase/auth';
 import database from '@react-native-firebase/database';
-
 import { colors, fontFamily } from '../../constant';
 import { Wrapper } from '../../components';
+import { useSelector } from 'react-redux';
+import moment from 'moment';
+import analytics from '@react-native-firebase/analytics';
 
+import Modal from 'react-native-modal';
+import { SafeAreaView } from 'react-native-safe-area-context';
 const { width, height } = Dimensions.get('window');
 
-const userId = auth().currentUser?.uid || 'USER_UID';
-const MENU_ITEMS = [
-  {
-    emoji: '🪪',
-    title: 'Profile Details',
-    subtitle: 'Your personalized health overview',
-    screenName: 'ProfileDetails',
-    badge: 'Active',
-  },
-  {
-    emoji: '🎯',
-    title: 'Goals',
-    subtitle: 'View & edit your health goals',
-    screenName: 'ProfileDetails',
-    badge: null,
-  },
-  {
-    emoji: '💪',
-    title: 'My Body',
-    subtitle: 'BMI, weight, body measurements',
-    screenName: 'ProfileDetails',
-    badge: 'Missing Info',
-  },
-  {
-    emoji: '📋',
-    title: 'Instructions',
-    subtitle: 'App guide and how-to tips',
-    screenName: 'Instructions',
-    badge: 'New',
-  },
-  {
-    emoji: '🏆',
-    title: 'Leaderboard',
-    subtitle: 'See how you rank with others',
-    screenName: 'Leaderboard',
-    badge: null,
-  },
-  {
-    emoji: '⚙️',
-    title: 'Settings',
-    subtitle: 'Notifications, privacy & more',
-    screenName: 'ProfileDetails',
-    badge: null,
-  },
-];
+const generateRandomCode = () => {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+};
 
 function MenuItem({ item, onPress, index }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -110,7 +71,7 @@ function MenuItem({ item, onPress, index }) {
               styles.badge,
               {
                 backgroundColor:
-                  item.badge === 'New'
+                  item.badge === 'New' || 'Admin' || 'Live'
                     ? 'rgba(143,175,120,0.2)'
                     : 'rgba(192,108,91,0.2)',
               },
@@ -121,7 +82,9 @@ function MenuItem({ item, onPress, index }) {
                 styles.badgeText,
                 {
                   color:
-                    item.badge === 'New' ? colors.secondary : colors.danger,
+                    item.badge === 'New' || 'Admin' || 'Live'
+                      ? colors.secondary
+                      : colors.danger,
                 },
               ]}
             >
@@ -136,40 +99,111 @@ function MenuItem({ item, onPress, index }) {
 }
 
 export default function Profile({ navigation }) {
-  const [profile, setProfile] = useState({});
-  const userRef = database().ref(`users/${userId}/profile`);
   const headerAnim = useRef(new Animated.Value(0)).current;
   const avatarScale = useRef(new Animated.Value(0.85)).current;
+  const userId =
+    auth().currentUser?.uid || useSelector(state => state.user?.uid);
+  const [profileData, setProfileData] = useState(null);
+  const [leaderboardData, setLeaderboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const profile = profileData?.profile || {};
 
-  const calculateStreak = habit => {
-    if (!habit) return 0;
+  const [verifyModalVisible, setVerifyModalVisible] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
 
-    const allDays = [];
+  const challengeCode = profile?.verificationCode?.code || 'Generating...';
 
-    Object.values(habit).forEach(month => {
-      if (month?.days) {
-        Object.entries(month?.days).forEach(([day, data]) => {
-          if (data?.completed) {
-            allDays.push(day);
-          }
+  const generateCodeIfNeeded = async () => {
+    try {
+      if (profile?.role !== 'admin') return;
+
+      const ref = database().ref(`users/${userId}/profile/verificationCode`);
+
+      const snap = await ref.once('value');
+
+      const data = snap.val();
+
+      if (!data || data.used === true) {
+        const newCode = Math.random()
+          .toString(36)
+          .substring(2, 8)
+          .toUpperCase();
+
+        await ref.set({
+          code: newCode,
+          used: false,
+          createdAt: moment().format('YYYY-MM-DD HH:mm:ss'),
         });
       }
-    });
+    } catch (error) {
+      console.log('Generate Code Error:', error);
+    }
+  };
 
-    return allDays.length; // simple version (can upgrade later)
+  const handleVerifyCode = async () => {
+    try {
+      const adminUsers = await database()
+        .ref('/users')
+        .orderByChild('profile/role')
+        .equalTo('admin')
+        .once('value');
+
+      let validCode = null;
+      let adminUid = null;
+
+      adminUsers.forEach(child => {
+        const codeData = child.val()?.profile?.verificationCode;
+
+        if (
+          codeData?.code === verificationCode.trim().toUpperCase() &&
+          !codeData?.used
+        ) {
+          validCode = codeData;
+          adminUid = child.key;
+        }
+      });
+
+      if (!validCode) {
+        Alert.alert('Invalid Code', 'Please enter a valid code.');
+        return;
+      }
+
+      const uid = auth().currentUser?.uid;
+
+      // VERIFY USER
+      await database()
+        .ref(`/users/${uid}/profile`)
+        .update({
+          challengeVerified: true,
+          challengeVerifiedAt: moment().format('YYYY-MM-DD HH:mm:ss'),
+        });
+
+      // GENERATE NEW ADMIN CODE
+      const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+      await database()
+        .ref(`/users/${adminUid}/profile/verificationCode`)
+        .set({
+          code: newCode,
+          used: false,
+          createdAt: moment().format('YYYY-MM-DD HH:mm:ss'),
+        });
+
+      setVerifyModalVisible(false);
+      setVerificationCode('');
+
+      Alert.alert(
+        '🎉 Challenge Completed',
+        'Your challenge completion has been verified.',
+      );
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   useEffect(() => {
-    const listener = userRef.on('value', snapshot => {
-      const data = snapshot.val();
-
-      if (data) {
-        setProfile(data);
-      }
-    });
-
-    return () => userRef.off('value', listener);
-  }, []);
+    generateCodeIfNeeded();
+  }, [profile?.role]);
 
   useEffect(() => {
     Animated.parallel([
@@ -185,62 +219,194 @@ export default function Profile({ navigation }) {
       }),
     ]).start();
   }, []);
-  const currentMonth = new Date().toLocaleString('default', { month: 'short' });
-  const year = new Date().getFullYear();
-  const monthKey = `${currentMonth}_${year}`;
 
-  const days = profile?.habit?.[monthKey]?.days || {};
+  // remaining days from start date -> next 30 days
 
-  const activeDays = Object.keys(days).length;
+  useEffect(() => {
+    if (!userId) return;
 
-  const streak = calculateStreak(profile?.habit);
-  const today = String(new Date().getDate()).padStart(2, '0');
+    // USERS DATA
+    const userRef = database().ref(`/users/${userId}`);
 
-  const currentHabit = profile?.habit?.[monthKey] || {};
-  const todayData = currentHabit?.days?.[today] || {};
+    // LEADERBOARD DATA
+    const leaderboardRef = database().ref(`/leaderboards/${userId}`);
 
+    const userListener = userRef.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (data) {
+        setProfileData(data);
+      }
+    });
+
+    const leaderboardListener = leaderboardRef.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (data) {
+        setLeaderboardData(data);
+      }
+
+      setLoading(false);
+    });
+
+    return () => {
+      userRef.off('value', userListener);
+      leaderboardRef.off('value', leaderboardListener);
+    };
+  }, [userId]);
+
+  // ----------------------
+  // DYNAMIC VALUES
+  // ----------------------
+
+  const challenge = leaderboardData?.challenge || {};
+  const status = leaderboardData?.status || {};
+
+  const streak = challenge?.streak || 0;
+
+  const longestStreak =
+    challenge?.longestStreak || profileData?.stats?.longestStreak || 0;
+
+  const consistency = status?.consistency || 0;
+
+  const startDay = profileData?.goal?.startDate;
+  const TOTAL_CHALLENGE_DAYS = 30;
+  let remainingDays = 0;
+
+  if (startDay) {
+    const start = new Date(startDay);
+    const today = new Date();
+
+    const diffInMs = today - start;
+    const daysPassed = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+
+    remainingDays = Math.max(0, TOTAL_CHALLENGE_DAYS - daysPassed);
+  }
+
+  // STATS FOR UI
   const STATS = [
     {
       label: 'Streak',
-      value: streak || 0,
+      value: streak,
       emoji: '🔥',
     },
     {
-      label: 'Active Days',
-      value: activeDays || 0,
+      label: 'Longest',
+      value: longestStreak,
+      emoji: '🏆',
+    },
+    {
+      label: 'Days Left of\nChallenge',
+      value: remainingDays,
       emoji: '📅',
     },
     // {
-    //   label: 'Habit',
-    //   value: currentHabit?.title || 'None',
-    //   emoji: '🎯',
-    // },
-    // {
-    //   label: 'Target',
-    //   value: currentHabit?.target || '--',
-    //   emoji: '🥅',
-    // },
-    {
-      label: 'Today',
-      value: todayData?.progress || '0',
-      emoji: '📊',
-    },
-    // {
-    //   label: 'Done',
-    //   value: todayData?.completed ? 'Yes' : 'No',
-    //   emoji: '✅',
+    //   label: 'Consistency',
+    //   value: `${consistency}%`,
+    //   emoji: '⚡',
     // },
   ];
+  const handleLogout = async () => {
+    try {
+      await auth().signOut();
+      console.log('User logged out');
+    } catch (error) {
+      console.log('Logout error:', error);
+    }
+  };
+  // GOALS TEXT
+  const selectedGoalsText =
+    profileData?.goal?.selectedGoals
+      ?.map(item => item?.title)
+      ?.filter(Boolean)
+      ?.join(' • ') || 'No goals selected';
+
+  const MENU_ITEMS = [
+    {
+      emoji: '🪪',
+      title: 'Profile Details',
+      subtitle: 'Your personalized health overview',
+      screenName: 'ProfileDetails',
+    },
+    profile?.role === 'admin'
+      ? {
+          emoji: '🔑',
+          title: 'Challenge Verification Code',
+          subtitle: challengeCode || 'Generate code',
+          screenName: 'VerificationAdmin',
+          badge: 'Admin',
+        }
+      : {
+          emoji: '✅',
+          title: 'Challenge Verification',
+          subtitle: 'Verify completion of your challenge',
+          screenName: 'ChallengeVerification',
+          badge: profileData?.profile?.challengeVerified
+            ? 'Verified'
+            : 'Pending',
+        },
+    {
+      emoji: '🏋️',
+      title: 'Workout History',
+      subtitle: 'View completed workouts and progress',
+      screenName: 'ArchivedGoals',
+    },
+    {
+      emoji: '🧠',
+      title: 'Quiz Hub',
+      subtitle: 'Track quizzes, streaks & performance',
+      screenName: 'QuizBoard',
+      badge: 'Live',
+    },
+    {
+      emoji: '🏆',
+      title: 'Quiz Leaderboard',
+      subtitle: 'See how you rank with others',
+      screenName: 'Leaderboard',
+      badge: null,
+    },
+
+    profileData?.profile?.role === 'admin' && {
+      emoji: '📊',
+      title: 'Quiz Analytics',
+      subtitle: 'View quiz performance insights',
+      screenName: 'QuizAnalytics',
+      badge: 'Admin',
+    },
+
+    {
+      emoji: '👥',
+      title: 'Social',
+      subtitle: 'Connect with our dietitian',
+      screenName: 'Social',
+    },
+    // { // emoji: '🎯', // title: 'Goals', // subtitle: 'View & edit your health goals', // screenName: 'ProfileDetails', // badge: null, // },
+    // { // emoji: '💪', // title: 'My Body', // subtitle: 'BMI, weight, body measurements', // screenName: 'ProfileDetails', // badge: 'Missing Info', // },
+    // { // emoji: '📋', // title: 'Instructions', // subtitle: 'App guide and how-to tips', // screenName: 'Instructions', // badge: 'New', // },
+    // { // emoji: '⚙️', // title: 'Settings', // subtitle: 'Notifications, privacy & more', // screenName: 'ProfileDetails', // badge: null, // },
+  ].filter(Boolean);
 
   return (
-    <View style={styles.container}>
-      <Wrapper>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.dark }}
+      edges={['top']}
+    >
+      <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle="light-content"
+      />
+      <View style={styles.container}>
         {/* Hero section */}
         <Animated.View style={[styles.hero, { opacity: headerAnim }]}>
           {/* Top row */}
           <View style={styles.heroTopRow}>
             <Text style={styles.heroLabel}>PROFILE</Text>
-            <TouchableOpacity style={styles.settingsBtn} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.settingsBtn}
+              activeOpacity={0.8}
+              onPress={() => navigation?.navigate('NotificationSettings')}
+            >
               <Text style={styles.settingsIcon}>⚙️</Text>
             </TouchableOpacity>
           </View>
@@ -264,12 +430,12 @@ export default function Profile({ navigation }) {
           <Text style={styles.userName}>{profile?.name || 'User'}</Text>
 
           <Text style={{ ...styles.userHandle, marginBottom: 0 }}>
-            {profile?.habit?.[monthKey]?.title || 'No habit set'}
+            {selectedGoalsText || 'No habit set'}
           </Text>
 
           <Text style={styles.userHandle}>
             {profile?.username || '@username'} · Member since{' '}
-            {profile?.memberSince || '2024'}
+            {moment(profile?.memberSince).format('YYYY') || '2026'}
           </Text>
 
           {/* Stats row */}
@@ -290,34 +456,93 @@ export default function Profile({ navigation }) {
           </View>
         </Animated.View>
 
-        <View
-          style={{
-            borderBottomWidth: 1,
-            borderBottomColor: 'rgba(255,255,255,0.07)',
-            marginVertical: 20,
-          }}
-        />
+        <Wrapper
+          safeAreaPops={{ edges: ['bottom'] }}
+          containerStyle={{ paddingBottom: height / 6 }}
+        >
+          <View
+            style={{
+              borderBottomWidth: 1,
+              borderBottomColor: 'rgba(255,255,255,0.07)',
+              marginVertical: 20,
+            }}
+          />
 
-        {/* Menu */}
-        <View style={styles.menuSection}>
-          <Text style={styles.menuHeader}>Account</Text>
-          {MENU_ITEMS.map((item, index) => (
-            <MenuItem
-              key={index}
-              item={item}
-              index={index}
-              onPress={() => navigation.navigate(item.screenName)}
-            />
-          ))}
-        </View>
+          {/* Menu */}
+          <View style={styles.menuSection}>
+            <Text style={styles.menuHeader}>Account</Text>
+            {MENU_ITEMS.map((item, index) => (
+              <MenuItem
+                key={index}
+                item={item}
+                index={index}
+                onPress={() => {
+                  // NON ADMIN VERIFICATION
+                  if (
+                    item.title === 'Challenge Verification' &&
+                    profile?.role !== 'admin'
+                  ) {
+                    setVerifyModalVisible(true);
+                    return;
+                  } else {
+                    if (item?.screenName != 'VerificationAdmin')
+                      navigation.navigate(item.screenName);
+                  }
+                }}
+              />
+            ))}
+          </View>
 
-        {/* Logout */}
-        <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.8}>
-          <Text style={styles.logoutIcon}>🚪</Text>
-          <Text style={styles.logoutText}>Log Out</Text>
-        </TouchableOpacity>
-      </Wrapper>
-    </View>
+          {/* Logout */}
+          <TouchableOpacity
+            style={styles.logoutBtn}
+            activeOpacity={0.8}
+            onPress={handleLogout}
+          >
+            <Text style={styles.logoutIcon}>🚪</Text>
+            <Text style={styles.logoutText}>Log Out</Text>
+          </TouchableOpacity>
+          <Modal
+            isVisible={verifyModalVisible}
+            onBackdropPress={() => setVerifyModalVisible(false)}
+            backdropOpacity={0.8}
+            animationIn="zoomIn"
+            animationOut="zoomOut"
+            useNativeDriver
+          >
+            <View style={styles.modalContainer}>
+              <Text style={styles.modalEmoji}>🏆</Text>
+
+              <Text style={styles.modalTitle}>Verify Challenge</Text>
+
+              <Text style={styles.modalSubtitle}>
+                Enter the verification code provided by your administrator.
+              </Text>
+
+              <TextInput
+                value={verificationCode}
+                onChangeText={text => setVerificationCode(text.toUpperCase())}
+                placeholder="ENTER CODE"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                style={styles.codeInput}
+                autoCapitalize="characters"
+              />
+
+              <TouchableOpacity
+                style={styles.verifyBtn}
+                onPress={handleVerifyCode}
+              >
+                <Text style={styles.verifyBtnText}>Verify Completion</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setVerifyModalVisible(false)}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </Modal>
+        </Wrapper>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -329,6 +554,7 @@ const styles = StyleSheet.create({
   scroll: {},
   hero: {
     alignItems: 'center',
+    paddingHorizontal: 23,
   },
   heroTopRow: {
     width: '100%',
@@ -417,6 +643,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: fontFamily.montserratMedium,
     marginTop: 2,
+    textAlign: 'center',
   },
   menuSection: {},
   menuHeader: {
@@ -483,12 +710,101 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(192,108,91,0.25)',
     backgroundColor: 'rgba(192,108,91,0.08)',
-    gap: 8,
+    // gap: 8,
   },
   logoutIcon: { fontSize: 16 },
   logoutText: {
     color: colors.danger,
     fontSize: 15,
     fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalContainer: {
+    width: '88%',
+    backgroundColor: '#151515',
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+  },
+
+  modalEmoji: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 22,
+    fontFamily: fontFamily.montserratBold,
+    marginBottom: 8,
+  },
+
+  modalSubtitle: {
+    color: 'rgba(255,255,255,0.55)',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+
+  codeInput: {
+    width: '100%',
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    color: colors.white,
+    textAlign: 'center',
+    letterSpacing: 4,
+    fontSize: 20,
+    fontFamily: fontFamily.montserratBold,
+    marginBottom: 20,
+  },
+
+  verifyBtn: {
+    width: '100%',
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: colors.secondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  verifyBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  cancelText: {
+    color: 'rgba(255,255,255,0.45)',
+    marginTop: 18,
+  },
+
+  codeDisplay: {
+    width: '100%',
+    paddingVertical: 20,
+    borderRadius: 18,
+    backgroundColor: 'rgba(143,175,120,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.35)',
+    marginBottom: 20,
+  },
+
+  codeDisplayText: {
+    color: colors.secondary,
+    textAlign: 'center',
+    fontSize: 28,
+    letterSpacing: 6,
+    fontFamily: fontFamily.montserratBold,
   },
 });

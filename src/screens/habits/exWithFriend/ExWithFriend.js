@@ -19,21 +19,24 @@ import Svg, {
   Rect,
   Circle,
 } from 'react-native-svg';
-import { launchCamera } from 'react-native-image-picker';
+import Modal from 'react-native-modal';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import Share from 'react-native-share';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
-const user = auth().currentUser;
-const USER_ID = user?.uid;
-const getDateKey = (date = new Date()) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+import storage from '@react-native-firebase/storage';
+import moment from 'moment';
 
-  return `${year}-${month}-${day}`; // "2026-04-01"
+const normalizeGoal = value => {
+  const num = Number(value) || 4;
+
+  if (num < 4) return 4;
+  if (num > 6) return 6;
+
+  return num;
 };
 
 function GradientBg({ id, c1, c2, r = 20 }) {
@@ -50,132 +53,353 @@ function GradientBg({ id, c1, c2, r = 20 }) {
   );
 }
 
-function CameraIcon({ size = 24, color = 'rgba(143,175,120,0.7)' }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
-        stroke={color}
-        strokeWidth={1.8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Circle cx={12} cy={13} r={4} stroke={color} strokeWidth={1.8} />
-    </Svg>
-  );
-}
-
 const CAPTIONS = (friend, timestamp) => [
   `💪 Workout with ${friend}!\n⏱ ${timestamp}\n🔥 No excuses today!\n\n#WorkoutWithFriend`,
   `🏋️‍♂️ Stronger together with ${friend}!\n⏱ ${timestamp}\n💯 Keep pushing!\n\n#FitnessLife`,
   `👊 ${friend} and I showed up!\n⏱ ${timestamp}\n🚀 Progress!\n\n#NoDaysOff`,
 ];
 
-export default function FriendWorkoutChallenge({ navigation }) {
-  const [entries, setEntries] = useState([
-    { photo: null, friend: '', timestamp: '' },
-    { photo: null, friend: '', timestamp: '' },
-    { photo: null, friend: '', timestamp: '' },
-    { photo: null, friend: '', timestamp: '' },
-  ]);
+const uploadImageToFirebase = async uri => {
+  try {
+    const fileName = `friendWorkout/${USER_ID}/${Date.now()}.jpg`;
+
+    const reference = storage().ref(fileName);
+    await reference.putFile(uri);
+
+    return await reference.getDownloadURL();
+  } catch (error) {
+    console.log('UPLOAD ERROR:', error);
+    throw error;
+  }
+};
+
+export default function FriendWorkoutChallenge({ navigation, route }) {
+  const today = moment();
+  const CURRENT_MONTH_KEY =
+    route?.params?.monthKey ?? today.format('MMMM_YYYY');
+  const user = auth().currentUser;
+  const USER_ID = user?.uid;
+  const isCurrentMonth = CURRENT_MONTH_KEY === today.format('MMMM_YYYY');
+
+  const TOTAL_WEEKS = 4;
+  const [startDate, setStartDate] = useState(null);
+  const [weekError, setWeekError] = useState({});
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [selectedWeek, setSelectedWeek] = useState(null);
+  const [workoutsPerWeek, setWorkoutsPerWeek] = useState(4);
+  const [weeks, setWeeks] = useState(
+    Array.from({ length: TOTAL_WEEKS }, (_, i) => ({
+      week: i + 1,
+      completed: false,
+      workoutPhotos: [],
+    })),
+  );
 
   useEffect(() => {
     if (!USER_ID) return;
 
-    const dateKey = getDateKey();
-
-    const ref = database().ref(
-      `users/${USER_ID}/logs/friendWorkout/${dateKey}/entries`,
-    );
+    const ref = database().ref(`users/${USER_ID}`);
 
     const listener = ref.on('value', snapshot => {
-      const data = snapshot.val();
+      const data = snapshot.val() || {};
 
-      if (!data) return;
+      // ------------------------
+      // START DATE
+      // ------------------------
+      const startDateRaw = data?.goal?.startDate;
+      console.log('startDateRaw :>> ', startDateRaw);
+      if (startDateRaw) {
+        setStartDate(moment(startDateRaw));
+      }
 
-      const updated = [...entries];
+      // ------------------------
+      // WEEKS DATA
+      // ------------------------
+      const weeksData =
+        data?.habits?.exWithFriend?.[CURRENT_MONTH_KEY]?.weeks || {};
+      const goalFromDb =
+        data?.habits?.exWithFriend?.[CURRENT_MONTH_KEY]?.goal || 4;
 
-      Object.keys(data).forEach(index => {
-        updated[index] = data[index];
+      const formattedWeeks = Array.from({ length: TOTAL_WEEKS }, (_, i) => {
+        const weekData = weeksData[`week${i + 1}`] || {};
+
+        return {
+          week: i + 1,
+          completed: weekData.completed || false,
+          workoutPhotos: weekData.workoutPhotos || [],
+        };
       });
+      setWorkoutsPerWeek(normalizeGoal(goalFromDb));
 
-      setEntries(updated);
+      setWeeks(formattedWeeks);
     });
 
     return () => ref.off('value', listener);
-  }, [USER_ID]);
+  }, []);
 
-  const handleCamera = async index => {
+  const savePhoto = async localUri => {
+    const week = weeks.find(w => w.week === selectedWeek);
+
+    if (!week) return;
+
+    const weekIndex = week.week - 1;
+
+    // Allow ONLY current week
+    if (weekIndex !== currentWeekIndex) {
+      setWeekError(prev => ({
+        ...prev,
+        [week.week]: '🔒 Only current week is accessible',
+      }));
+      return;
+    }
+
+    if (week.workoutPhotos.length >= workoutsPerWeek) {
+      setWeekError(prev => ({
+        ...prev,
+        [week.week]: '✅ Week already completed',
+      }));
+      return;
+    }
+
+    try {
+      const imageUrl = await uploadImageToFirebase(localUri);
+
+      const newWorkout = {
+        uri: imageUrl,
+        friend: '',
+        timestamp: moment().toISOString(),
+      };
+
+      const updatedPhotos = [...week.workoutPhotos, newWorkout];
+
+      const updatedWeek = {
+        ...week,
+        workoutPhotos: updatedPhotos,
+        completed: updatedPhotos.length === workoutsPerWeek,
+      };
+
+      const updatedWeeks = weeks.map(w =>
+        w.week === week.week ? updatedWeek : w,
+      );
+
+      setWeeks(updatedWeeks);
+
+      await saveWeek(week.week, updatedWeek);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+  const openCamera = async () => {
+    setPickerVisible(false);
+
+    const granted = await requestCameraPermission();
+
+    if (!granted) return;
+
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        saveToPhotos: true,
+      },
+      async response => {
+        if (response.didCancel || response.errorCode) return;
+
+        const uri = response?.assets?.[0]?.uri;
+
+        if (!uri) return;
+
+        await savePhoto(uri);
+      },
+    );
+  };
+
+  const openGallery = async () => {
+    setPickerVisible(false);
+
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        selectionLimit: 1,
+        quality: 0.8,
+      },
+      async response => {
+        if (response.didCancel || response.errorCode) return;
+
+        const uri = response?.assets?.[0]?.uri;
+
+        if (!uri) return;
+
+        await savePhoto(uri);
+      },
+    );
+  };
+
+  const getCurrentWeekIndex = () => {
+    if (!startDate) return 0;
+
+    const now = moment();
+
+    const diffWeeks = now.diff(startDate, 'weeks');
+
+    return Math.min(diffWeeks, TOTAL_WEEKS - 1);
+  };
+  const currentWeekIndex = getCurrentWeekIndex();
+
+  const updateFriendLocal = (weekNumber, photoIndex, text) => {
+    const updatedWeeks = weeks.map(week => {
+      if (week.week !== weekNumber) return week;
+
+      return {
+        ...week,
+        workoutPhotos: week.workoutPhotos.map((photo, index) => {
+          if (index !== photoIndex) return photo;
+
+          return {
+            ...photo,
+            friend: text,
+          };
+        }),
+      };
+    });
+
+    setWeeks(updatedWeeks);
+  };
+
+  const updateFriendName = async (weekNumber, photoIndex, name) => {
+    if (!isCurrentMonth || weekNumber - 1 !== currentWeekIndex) return;
+    const updatedWeeks = weeks.map(week => {
+      if (week.week !== weekNumber) return week;
+
+      return {
+        ...week,
+        workoutPhotos: week.workoutPhotos.map((photo, index) => {
+          if (index !== photoIndex) return photo;
+
+          return {
+            ...photo,
+            friend: name,
+          };
+        }),
+      };
+    });
+
+    setWeeks(updatedWeeks);
+
+    const updatedWeek = updatedWeeks.find(w => w.week === weekNumber);
+
+    await saveWeek(weekNumber, updatedWeek);
+  };
+
+  const saveWeek = async (weekNumber, weekData) => {
+    try {
+      const CURRENT_MONTH_KEY = CURRENT_MONTH_KEY;
+
+      await database()
+        .ref(
+          `users/${USER_ID}/habits/exWithFriend/${CURRENT_MONTH_KEY}/weeks/week${weekNumber}`,
+        )
+        .update({
+          completed: weekData.completed,
+          updatedAt: database.ServerValue.TIMESTAMP,
+          workoutPhotos: weekData.workoutPhotos,
+        });
+    } catch (e) {
+      console.log('SAVE ERROR:', e);
+    }
+  };
+
+  const deletePhoto = async (weekNumber, photoIndex) => {
+    const weekIndex = weekNumber - 1;
+
+    if (!isCurrentMonth || weekNumber - 1 !== currentWeekIndex) {
+      Alert.alert('Locked', 'Only current week can be edited.');
+      return;
+    }
+    const updatedWeeks = weeks.map(w => {
+      if (w.week !== weekNumber) return w;
+
+      const updatedPhotos = w.workoutPhotos.filter((_, i) => i !== photoIndex);
+
+      return {
+        ...w,
+        workoutPhotos: updatedPhotos,
+        completed: updatedPhotos.length === workoutsPerWeek,
+      };
+    });
+
+    setWeeks(updatedWeeks);
+
+    const updatedWeek = updatedWeeks.find(w => w.week === weekNumber);
+    await saveWeek(weekNumber, updatedWeek);
+  };
+
+  const retakePhoto = async (weekNumber, photoIndex) => {
+    const weekIndex = weekNumber - 1;
+
+    if (!isCurrentMonth || weekIndex !== currentWeekIndex) {
+      Alert.alert('Locked', 'Only current week can be edited.');
+      return;
+    }
     const granted = await requestCameraPermission();
     if (!granted) return;
 
-    launchCamera({ mediaType: 'photo', quality: 0.7 }, async response => {
-      if (response.didCancel || response.errorCode) return;
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+      },
+      async response => {
+        if (response.didCancel || response.errorCode) return;
 
-      const uri = response?.assets?.[0]?.uri;
-      if (!uri) return;
+        const localUri = response?.assets?.[0]?.uri;
+        if (!localUri) return;
 
-      const newEntry = {
-        ...entries[index],
-        photo: uri,
-        timestamp: new Date().toLocaleString(),
-      };
+        const imageUrl = await uploadImageToFirebase(localUri);
 
-      setEntries(prev => {
-        const updated = [...prev];
-        updated[index] = newEntry;
-        return updated;
-      });
+        const updatedWeeks = weeks.map(w => {
+          if (w.week !== weekNumber) return w;
 
-      // 🔥 SAVE instantly
-      await saveEntryRealtime(index, newEntry);
-    });
+          const updatedPhotos = [...w.workoutPhotos];
+
+          updatedPhotos[photoIndex] = {
+            ...updatedPhotos[photoIndex],
+            uri: imageUrl,
+          };
+
+          return {
+            ...w,
+            workoutPhotos: updatedPhotos,
+          };
+        });
+
+        setWeeks(updatedWeeks);
+
+        const updatedWeek = updatedWeeks.find(w => w.week === weekNumber);
+
+        await saveWeek(weekNumber, updatedWeek);
+      },
+    );
   };
 
-  const handleFriendChange = (index, name) => {
-    const newEntry = {
-      ...entries[index],
-      friend: name,
-    };
-
-    setEntries(prev => {
-      const updated = [...prev];
-      updated[index] = newEntry;
-      return updated;
-    });
-
-    // 🔥 SAVE instantly
-    saveEntryRealtime(index, newEntry);
-  };
-  const saveEntryRealtime = async (index, entry) => {
-    try {
-      const dateKey = getDateKey();
-
-      await database()
-        .ref(`users/${USER_ID}/logs/friendWorkout/${dateKey}/entries/${index}`)
-        .set(entry);
-    } catch (e) {
-      console.log('Realtime save error:', e);
-    }
-  };
-
-  const handleShare = async index => {
-    const item = entries[index];
-
-    if (!item.photo) {
+  const handleShare = async photoItem => {
+    if (!photoItem?.uri) {
       Alert.alert('Please take a photo first 📸');
       return;
     }
-    if (!item.friend.trim()) {
-      Alert.alert("Enter your friend's name 👤");
+
+    if (!photoItem?.friend?.trim()) {
+      Alert.alert("Enter friend's name 👤");
       return;
     }
 
-    const caps = CAPTIONS(item.friend, item.timestamp);
+    const caps = CAPTIONS(photoItem.friend, photoItem.timestamp);
+
     const message = caps[Math.floor(Math.random() * caps.length)];
 
     try {
-      let imagePath = item.photo;
+      let imagePath = photoItem.uri;
+
       if (Platform.OS === 'android' && !imagePath.startsWith('file://')) {
         imagePath = 'file://' + imagePath;
       }
@@ -185,45 +409,48 @@ export default function FriendWorkoutChallenge({ navigation }) {
         url: imagePath,
         type: 'image/jpeg',
       });
-    } catch (error) {
-      console.log(error);
-    }
-  };
-
-  const saveWorkoutEntry = async entry => {
-    try {
-      const dateKey = getDateKey(); // same function you already have
-
-      const ref = database().ref(
-        `users/${USER_ID}/logs/friendWorkout/${dateKey}`,
-      );
-
-      const snapshot = await ref.once('value');
-      const existing = snapshot.val();
-
-      if (existing) {
-        await ref.update({
-          entries: [...(existing.entries || []), entry],
-        });
-      } else {
-        await ref.set({
-          date: dateKey,
-          entries: [entry],
-        });
-      }
     } catch (e) {
-      console.log('Save error:', e);
+      console.log(e);
     }
   };
+  const completedWeeks = weeks.filter(
+    w => w.workoutPhotos.length >= workoutsPerWeek,
+  ).length;
+  const activeWeekIndex = weeks.findIndex(
+    w => w.workoutPhotos.length < workoutsPerWeek,
+  );
 
-  const completedCount = entries.filter(e => e.photo && e.friend.trim()).length;
+  const activeWeek = activeWeekIndex === -1 ? null : weeks[activeWeekIndex];
+
+  const isWeekMissed = weekIndex => {
+    const week = weeks[weekIndex];
+
+    const hasWorkouts = (week?.workoutPhotos?.length || 0) > 0;
+
+    const isComplete = (week?.workoutPhotos?.length || 0) >= workoutsPerWeek;
+
+    // ❌ completed = never missed
+    if (isComplete) return false;
+
+    // 🔥 OLD MONTH (Feb, Mar etc.)
+    if (!isCurrentMonth) {
+      return true; // everything incomplete = missed
+    }
+
+    // 🔥 CURRENT MONTH ONLY
+    if (!startDate) return false;
+
+    const weekEnd = moment(startDate).add(weekIndex + 1, 'weeks');
+
+    // past time + not completed = missed
+    return moment().isAfter(weekEnd);
+  };
 
   return (
     <View style={styles.root}>
       <Header
         header={'Workout with Friend'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />
@@ -234,8 +461,9 @@ export default function FriendWorkoutChallenge({ navigation }) {
 
       {/* Progress dots */}
       <View style={styles.progressDots}>
-        {entries.map((e, i) => {
-          const done = !!(e.photo && e.friend.trim());
+        {weeks.map((week, i) => {
+          const done = week.completed;
+
           return (
             <View key={i} style={[styles.dot, done && styles.dotDone]}>
               {done ? (
@@ -246,153 +474,286 @@ export default function FriendWorkoutChallenge({ navigation }) {
             </View>
           );
         })}
-        <Text style={styles.progressLabel}>{completedCount}/4 done</Text>
+        <Text style={styles.progressLabel}>{completedWeeks}/4 weeks done</Text>
       </View>
       <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
-        {entries.map((item, index) => {
-          const done = !!(item.photo && item.friend.trim());
-          return (
-            <View key={index} style={[styles.card, done && styles.cardDone]}>
-              {done && (
-                <GradientBg
-                  id={`fg${index}`}
-                  c1="rgba(77,102,68,0.15)"
-                  c2="rgba(45,74,37,0.05)"
-                />
-              )}
+        {weeks.map((weekItem, weekIndex) => {
+          const missed = isWeekMissed(weekIndex);
 
-              {/* Card header */}
-              <View style={styles.cardHeader}>
-                <View style={[styles.numBadge, done && styles.numBadgeDone]}>
-                  <Text
-                    style={[styles.numText, done && { color: colors.white }]}
-                  >
-                    {done ? '✓' : index + 1}
+          let isLocked = false;
+
+          // past month → never lock (just show history)
+          if (isCurrentMonth) {
+            isLocked = weekIndex > currentWeekIndex || isWeekMissed(weekIndex);
+          }
+          const isEditableWeek =
+            isCurrentMonth &&
+            weekIndex === currentWeekIndex &&
+            !isWeekMissed(weekIndex);
+          return (
+            <View
+              key={weekIndex}
+              style={[styles.card, weekItem.completed && styles.cardDone]}
+            >
+              {isLocked && (
+                <View style={styles.lockOverlay}>
+                  <Text style={styles.lockText}>
+                    {missed ? '❌ Missed Week' : '🔒 Future Week'}
                   </Text>
                 </View>
-                <Text style={styles.cardTitle}>Workout #{index + 1}</Text>
-                {done && (
-                  <View style={styles.donePill}>
-                    <Text style={styles.donePillText}>Shared</Text>
-                  </View>
-                )}
+              )}
+              {missed && (
+                <Text style={styles.weekErrorText}>
+                  ❌ You missed this week
+                </Text>
+              )}
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>Week {weekItem.week}</Text>
+
+                <Text style={styles.progressLabel}>
+                  {weekItem.workoutPhotos.length}/{workoutsPerWeek} workouts
+                </Text>
               </View>
 
-              {/* Photo section */}
-              <TouchableOpacity
-                style={[styles.photoBox, item.photo && styles.photoBoxFilled]}
-                onPress={() => handleCamera(index)}
-                activeOpacity={0.8}
-              >
-                {item.photo ? (
-                  <Image source={{ uri: item.photo }} style={styles.photo} />
-                ) : (
-                  <View style={styles.photoPlaceholder}>
-                    <CameraIcon size={28} />
-                    <Text style={styles.photoPlaceholderText}>
-                      Tap to take a photo
+              {weekItem.completed && (
+                <Text style={styles.donePillText}>✅ Week Completed</Text>
+              )}
+
+              {isLocked && (
+                <Text style={styles.hint}>🔒 Complete previous week first</Text>
+              )}
+
+              {weekItem.workoutPhotos.map((photoItem, photoIndex) => (
+                <View key={photoIndex} style={styles.workoutCard}>
+                  {/* IMAGE SECTION */}
+                  <View style={styles.imageWrap}>
+                    <Image
+                      source={{ uri: photoItem.uri }}
+                      style={styles.photo}
+                    />
+
+                    <View style={styles.imageOverlay}>
+                      <Text style={styles.workoutLabel}>
+                        Workout #{photoIndex + 1}
+                      </Text>
+
+                      <View style={styles.timeBadge}>
+                        <Text style={styles.timeBadgeText}>
+                          {isEditableWeek ? '🟢 Active' : '🔒 Locked'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* INPUT SECTION */}
+                  <View style={styles.friendInputWrap}>
+                    <Text style={styles.inputLabel}>Workout Partner</Text>
+
+                    <TextInput
+                      placeholder="Enter friend's name"
+                      value={photoItem.friend}
+                      editable={isEditableWeek}
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                      style={[
+                        styles.friendInputEnhanced,
+                        !isEditableWeek && { opacity: 0.5 },
+                      ]}
+                      onChangeText={text =>
+                        updateFriendLocal(weekItem.week, photoIndex, text)
+                      }
+                      onEndEditing={() =>
+                        updateFriendName(
+                          weekItem.week,
+                          photoIndex,
+                          photoItem.friend,
+                        )
+                      }
+                    />
+                  </View>
+
+                  {/* ACTION BUTTONS */}
+                  {isEditableWeek && (
+                    <View style={styles.actionRow}>
+                      {/* RETAKE */}
+                      <TouchableOpacity
+                        style={[
+                          styles.smallBtn,
+                          { backgroundColor: '#2a2a2a' },
+                        ]}
+                        onPress={() => retakePhoto(weekItem.week, photoIndex)}
+                      >
+                        <Text style={styles.smallBtnText}>🔄 Retake</Text>
+                      </TouchableOpacity>
+
+                      {/* DELETE */}
+                      <TouchableOpacity
+                        style={[
+                          styles.smallBtn,
+                          { backgroundColor: '#3a1f1f' },
+                        ]}
+                        onPress={() => deletePhoto(weekItem.week, photoIndex)}
+                      >
+                        <Text style={styles.smallBtnText}>🗑 Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* SHARE BUTTON */}
+                  <TouchableOpacity
+                    style={[
+                      styles.shareWorkoutBtn,
+                      !photoItem.friend && { opacity: 0.4 },
+                    ]}
+                    disabled={!photoItem.friend || !isEditableWeek}
+                    onPress={() => handleShare(photoItem)}
+                  >
+                    <GradientBg
+                      id={`share${weekIndex}${photoIndex}`}
+                      c1="#4f8cff"
+                      c2="#2457d6"
+                      r={16}
+                    />
+
+                    <Text style={styles.shareWorkoutText}>Share Workout</Text>
+                  </TouchableOpacity>
+
+                  {/* TIMESTAMP */}
+                  <Text style={styles.timestampText}>
+                    {moment(photoItem.timestamp).format('MMM D, YYYY • h:mm A')}
+                  </Text>
+
+                  {weekError?.[weekItem?.week] ? (
+                    <Text style={styles.weekErrorText}>
+                      {weekError[weekItem?.week]}
                     </Text>
-                  </View>
+                  ) : null}
+                </View>
+              ))}
+
+              {!isLocked &&
+                weekItem.workoutPhotos.length < workoutsPerWeek &&
+                !route?.params?.monthKey && (
+                  <TouchableOpacity
+                    style={styles.shareBtn}
+                    onPress={() => {
+                      setSelectedWeek(weekItem.week);
+                      setPickerVisible(true);
+                    }}
+                  >
+                    <Text style={styles.shareText}>Add Workout</Text>
+                  </TouchableOpacity>
                 )}
-              </TouchableOpacity>
-
-              {item.timestamp ? (
-                <Text style={styles.timestamp}>⏱ {item.timestamp}</Text>
-              ) : null}
-
-              {/* Friend input */}
-              <View style={styles.inputWrap}>
-                <Svg
-                  width={16}
-                  height={16}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  style={{ marginRight: 8 }}
-                >
-                  <Path
-                    d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"
-                    stroke="rgba(255,255,255,0.3)"
-                    strokeWidth={1.8}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <Circle
-                    cx={12}
-                    cy={7}
-                    r={4}
-                    stroke="rgba(255,255,255,0.3)"
-                    strokeWidth={1.8}
-                  />
-                </Svg>
-                <TextInput
-                  placeholder="Friend's name"
-                  value={item.friend}
-                  onChangeText={text => handleFriendChange(index, text)}
-                  placeholderTextColor="rgba(255,255,255,0.25)"
-                  style={styles.friendInput}
-                />
-              </View>
-
-              {/* Share button */}
-              <TouchableOpacity
-                style={styles.shareBtn}
-                onPress={() => handleShare(index)}
-                activeOpacity={0.85}
-              >
-                <GradientBg
-                  id={`sgr${index}`}
-                  c1="#3b6b9e"
-                  c2="#1e3a5f"
-                  r={49}
-                />
-                <Svg
-                  width={16}
-                  height={16}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  style={{ marginRight: 8 }}
-                >
-                  <Path
-                    d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"
-                    stroke="#ffffff"
-                    strokeWidth={1.8}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </Svg>
-                <Text style={styles.shareText}>Share & Tag Friend</Text>
-              </TouchableOpacity>
-
-              <Text style={styles.hint}>
-                After sharing, tag your friend on Instagram
-              </Text>
             </View>
           );
         })}
 
         {/* Submit button */}
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={[
             styles.submitBtn,
-            completedCount < 4 && styles.submitBtnDisabled,
+            completedWeeks < 4 && styles.submitBtnDisabled,
           ]}
-          activeOpacity={completedCount < 4 ? 1 : 0.85}
+          activeOpacity={completedWeeks < 4 ? 1 : 0.85}
         >
           <Text style={styles.submitText}>
-            {completedCount < 4
-              ? `Complete ${4 - completedCount} more workout${
-                  4 - completedCount > 1 ? 's' : ''
+            {completedWeeks < 4
+              ? `Complete ${4 - completedWeeks} more workout${
+                  4 - completedWeeks > 1 ? 's' : ''
                 }`
               : '🎉 Submit Challenge'}
           </Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </Wrapper>
+      <Modal
+        isVisible={pickerVisible}
+        onBackdropPress={() => setPickerVisible(false)}
+      >
+        <View
+          style={{
+            backgroundColor: colors.bubbleDark,
+            borderRadius: 20,
+            padding: 20,
+          }}
+        >
+          <Text
+            style={{
+              color: colors.white,
+              fontSize: 18,
+              textAlign: 'center',
+              marginBottom: 20,
+              fontFamily: fontFamily.montserratBold,
+            }}
+          >
+            Upload Workout Photo
+          </Text>
+
+          <TouchableOpacity
+            style={{
+              height: 52,
+              borderRadius: 12,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: 'rgba(143,175,120,0.12)',
+              marginBottom: 12,
+            }}
+            onPress={openCamera}
+          >
+            <Text
+              style={{
+                color: colors.white,
+                fontFamily: fontFamily.montserratSemiBold,
+              }}
+            >
+              📷 Camera
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              height: 52,
+              borderRadius: 12,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: 'rgba(143,175,120,0.12)',
+              marginBottom: 12,
+            }}
+            onPress={openGallery}
+          >
+            <Text
+              style={{
+                color: colors.white,
+                fontFamily: fontFamily.montserratSemiBold,
+              }}
+            >
+              🖼 Gallery
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              height: 50,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+            onPress={() => setPickerVisible(false)}
+          >
+            <Text
+              style={{
+                color: '#FF6B6B',
+                fontFamily: fontFamily.montserratSemiBold,
+              }}
+            >
+              Cancel
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.dark },
+  root: { flex: 1, backgroundColor: colors.dark, paddingBottom: 120 },
 
   heroBg: { paddingBottom: 20, overflow: 'hidden' },
   header: {
@@ -435,7 +796,137 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     lineHeight: 20,
   },
+  workoutCard: {
+    marginBottom: 22,
+    borderRadius: 20,
+    padding: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  weekErrorText: {
+    marginTop: 10,
+    color: '#ef4444',
+    fontSize: 12,
+    textAlign: 'center',
+    fontFamily: fontFamily.montserratMedium,
+  },
+  imageWrap: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginBottom: 14,
+    position: 'relative',
+  },
+  smallBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
 
+  smallBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  imageOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+
+  workoutLabel: {
+    color: colors.white,
+    fontSize: 14,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  timeBadge: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 30,
+  },
+
+  timeBadgeText: {
+    color: colors.white,
+    fontSize: 10,
+    fontFamily: fontFamily.montserratMedium,
+  },
+
+  friendInputWrap: {
+    marginBottom: 14,
+  },
+
+  inputLabel: {
+    color: 'rgba(255,255,255,0.7)',
+    marginBottom: 8,
+    fontSize: 12,
+    fontFamily: fontFamily.montserratMedium,
+  },
+
+  friendInputEnhanced: {
+    height: 52,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    color: colors.white,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    fontFamily: fontFamily.montserratMedium,
+    fontSize: 14,
+  },
+
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+
+  shareWorkoutBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: 16,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  shareWorkoutText: {
+    color: colors.white,
+    fontSize: 14,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  timestampWrap: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+
+  timestampText: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 10,
+    fontFamily: fontFamily.montserratMedium,
+  },
   /* Progress dots */
   progressDots: {
     flexDirection: 'row',
@@ -619,6 +1110,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(77,102,68,0.35)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
+  },
+  lockOverlay: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 22,
+    zIndex: 10,
+  },
+
+  lockText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: fontFamily.montserratBold,
   },
   submitText: {
     color: colors.white,

@@ -2,60 +2,21 @@ import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
-  StatusBar,
   StyleSheet,
-  Dimensions,
   FlatList,
   TouchableOpacity,
-  TextInput,
   Animated,
+  Dimensions,
 } from 'react-native';
-import Svg, { Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
-import { colors, fontFamily } from '../../constant/colors';
+import { colors } from '../../constant/colors';
 import { fontFamily as ff } from '../../constant';
 import ChatCard from '../../components/social/chatCard';
 import auth from '@react-native-firebase/auth';
-import ProfileHeader from '../../components/profile/ProfileHeader';
-import { Wrapper } from '../../components';
-import database from '@react-native-firebase/database';
+import { Header, Wrapper } from '../../components';
+import database, { onValue } from '@react-native-firebase/database';
+import Svg, { Circle, Rect, Path } from 'react-native-svg';
 
-const { width } = Dimensions.get('window');
-
-const POSTS = [
-  {
-    id: 1,
-    name: 'Linh Nguyen',
-    message:
-      'Just finished a 5K morning run — feeling incredible! Who else is keeping up with their daily steps? 🏃‍♀️',
-    time: '10:30 AM · 2 min ago',
-    picture:
-      'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-    likes: 24,
-    comments: 8,
-  },
-  {
-    id: 2,
-    name: 'Marcus Lee',
-    message:
-      'Hit a new personal best at the gym today. Consistency is everything — keep going everyone! 💪',
-    time: '9:15 AM · 1 hr ago',
-    picture:
-      'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-    likes: 41,
-    comments: 12,
-  },
-  {
-    id: 3,
-    name: 'Sara Kim',
-    message:
-      'Meal prepped for the whole week — all balanced, all clean 🥗 Drop a 🙌 if you meal prep too!',
-    time: 'Yesterday · 8:00 PM',
-    picture:
-      'https://media.istockphoto.com/id/1319764741/photo/mature-people-jogging-in-park.jpg?s=1024x1024&w=is&k=20&c=p5rgI1p3LMXMOg10h6E5UzZH1orsneAg6MQKKFdsM64=',
-    likes: 33,
-    comments: 5,
-  },
-];
+const { height } = Dimensions.get('window');
 
 const STORIES = [
   { id: 0, name: 'Your Story', color: '#4D6644', isOwn: true },
@@ -112,10 +73,22 @@ export default function Feeds({ navigation }) {
   const [hideStories, setHideStories] = useState(false);
   const [loading, setLoading] = useState(true);
   const headerAnim = useRef(new Animated.Value(0)).current;
+  const [userData, setUserData] = useState(null);
   const userId = auth().currentUser?.uid || 'USER_UID';
 
   useEffect(() => {
     const postsRef = database().ref('posts').limitToLast(20);
+    const userRef = database().ref(`users/${userId}`);
+
+    const unsubscribe = onValue(userRef, snapshot => {
+      if (snapshot.exists()) {
+        setUserData(snapshot.val());
+
+        console.log('User Data => ', snapshot.val());
+      } else {
+        console.log('No user found');
+      }
+    });
 
     const listener = postsRef.on('value', snapshot => {
       const data = snapshot.val();
@@ -148,7 +121,10 @@ export default function Feeds({ navigation }) {
       setLoading(false);
     });
 
-    return () => postsRef.off('value', listener);
+    return () => {
+      postsRef.off('value', listener);
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -158,18 +134,6 @@ export default function Feeds({ navigation }) {
       useNativeDriver: true,
     }).start();
   }, []);
-
-  const headerStyle = {
-    opacity: headerAnim,
-    transform: [
-      {
-        translateY: headerAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [-16, 0],
-        }),
-      },
-    ],
-  };
 
   const filteredPosts = posts.filter(
     p =>
@@ -189,112 +153,230 @@ export default function Feeds({ navigation }) {
     }
   };
 
+  const deletePost = async postId => {
+    try {
+      if (!postId) return;
+
+      await database().ref(`/posts/${postId}`).remove();
+
+      console.log('Post deleted:', postId);
+    } catch (error) {
+      console.log('Delete error:', error);
+    }
+  };
+
+  const mergedQuiz = userData?.quizzes?.days || {};
+
   return (
     <View style={styles.container}>
       <View
         style={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 15,
           zIndex: 1,
         }}
       >
-        <ProfileHeader onPress={() => navigation.navigate('AvgSteps')} />
+        <View style={{ paddingVertical: 10 }}>
+          <Header
+            showSubHeader={'supporting healthier lifestyles'}
+            header={'Healthy U Community'}
+          />
+        </View>
+        {/* <ProfileHeader
+          userData={userData?.profile}
+          startDate={
+            moment(
+              userData?.profile?.memberSince || userData?.goal?.startDate,
+            )?.format('YYYY-MM-DD') || ''
+          }
+          streakData={mergedQuiz}
+        /> */}
       </View>
       <Wrapper
         orbsRight
         safeAreaPops={{ edges: ['bottom'] }}
-        containerStyle={{ paddingHorizontal: 0 }}
+        containerStyle={{ paddingHorizontal: 0, paddingBottom: height / 12 }}
       >
         <FlatList
           data={filteredPosts}
           keyExtractor={item => item.id.toString()}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
-          ListHeaderComponent={
-            <>
-              {/* Search */}
-              {!hideStories ? (
-                <>
-                  <View style={styles.searchRow}>
-                    <Text style={styles.searchIcon}>🔍</Text>
-                    <TextInput
-                      style={styles.searchInput}
-                      placeholder="Search friends or posts…"
-                      placeholderTextColor="rgba(255,255,255,0.3)"
-                      value={search}
-                      onChangeText={setSearch}
-                    />
-                  </View>
+          // ListHeaderComponent={
+          //   <>
+          //     {/* Search */}
+          //     {!hideStories ? (
+          //       <>
+          //         <View style={styles.searchRow}>
+          //           <Text style={styles.searchIcon}>🔍</Text>
+          //           <TextInput
+          //             style={styles.searchInput}
+          //             placeholder="Search friends or posts…"
+          //             placeholderTextColor="rgba(255,255,255,0.3)"
+          //             value={search}
+          //             onChangeText={setSearch}
+          //           />
+          //         </View>
 
-                  {/* Stories */}
-                  <Text style={styles.sectionLabel}>Stories</Text>
-                  <FlatList
-                    data={STORIES}
-                    horizontal
-                    keyExtractor={s => s.id.toString()}
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.storiesRow}
-                    renderItem={({ item }) => <StoryItem story={item} />}
-                  />
-                </>
-              ) : (
-                <View />
-              )}
+          //         {/* Stories */}
+          //         <Text style={styles.sectionLabel}>Stories</Text>
+          //         <FlatList
+          //           data={STORIES}
+          //           horizontal
+          //           keyExtractor={s => s.id.toString()}
+          //           showsHorizontalScrollIndicator={false}
+          //           contentContainerStyle={styles.storiesRow}
+          //           renderItem={({ item }) => <StoryItem story={item} />}
+          //         />
+          //       </>
+          //     ) : (
+          //       <View />
+          //     )}
 
-              {/* Feed label */}
-              <View style={styles.feedLabelRow}>
-                <Text style={styles.sectionLabel}>Community Feed</Text>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => setHideStories(!hideStories)}
-                >
-                  <Text style={styles.seeAll}>
-                    {hideStories ? 'See Less' : 'See all'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          }
+          //     {/* Feed label */}
+          //     <View style={styles.feedLabelRow}>
+          //       <Text style={styles.sectionLabel}>Community Feed</Text>
+          //       <TouchableOpacity
+          //         activeOpacity={0.7}
+          //         onPress={() => setHideStories(!hideStories)}
+          //       >
+          //         <Text style={styles.seeAll}>
+          //           {hideStories ? 'See Less' : 'See all'}
+          //         </Text>
+          //       </TouchableOpacity>
+          //     </View>
+          //   </>
+          // }
+
           renderItem={({ item, index }) => {
             console.log('object :>> ', item);
             return (
               <ChatCard
                 item={{
+                  ...item,
                   name: item?.name,
-                  message: item?.message,
+                  message: item?.message || item?.text,
                   picture: item?.image,
                   time: formatTime(item?.createdAt),
                   likes: item?.likesCount,
                   comments: item?.commentsCount,
                   isLiked: item?.isLiked,
+
+                  beverageName: item.beverageName,
+                  ingredients: item.ingredients || [],
+                  type: item.type,
+
+                  snackName: item?.snackName,
+                  snackApproverName: item?.approvedBy,
+                  qty: item?.qty,
+                  type: item?.type,
                 }}
                 index={index}
                 onLikePress={() => toggleLike(item.id)}
                 onCardPress={() =>
-                  navigation.navigate('FeedDetails', { postId: item?.id })
+                  navigation.navigate('FeedDetails', {
+                    postId: item?.id,
+                    userData: userData,
+                  })
                 }
                 onCommentPress={() =>
                   navigation.navigate('FeedDetails', {
                     postId: item?.id,
                     showComment: true,
+                    userData: userData,
                   })
                 }
+                isUser={
+                  userId == item?.userId || userData?.profile?.role == 'admin'
+                }
+                onDeletePress={() => deletePost(item?.id)}
               />
             );
           }}
           ListEmptyComponent={
-            <Text
-              style={{ color: 'white', textAlign: 'center', marginTop: 40 }}
-            >
-              No posts yet 🚀
-            </Text>
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptySvgContainer}>
+                <Svg width={150} height={150} viewBox="0 0 150 150">
+                  {/* Glow Circle */}
+                  <Circle
+                    cx="75"
+                    cy="75"
+                    r="60"
+                    fill="rgba(143,175,120,0.08)"
+                  />
+
+                  {/* Card */}
+                  <Rect
+                    x="35"
+                    y="35"
+                    width="80"
+                    height="90"
+                    rx="18"
+                    fill="rgba(255,255,255,0.04)"
+                    stroke="rgba(143,175,120,0.35)"
+                    strokeWidth="1.5"
+                  />
+
+                  {/* Image Placeholder */}
+                  <Rect
+                    x="48"
+                    y="48"
+                    width="54"
+                    height="36"
+                    rx="10"
+                    fill="rgba(143,175,120,0.18)"
+                  />
+
+                  {/* Lines */}
+                  <Rect
+                    x="48"
+                    y="95"
+                    width="42"
+                    height="6"
+                    rx="3"
+                    fill="rgba(255,255,255,0.2)"
+                  />
+
+                  <Rect
+                    x="48"
+                    y="108"
+                    width="28"
+                    height="6"
+                    rx="3"
+                    fill="rgba(255,255,255,0.15)"
+                  />
+
+                  {/* Floating Plus */}
+                  <Circle cx="108" cy="48" r="16" fill={colors.secondary} />
+
+                  <Path
+                    d="M108 41V55M101 48H115"
+                    stroke="#fff"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                  />
+                </Svg>
+              </View>
+
+              <Text style={styles.emptyTitle}>Your Story Starts Here</Text>
+
+              <Text style={styles.emptyDescription}>
+                Share workouts, healthy meals, achievements, and inspire the
+                HealthyU community.
+              </Text>
+
+              <View style={styles.emptyBadge}>
+                <Text style={styles.emptyBadgeText}>
+                  Create your first post 🚀
+                </Text>
+              </View>
+            </View>
           }
         />
       </Wrapper>
       {/* FAB — add post (outside FlatList so absolute positioning is relative to root View) */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => navigation.navigate('AddPost')}
+        onPress={() => navigation.navigate('AddPost', { userData: userData })}
         activeOpacity={0.85}
       >
         <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
@@ -462,7 +544,7 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 20,
+    bottom: height / 8,
     right: 20,
     width: 52,
     height: 52,
@@ -477,5 +559,47 @@ const styles = StyleSheet.create({
     elevation: 12,
     borderWidth: 1.5,
     borderColor: 'rgba(143,175,120,0.4)',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 30,
+    height: height / 1.5,
+  },
+
+  emptySvgContainer: {
+    marginBottom: 10,
+  },
+
+  emptyTitle: {
+    color: colors.white,
+    fontSize: 24,
+    fontFamily: ff.montserratBold,
+    textAlign: 'center',
+  },
+
+  emptyDescription: {
+    marginTop: 10,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    lineHeight: 22,
+    fontSize: 13,
+    fontFamily: ff.montserratMedium,
+  },
+
+  emptyBadge: {
+    marginTop: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(143,175,120,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.25)',
+  },
+
+  emptyBadgeText: {
+    color: colors.secondary,
+    fontSize: 12,
+    fontFamily: ff.montserratSemiBold,
   },
 });

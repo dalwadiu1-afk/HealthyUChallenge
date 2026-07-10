@@ -9,7 +9,6 @@ import {
   StyleSheet,
   StatusBar,
   Alert,
-  Dimensions,
 } from 'react-native';
 import Svg, {
   Path,
@@ -19,39 +18,32 @@ import Svg, {
   Rect,
   Circle,
 } from 'react-native-svg';
-import { launchCamera } from 'react-native-image-picker';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  onSnapshot,
-} from '@react-native-firebase/firestore';
-import storage from '@react-native-firebase/storage';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
+import storage from '@react-native-firebase/storage';
+import moment from 'moment';
+import Modal from 'react-native-modal';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 
-const { width: SW } = Dimensions.get('window');
-const TOTAL_WEEKS = 4;
-const MAX_MEALS = 4;
-let START_DATE = new Date('2026-04-28');
-const getWeekDate = weekIndex => {
-  const date = new Date(START_DATE);
-  date.setDate(date.getDate() + weekIndex * 7);
-  return date.toISOString().split('T')[0];
-};
 const user = auth().currentUser;
 const USER_ID = user?.uid || 'USER_UID';
 
-console.log('user :>> ', user);
+const TOTAL_WEEKS = 4;
+const DEFAULT_MAX_MEALS = 4;
 
-const getDaysPassed = () => Math.floor((new Date() - START_DATE) / 86400000);
-const getUnlockedWeek = () =>
-  Math.min(Math.floor(getDaysPassed() / 7), TOTAL_WEEKS - 1);
+const today = moment();
+
+const getClosestMealGoal = value => {
+  const num = Number(value) || 4;
+
+  if (num <= 3) return 3;
+  if (num >= 5) return 5;
+
+  return Math.round(num);
+};
 
 function GradientBg({ id, c1, c2, r = 20 }) {
   return (
@@ -88,194 +80,304 @@ function CameraIcon() {
   );
 }
 
-export default function MeatlessChallenge({ navigation }) {
-  const [weeks, setWeeks] = useState({
-    week1: { meals: [], completed: false },
-    week2: { meals: [], completed: false },
-    week3: { meals: [], completed: false },
-    week4: { meals: [], completed: false },
+export default function MeatlessChallenge({ navigation, route }) {
+  const [habitData, setHabitData] = useState({
+    title: 'Meatless Challenge',
+    target: '4 Meals Per Week',
+    weeks: {},
   });
-  const unlockedWeek = `week${getUnlockedWeek() + 1}`;
+  const CURRENT_MONTH_KEY = route?.params?.monthKey
+    ? route?.params?.monthKey
+    : today.format('MMMM_YYYY');
 
-  const totalMeals = Object.values(weeks)?.reduce(
-    (sum, week) => sum + (week?.meals?.length || 0),
-    0,
-  );
+  const [startDate, setStartDate] = useState(null);
+  const [labels, setLabels] = useState({});
+  const [imagePickerVisible, setImagePickerVisible] = useState(false);
+  const [selectedWeekKey, setSelectedWeekKey] = useState(null);
+  const weeks = habitData?.weeks || {};
 
-  const progress = totalMeals / (TOTAL_WEEKS * MAX_MEALS) || 0;
-
-  useEffect(() => {
-    const userRef = database().ref(`/users/${USER_ID}`);
-
-    const listener = userRef.on('value', snapshot => {
-      const data = snapshot.val();
-
-      if (data?.goal?.startDate) {
-        START_DATE = new Date(data.goal.startDate);
-      }
-
-      const logs = data?.logs || {};
-
-      const restored = {
-        week1: { meals: [], completed: false },
-        week2: { meals: [], completed: false },
-        week3: { meals: [], completed: false },
-        week4: { meals: [], completed: false },
-      };
-
-      Object.keys(restored).forEach((weekKey, index) => {
-        const weekDate = getWeekDate(index);
-        const weekData = logs?.[weekKey]?.[weekDate];
-
-        if (weekData) {
-          restored[weekKey] = {
-            meals: weekData.meals || [],
-            completed: weekData.completed || false,
-          };
-        }
-      });
-
-      setWeeks(restored);
-    });
-
-    return () => userRef.off('value', listener);
-  }, [USER_ID]);
-
-  const addMeal = async weekKey => {
-    if (weekKey !== unlockedWeek) return;
-
-    if (weeks[weekKey]?.meals?.length >= MAX_MEALS) {
-      Alert.alert('Limit reached', 'Max 4 meals per week');
-      return;
+  const showImagePicker = dayKey => {
+    if (route?.params?.monthKey) {
+      Alert.alert(
+        'Upload Not Allowed',
+        'Photos can only be uploaded during the current month.',
+      );
+    } else {
+      setSelectedWeekKey(dayKey);
+      setImagePickerVisible(true);
     }
+  };
+
+  const processMealUpload = async (weekKey, localUri) => {
+    try {
+      const { downloadURL, storagePath } = await uploadMealImage(
+        localUri,
+        weekKey,
+      );
+
+      await saveMeal(weekKey, {
+        imageUrl: downloadURL,
+        storagePath,
+        label: '',
+        timestamp: moment().toISOString(),
+        uploadedAt: Date.now(),
+      });
+    } catch (error) {
+      console.log(error);
+      Alert.alert('Error', 'Failed to upload image');
+    }
+  };
+
+  const openCamera = async () => {
+    setImagePickerVisible(false);
 
     const granted = await requestCameraPermission();
+
     if (!granted) return;
 
-    launchCamera({ mediaType: 'photo', quality: 0.7 }, res => {
-      const uri = res?.assets?.[0]?.uri;
-      if (!uri) return;
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.7,
+        saveToPhotos: true,
+      },
+      async res => {
+        if (res.didCancel || res.errorCode) return;
 
-      // ✅ ALWAYS use latest state
-      setWeeks(prev => {
-        const updated = { ...prev };
+        const localUri = res?.assets?.[0]?.uri;
 
-        updated[weekKey] = {
-          ...updated[weekKey],
-          meals: [
-            ...(updated[weekKey]?.meals || []),
-            {
-              uri,
-              label: '',
-              timestamp: new Date().toISOString(),
-            },
-          ],
-        };
+        if (!localUri) return;
 
-        // 🔥 save AFTER computing latest state
-        saveToFirestore(updated);
-
-        return updated;
-      });
-    });
+        await processMealUpload(selectedWeekKey, localUri);
+      },
+    );
   };
 
-  const updateLabel = (weekKey, mealIndex, text) => {
-    setWeeks(prev => {
-      const updated = {
-        ...prev,
-        [weekKey]: {
-          ...prev[weekKey],
-          meals: prev[weekKey].meals.map((meal, i) =>
-            i === mealIndex ? { ...meal, label: text } : meal,
-          ),
-        },
-      };
+  const openGallery = async () => {
+    setImagePickerVisible(false);
 
-      saveToFirestore(updated); // 🔥 always latest
-      return updated;
-    });
-  };
-  const deleteMeal = (weekKey, mealIndex) => {
-    setWeeks(prev => {
-      const updated = { ...prev };
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        quality: 0.7,
+        selectionLimit: 1,
+      },
+      async res => {
+        if (res.didCancel || res.errorCode) return;
 
-      updated[weekKey] = {
-        ...updated[weekKey],
-        meals: updated[weekKey].meals.filter((_, i) => i !== mealIndex),
-      };
+        const localUri = res?.assets?.[0]?.uri;
 
-      saveToFirestore(updated); // 🔥 always latest
-      return updated;
-    });
+        if (!localUri) return;
+
+        await processMealUpload(selectedWeekKey, localUri);
+      },
+    );
   };
 
-  // const uploadImage = async (uri, userId, weekIndex, mealIndex) => {
-  //   const filename = `meal_${Date.now()}.jpg`;
-  //   const refPath = `meals/${userId}/week_${weekIndex}/${filename}`;
+  const totalMeals = Object.values(weeks).reduce((sum, week) => {
+    return sum + Object.keys(week || {}).length;
+  }, 0);
 
-  //   await storage().ref(refPath).putFile(uri);
-  //   return await storage().ref(refPath).getDownloadURL();
-  // };
+  const progress = totalMeals / (TOTAL_WEEKS * MAX_MEALS);
 
-  const saveToFirestore = async updatedWeeks => {
+  const getCurrentWeek = () => {
+    if (!startDate) return 1;
+
+    const diffDays = moment().diff(startDate, 'days');
+
+    return Math.min(Math.max(Math.floor(diffDays / 7) + 1, 1), TOTAL_WEEKS);
+  };
+
+  const CURRENT_WEEK = getCurrentWeek();
+
+  useEffect(() => {
+    if (!USER_ID) return;
+
+    const ref = database().ref(`users/${USER_ID}`);
+
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val();
+
+      // START DATE
+      if (data?.goal?.startDate) {
+        setStartDate(moment(data.goal.startDate, 'YYYY-MM-DD'));
+      }
+
+      // HABIT DATA
+      const monthData = data?.habits?.meatLess?.[CURRENT_MONTH_KEY];
+
+      const challenge = monthData?.[CURRENT_MONTH_KEY] || monthData;
+      const rawGoal = challenge?.goal || 4;
+      console.log('CURRENT_MONTH_KEY', CURRENT_MONTH_KEY);
+      console.log('meatLess data', data?.habits?.meatLess);
+      console.log('challenge', challenge);
+
+      const weeklyGoal = getClosestMealGoal(rawGoal);
+      console.log('challenge :>> ', challenge?.weeks);
+      if (challenge?.weeks != undefined) {
+        setHabitData({
+          ...challenge,
+          goal: weeklyGoal,
+          target: `${weeklyGoal} Meals Per Week`,
+        });
+
+        const tempLabels = {};
+
+        Object.entries(challenge?.weeks || {}).forEach(([weekKey, week]) => {
+          Object.entries(week || {}).forEach(([mealKey, meal]) => {
+            tempLabels[`${weekKey}_${mealKey}`] = meal?.label || '';
+          });
+        });
+
+        setLabels(tempLabels);
+      } else {
+        setHabitData({
+          title: 'Meatless Challenge',
+          target: `${weeklyGoal} Meals Per Week`,
+          goal: weeklyGoal,
+          weeks: {},
+        });
+      }
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
+
+  const uploadMealImage = async (localUri, weekKey) => {
     try {
-      if (!USER_ID) return;
+      const fileName = `meal_${Date.now()}.jpg`;
 
-      const updates = {};
+      const storagePath = `meatLess/${USER_ID}/${CURRENT_MONTH_KEY}/${weekKey}/${fileName}`;
 
-      Object.keys(updatedWeeks || {}).forEach((weekKey, index) => {
-        const weekDate = getWeekDate(index);
+      const reference = storage().ref(storagePath);
 
-        updates[`logs/${weekKey}/${weekDate}`] = {
-          meals: updatedWeeks[weekKey]?.meals || [],
-          completed: (updatedWeeks[weekKey]?.meals || []).length >= MAX_MEALS,
-        };
-      });
+      await reference.putFile(localUri);
 
-      await database().ref(`/users/${USER_ID}`).update(updates);
-    } catch (e) {
-      console.log('❌ ERROR:', e);
+      const downloadURL = await reference.getDownloadURL();
+
+      return {
+        downloadURL,
+        storagePath,
+      };
+    } catch (error) {
+      console.log('UPLOAD ERROR:', error);
+      throw error;
     }
   };
 
+  const saveMeal = async (weekKey, mealData) => {
+    const normalizedGoal = getClosestMealGoal(habitData?.goal || 4);
+
+    const currentMeals = Object.values(weeks?.[weekKey] || {});
+
+    const updatedMeals = [...currentMeals, mealData];
+
+    await database()
+      .ref(`users/${USER_ID}/habits/meatLess/${CURRENT_MONTH_KEY}`)
+      .update({
+        title: 'Meatless Challenge',
+        target: `${normalizedGoal} Meals Per Week`,
+        goal: normalizedGoal,
+
+        [`weeks/${weekKey}`]: updatedMeals,
+      });
+  };
+
+  const updateLabel = async (weekKey, mealIndex, text) => {
+    const currentMeals = Array.isArray(weeks?.[weekKey])
+      ? [...weeks[weekKey]]
+      : [];
+
+    currentMeals[mealIndex] = {
+      ...currentMeals[mealIndex],
+      label: text,
+    };
+
+    await database()
+      .ref(
+        `users/${USER_ID}/habits/meatLess/${CURRENT_MONTH_KEY}/weeks/${weekKey}`,
+      )
+      .set(currentMeals);
+  };
+
+  const deleteMeal = async (weekKey, mealIndex) => {
+    try {
+      const currentMeals = Array.isArray(weeks?.[weekKey])
+        ? [...weeks[weekKey]]
+        : [];
+
+      const meal = currentMeals[mealIndex];
+
+      if (meal?.storagePath) {
+        await storage().ref(meal.storagePath).delete();
+      }
+
+      const updatedMeals = currentMeals.filter(
+        (_, index) => index !== mealIndex,
+      );
+
+      await database()
+        .ref(
+          `users/${USER_ID}/habits/meatLess/${CURRENT_MONTH_KEY}/weeks/${weekKey}`,
+        )
+        .set(updatedMeals);
+    } catch (error) {
+      console.log('DELETE ERROR:', error);
+    }
+  };
+
+  const MAX_MEALS = habitData?.goal || DEFAULT_MAX_MEALS;
   return (
     <View style={styles.root}>
-      {/* Header with gradient */}
       <Header
         header={'Meatless Challenge'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />
+
       <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
         <View style={styles.heroBg}>
           <Text style={styles.heroTitle}>🌿 Meatless Day Challenge</Text>
+
           <Text style={styles.heroSub}>
             Upload meals for 1 meatless day each week (4 weeks)
           </Text>
 
-          {/* Progress */}
           <View style={styles.progressRow}>
             <View style={styles.progressBg}>
               <View
                 style={[styles.progressFill, { width: `${progress * 100}%` }]}
               />
             </View>
+
             <Text style={styles.progressLabel}>
               {totalMeals}/{TOTAL_WEEKS * MAX_MEALS} meals
             </Text>
           </View>
         </View>
-        {Object.keys(weeks).map((weekKey, wi) => {
-          const currentWeekIndex = getUnlockedWeek();
-          const isPast = wi < currentWeekIndex;
-          const isLocked = wi > currentWeekIndex;
-          const isCurrent = wi === currentWeekIndex;
-          const weekMeals = weeks[weekKey]?.meals || [];
-          const weekDone = isPast || weekMeals?.length === MAX_MEALS;
-          console.log('weekMeals?.length :>> ', weeks[weekKey]);
+
+        {Array.from({ length: TOTAL_WEEKS }).map((_, wi) => {
+          const weekKey = `week${wi + 1}`;
+          const weekNumber = wi + 1;
+
+          const selectedMonth = moment(CURRENT_MONTH_KEY, 'MMMM_YYYY');
+          const currentMonth = moment();
+          const isPastMonth = selectedMonth.isBefore(currentMonth, 'month');
+
+          const isPast = isPastMonth || weekNumber < CURRENT_WEEK;
+          const isCurrent = !isPastMonth && weekNumber === CURRENT_WEEK;
+          const isLocked = !isPastMonth && weekNumber > CURRENT_WEEK;
+          const mealsObject = weeks?.[weekKey] || {};
+
+          const mealsArray = Array.isArray(mealsObject)
+            ? mealsObject
+                .filter(Boolean)
+                .map((item, index) => [`meal${index + 1}`, item])
+            : Object.entries(mealsObject).filter(([_, meal]) => meal);
+
+          const weekDone = mealsArray.length >= MAX_MEALS;
+
           return (
             <View
               key={wi}
@@ -293,7 +395,6 @@ export default function MeatlessChallenge({ navigation }) {
                 />
               )}
 
-              {/* Week header */}
               <View style={styles.weekHeader}>
                 <View
                   style={[
@@ -311,19 +412,23 @@ export default function MeatlessChallenge({ navigation }) {
                     {weekDone ? '✓' : wi + 1}
                   </Text>
                 </View>
+
                 <Text style={[styles.weekTitle, isLocked && styles.lockedText]}>
                   Week {wi + 1}
                 </Text>
+
                 {weekDone && (
                   <View style={styles.completedPill}>
                     <Text style={styles.completedPillText}>Completed</Text>
                   </View>
                 )}
+
                 {isCurrent && (
                   <View style={styles.currentPill}>
                     <Text style={styles.currentPillText}>Active</Text>
                   </View>
                 )}
+
                 {isLocked && (
                   <View style={styles.lockedPill}>
                     <Text style={styles.lockedPillText}>🔒 Locked</Text>
@@ -331,14 +436,13 @@ export default function MeatlessChallenge({ navigation }) {
                 )}
               </View>
 
-              {/* Locked */}
               {isLocked ? (
                 <View style={styles.lockedBox}>
                   <Text style={styles.lockEmoji}>🔒</Text>
+
                   <Text style={styles.lockedSub}>Unlocks in a future week</Text>
                 </View>
-              ) : isPast && weekMeals?.length === 0 ? (
-                /* Past week with no uploaded meals — show completed summary */
+              ) : isPast && mealsArray?.length === 0 ? (
                 <View style={styles.pastSummary}>
                   <View style={styles.pastIconWrap}>
                     <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
@@ -351,8 +455,10 @@ export default function MeatlessChallenge({ navigation }) {
                       />
                     </Svg>
                   </View>
+
                   <View style={styles.pastTextWrap}>
                     <Text style={styles.pastTitle}>Week completed</Text>
+
                     <Text style={styles.pastSub}>
                       Meatless day challenge met for this week
                     </Text>
@@ -360,30 +466,51 @@ export default function MeatlessChallenge({ navigation }) {
                 </View>
               ) : (
                 <>
-                  {/* Meal thumbnails */}
-                  {weekMeals?.length > 0 && (
+                  {mealsArray?.length > 0 && (
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
                       style={styles.mealsRow}
                     >
-                      {weekMeals.map((meal, mi) => (
+                      {mealsArray.map(([mealKey, meal], mi) => (
                         <View key={mi} style={styles.mealThumb}>
                           <Image
-                            source={{ uri: meal.uri }}
+                            source={{
+                              uri: meal?.imageUrl || meal?.uri,
+                            }}
                             style={styles.mealImg}
                           />
+
                           {isCurrent && (
                             <TouchableOpacity
                               style={styles.mealDelete}
-                              onPress={() => deleteMeal(weekKey, mi)}
+                              onPress={() => deleteMeal(weekKey, mealKey)}
                             >
                               <Text style={styles.mealDeleteText}>✕</Text>
                             </TouchableOpacity>
                           )}
+
+                          <Text style={styles.mealDate}>
+                            {meal?.timestamp
+                              ? moment(meal.timestamp).format('DD MMM YYYY')
+                              : ''}
+                          </Text>
+
                           <TextInput
-                            value={meal?.label}
-                            onChangeText={t => updateLabel(weekKey, mi, t)}
+                            value={labels[`${weekKey}_${mealKey}`] || ''}
+                            onChangeText={t => {
+                              setLabels(prev => ({
+                                ...prev,
+                                [`${weekKey}_${mealKey}`]: t,
+                              }));
+                            }}
+                            onEndEditing={() => {
+                              updateLabel(
+                                weekKey,
+                                mealKey,
+                                labels[`${weekKey}_${mealKey}`] || '',
+                              );
+                            }}
                             editable={isCurrent}
                             placeholder="Label…"
                             placeholderTextColor="rgba(255,255,255,0.3)"
@@ -394,32 +521,31 @@ export default function MeatlessChallenge({ navigation }) {
                     </ScrollView>
                   )}
 
-                  {/* Past week with uploaded meals — show completion banner */}
-                  {isPast && weekMeals?.length > 0 && (
+                  {isPast && mealsArray?.length > 0 && (
                     <View style={styles.mealsDoneBanner}>
                       <Text style={styles.mealsDoneText}>
-                        ✅ {weekMeals?.length}/{MAX_MEALS} meals logged
+                        ✅ {mealsArray?.length}/{MAX_MEALS} meals logged
                       </Text>
                     </View>
                   )}
 
-                  {/* Upload / add button */}
-                  {isCurrent && weekMeals?.length < MAX_MEALS && (
+                  {isCurrent && mealsArray?.length < MAX_MEALS && (
                     <TouchableOpacity
                       style={styles.uploadBtn}
-                      onPress={() => addMeal(weekKey)}
+                      onPress={() => showImagePicker(weekKey)}
                       activeOpacity={0.8}
                     >
                       <CameraIcon />
+
                       <Text style={styles.uploadText}>
-                        {weekMeals?.length === 0
+                        {mealsArray.length === 0
                           ? 'Upload Meal Photo'
-                          : `+ Add Meal (${weekMeals?.length}/${MAX_MEALS})`}
+                          : `+ Add Meal (${mealsArray.length}/${MAX_MEALS})`}
                       </Text>
                     </TouchableOpacity>
                   )}
 
-                  {weekMeals?.length >= MAX_MEALS && isCurrent && (
+                  {mealsArray?.length >= MAX_MEALS && isCurrent && (
                     <View style={styles.maxReachedRow}>
                       <Text style={styles.maxReachedText}>
                         ✅ All meals uploaded for this week
@@ -432,13 +558,45 @@ export default function MeatlessChallenge({ navigation }) {
           );
         })}
       </Wrapper>
+      <Modal
+        isVisible={imagePickerVisible}
+        style={{ margin: 0 }}
+        onBackdropPress={() => setImagePickerVisible(false)}
+        onBackButtonPress={() => setImagePickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Choose Image</Text>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openCamera}>
+              <Text style={styles.modalBtnText}>📸 Camera</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openGallery}>
+              <Text style={styles.modalBtnText}>🖼 Gallery</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setImagePickerVisible(false)}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.dark },
-
+  mealDate: {
+    marginTop: 4,
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 9,
+    fontFamily: fontFamily.montserratRegular,
+  },
   heroBg: { paddingBottom: 20, overflow: 'hidden' },
   header: {
     flexDirection: 'row',
@@ -446,6 +604,53 @@ const styles = StyleSheet.create({
     paddingTop: (StatusBar.currentHeight || 44) + 8,
     // paddingHorizontal: 18,
     paddingBottom: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+
+  modalCard: {
+    backgroundColor: colors.bubbleDark,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 30,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  modalBtn: {
+    paddingVertical: 16,
+    borderRadius: 14,
+    backgroundColor: 'rgba(143,175,120,0.12)',
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+
+  modalBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  cancelBtn: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+
+  cancelText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    fontFamily: fontFamily.montserratSemiBold,
   },
   backBtn: {
     width: 44,

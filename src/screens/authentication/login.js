@@ -13,6 +13,7 @@ import { eyeIcon } from '../../assets/images';
 import InputBox from '../../components/common/InputBox';
 import { AuthBtn } from '../../components/common/authBtn';
 import auth from '@react-native-firebase/auth';
+import analytics from '@react-native-firebase/analytics';
 
 const { height, width } = Dimensions.get('window');
 
@@ -66,8 +67,8 @@ export default function Login({ navigation }) {
   }));
 
   const isValidEmail = email => {
-    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return regex.test(email);
+    const regex = /^[a-zA-Z0-9._%+-]+@montclair\.edu$/;
+    return regex.test(email.trim().toLowerCase());
   };
 
   const isValidPassword = password => {
@@ -77,26 +78,27 @@ export default function Login({ navigation }) {
     email && password && isValidEmail(email) && isValidPassword(password);
 
   const handleLogin = async () => {
-    navigation.replace('Main');
+    // navigation.replace('Main');
     // Reset all errors
     setError({ email: '', password: '', general: '' });
 
     let valid = true;
 
     // EMAIL VALIDATION
-    if (!email) {
-      setError(prev => ({
-        ...prev,
-        email: 'Email is required.',
-      }));
-      valid = false;
-    } else if (!isValidEmail(email)) {
-      setError(prev => ({
-        ...prev,
-        email: 'Enter a valid email (e.g. name@example.com).',
-      }));
-      valid = false;
-    }
+    // if (!email) {
+    //   setError(prev => ({
+    //     ...prev,
+    //     email: 'Email is required.',
+    //   }));
+    //   valid = false;
+    // } else if (!isValidEmail(email)) {
+    //   setError(prev => ({
+    //     ...prev,
+    //     email:
+    //       'Only users with a montclair.edu email address can access this feature!',
+    //   }));
+    //   valid = false;
+    // }
 
     // PASSWORD VALIDATION
     if (!password) {
@@ -118,14 +120,37 @@ export default function Login({ navigation }) {
     try {
       setLoading(true);
 
+      // 🔥 LOGIN ATTEMPT EVENT
+      await analytics().logEvent('login_attempt', {
+        method: 'email',
+      });
+
       const userCredential = await auth().signInWithEmailAndPassword(
         email.trim(),
         password,
       );
 
-      console.log('User signed in:', userCredential.user);
+      const user = userCredential.user;
+
+      // 🔥 LOGIN SUCCESS EVENT (IMPORTANT KPI)
+      await analytics().logLogin({
+        method: 'email',
+      });
+
+      // 🔥 SET USER ID (CRITICAL - links all activity to user)
+      await analytics().setUserId(user.uid);
+
+      // Optional: tag user
+      await analytics().setUserProperties({
+        user_type: 'student',
+      });
+
+      console.log('User signed in:', user);
     } catch (err) {
       console.log(err);
+      await analytics().logEvent('login_failed', {
+        error_code: err.code,
+      });
 
       switch (err.code) {
         case 'auth/user-not-found':
@@ -175,7 +200,9 @@ export default function Login({ navigation }) {
         default:
           setError(prev => ({
             ...prev,
-            general: 'Unable to log in right now. Please try again shortly.',
+            general:
+              err?.message ||
+              'Unable to log in right now. Please try again shortly.',
           }));
           break;
       }
@@ -187,14 +214,14 @@ export default function Login({ navigation }) {
   return (
     <View style={styles.container}>
       {/* Back button */}
-      <Wrapper containerStyle={{ flex: 1 }}>
+      <Wrapper containerStyle={{ flex: 1 }} safeAreaPops={{ edges: [''] }}>
         <Header disableLeft={false} />
 
         {/* Greeting */}
         <Animated.View style={[styles.greetSection, greetAnimStyle]}>
           <Text style={styles.tagline}>WELCOME BACK</Text>
           <Text style={styles.headline}>
-            Glad to see{'\n'}you,{' '}
+            Glad to see{'\n'}you!,{' '}
             {/* <Text style={styles.headlineAccent}>Again!</Text> */}
           </Text>
           <Text style={styles.subtitle}>
@@ -211,26 +238,34 @@ export default function Login({ navigation }) {
               labelStyle={styles.inputLabel}
               inputContainerStyle={styles.textInput}
               value={email}
-              onChangeText={setEmail}
-              placeholder="Enter your email"
-              placeholderTextColor="rgba(255,255,255,0.3)"
+              onChangeText={text => {
+                setEmail(text);
+
+                if (error.email) {
+                  setError(prev => ({ ...prev, email: '' }));
+                }
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
               returnKeyType="next"
-              errorMessage={error?.general ? error?.general : error?.email}
+              errorMessage={error.email}
             />
           </View>
 
           {/* Password */}
           <View style={styles.inputGroup}>
             <InputBox
-              label={' Password'}
+              label={'Password'}
               labelStyle={styles.inputLabel}
               inputContainerStyle={[styles.textInput, { flex: 1 }]}
               value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              placeholderTextColor="rgba(255,255,255,0.3)"
+              onChangeText={text => {
+                setPassword(text);
+
+                if (error.password) {
+                  setError(prev => ({ ...prev, password: '' }));
+                }
+              }}
               secureTextEntry={secureText}
               returnKeyType="done"
               onRightIconPress={() => setSecureText(!secureText)}
@@ -240,9 +275,24 @@ export default function Login({ navigation }) {
                   ? 'rgba(255,255,255,0.1)'
                   : 'rgba(255,255,255,0.8)',
               }}
-              errorMessage={error?.general ? error?.general : error?.email}
+              errorMessage={error.password}
             />
           </View>
+
+          {error.general ? (
+            <Text
+              style={{
+                color: '#FF6B6B',
+                fontSize: 13,
+                marginTop: 8,
+                marginBottom: 12,
+                textAlign: 'center',
+                fontFamily: fontFamily.montserratMedium,
+              }}
+            >
+              {error.general}
+            </Text>
+          ) : null}
 
           {/* Forgot password */}
 

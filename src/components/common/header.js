@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { SvgImg } from './SvgImg';
 import { fontFamily } from '../../constant';
 import Animated from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { height } = Dimensions.get('window');
 
@@ -20,49 +21,67 @@ export function Header({
   onLeftPress,
   onRightPress = () => {},
   showRightBtn = false,
+  showSubHeader = '',
   leftImg = backBtn,
   rightImg = moreIcon,
+  ...SafeAreaViewProps
 }) {
   const navigation = useNavigation();
 
   return (
-    <View style={[styles.wrapper, headerContainer]}>
-      {/* LEFT BUTTON */}
-      <TouchableOpacity
-        disabled={disableLeft}
-        style={[styles.btn, leftBtnStyle]}
-        onPress={onLeftPress ? onLeftPress : () => navigation.goBack()}
-        activeOpacity={0.75}
-      >
-        <SvgImg iconName={leftImg} height={20} width={9} />
-      </TouchableOpacity>
+    <SafeAreaView edges={['top']} {...SafeAreaViewProps}>
+      <View style={[styles.wrapper, headerContainer]}>
+        {/* LEFT BUTTON */}
+        {!showSubHeader ? (
+          <TouchableOpacity
+            disabled={disableLeft}
+            style={[styles.btn, leftBtnStyle]}
+            onPress={onLeftPress ? onLeftPress : () => navigation.goBack()}
+            activeOpacity={0.75}
+          >
+            <SvgImg iconName={leftImg} height={20} width={9} />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: height * 0.06 }} />
+        )}
 
-      {/* ✅ ANIMATED HEADER TEXT */}
-      <Animated.Text
-        style={[
-          styles.headerText,
-          { fontFamily: fontFamily.montserratBold },
-          textStyle, // <-- animated style comes here safely
-        ]}
-        numberOfLines={1}
-      >
-        {header}
-      </Animated.Text>
-
-      {/* RIGHT BUTTON */}
-      {showRightBtn ? (
-        <TouchableOpacity
-          disabled={disableRight}
-          style={[styles.btn, rightBtnStyle]}
-          onPress={onRightPress}
-          activeOpacity={0.75}
+        {/* ✅ ANIMATED HEADER TEXT */}
+        <Animated.Text
+          style={[
+            styles.headerText,
+            { fontFamily: fontFamily.montserratBold },
+            textStyle,
+          ]}
+          numberOfLines={2}
         >
-          <SvgImg iconName={rightImg} height={28} width={28} />
-        </TouchableOpacity>
-      ) : (
-        <View style={{ width: height * 0.06 }} />
-      )}
-    </View>
+          {header}
+          {'\n'}
+          {showSubHeader ? (
+            <Animated.Text
+              style={{ fontFamily: fontFamily.montserratRegular, fontSize: 12 }}
+            >
+              {showSubHeader}
+            </Animated.Text>
+          ) : (
+            <View />
+          )}
+        </Animated.Text>
+
+        {/* RIGHT BUTTON */}
+        {showRightBtn ? (
+          <TouchableOpacity
+            disabled={disableRight}
+            style={[styles.btn, rightBtnStyle]}
+            onPress={onRightPress}
+            activeOpacity={0.75}
+          >
+            <SvgImg iconName={rightImg} height={28} width={28} />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: height * 0.06 }} />
+        )}
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -87,5 +106,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 9,
   },
 });

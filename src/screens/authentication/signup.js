@@ -13,6 +13,9 @@ import { eyeIcon } from '../../assets/images';
 import InputBox from '../../components/common/InputBox';
 import { AuthBtn } from '../../components/common/authBtn';
 import auth from '@react-native-firebase/auth';
+import database from '@react-native-firebase/database';
+import moment from 'moment';
+import analytics from '@react-native-firebase/analytics';
 
 const { height, width } = Dimensions.get('window');
 
@@ -66,7 +69,8 @@ export default function Signup({ navigation }) {
   }, []);
 
   const isValidEmail = email => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const regex = /^[a-zA-Z0-9._%+-]+@montclair\.edu$/;
+    return regex.test(email.trim().toLowerCase());
   };
 
   const isValidPassword = password => {
@@ -118,7 +122,8 @@ export default function Signup({ navigation }) {
     } else if (!isValidEmail(email)) {
       setError(prev => ({
         ...prev,
-        email: 'Enter a valid email (e.g. name@example.com).',
+        email:
+          'Only users with a montclair.edu email address can access this feature!.',
       }));
       valid = false;
     }
@@ -163,13 +168,34 @@ export default function Signup({ navigation }) {
         password,
       );
 
-      // Optional: set display name
+      // set display name
       await userCredential.user.updateProfile({
         displayName: username,
       });
 
-      console.log('User created:', userCredential.user);
+      // save in DB
+      await database()
+        .ref(`users/${userCredential.user.uid}/profile`)
+        .update({
+          name: username,
+          username: username,
+          email: email,
+          memberSince: moment().format('YYYY-MM-DD HH:mm:ss'),
+        });
 
+      // ✅ ANALYTICS (ADD THIS)
+      await analytics().setUserId(userCredential.user.uid);
+
+      await analytics().logSignUp({
+        method: 'email',
+      });
+
+      await analytics().setUserProperties({
+        username,
+        memberSince: moment().format('YYYY-MM-DD'),
+      });
+
+      // navigate
       navigation.replace('Main');
     } catch (err) {
       console.log(err);
@@ -250,11 +276,17 @@ export default function Signup({ navigation }) {
               labelStyle={styles.inputLabel}
               inputContainerStyle={styles.textInput}
               value={username}
-              onChangeText={setUsername}
+              onChangeText={text => {
+                setUsername(text);
+
+                if (error.username) {
+                  setError(prev => ({ ...prev, username: '' }));
+                }
+              }}
               placeholder="Enter your username"
-              placeholderTextColor="rgba(255,255,255,0.3)"
               autoCapitalize="none"
               returnKeyType="next"
+              errorMessage={error.username}
             />
           </View>
 
@@ -265,13 +297,18 @@ export default function Signup({ navigation }) {
               labelStyle={styles.inputLabel}
               inputContainerStyle={styles.textInput}
               value={email}
-              onChangeText={setEmail}
-              placeholder="Enter your email"
-              placeholderTextColor="rgba(255,255,255,0.3)"
+              onChangeText={text => {
+                setEmail(text);
+
+                if (error.email) {
+                  setError(prev => ({ ...prev, email: '' }));
+                }
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
               returnKeyType="next"
-              errorMessage={error?.email}
+              placeholder="Enter your email"
+              errorMessage={error.email}
             />
           </View>
 
@@ -282,14 +319,18 @@ export default function Signup({ navigation }) {
               labelStyle={styles.inputLabel}
               inputContainerStyle={[styles.textInput, { flex: 1 }]}
               value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              placeholderTextColor="rgba(255,255,255,0.3)"
+              onChangeText={text => {
+                setPassword(text);
+
+                if (error.password) {
+                  setError(prev => ({ ...prev, password: '' }));
+                }
+              }}
               secureTextEntry={securePassword}
               returnKeyType="next"
               onRightIconPress={() => setSecurePassword(!securePassword)}
               textIcon={eyeIcon}
-              errorMessage={error?.password}
+              errorMessage={error.password}
             />
           </View>
 
@@ -300,19 +341,37 @@ export default function Signup({ navigation }) {
               labelStyle={styles.inputLabel}
               inputContainerStyle={[styles.textInput, { flex: 1 }]}
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Re-enter your Password"
-              placeholderTextColor="rgba(255,255,255,0.3)"
+              onChangeText={text => {
+                setConfirmPassword(text);
+
+                if (error.confirmPassword) {
+                  setError(prev => ({
+                    ...prev,
+                    confirmPassword: '',
+                  }));
+                }
+              }}
               secureTextEntry={secureConfirm}
               returnKeyType="done"
               onRightIconPress={() => setSecureConfirm(!secureConfirm)}
               textIcon={eyeIcon}
-              errorMessage={error?.confirmPassword}
+              errorMessage={error.confirmPassword}
             />
-            {confirmPassword.length > 0 && password !== confirmPassword && (
-              <Text style={styles.errorText}>Passwords do not match</Text>
-            )}
           </View>
+
+          {error.general ? (
+            <Text
+              style={{
+                color: '#FF6B6B',
+                fontSize: 13,
+                textAlign: 'center',
+                marginBottom: 12,
+                fontFamily: fontFamily.montserratMedium,
+              }}
+            >
+              {error.general}
+            </Text>
+          ) : null}
 
           {/* Register button */}
           <AuthBtn

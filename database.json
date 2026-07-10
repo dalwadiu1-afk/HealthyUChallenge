@@ -1,0 +1,1053 @@
+{
+  "leaderboards": {
+    "Tcii4hjxEEaN9r1SSxZaPGICh3d2": {
+      "avatar": "",
+      "challenge": {
+        "days": {
+          "2026-05-24": {
+            "points": 150,
+            "quizCompleted": 1,
+            "steps": 5100
+          },
+          "2026-05-25": {
+            "points": 190,
+            "quizCompleted": 2,
+            "steps": 6400
+          }
+        },
+        "durationDays": 30,
+        "endDate": "2026-06-23",
+        "startDate": "2026-05-24",
+        "streak": 14,
+        "totalChallengePoints": 5400,
+        "weeklySummary": {
+          "week_1": {
+            "end": "2026-05-30",
+            "points": 1220,
+            "start": "2026-05-24"
+          }
+        }
+      },
+      "gender": "female",
+      "memberSince": "2024",
+      "name": "Linh Ngu boo boo",
+      "points": 60,
+      "previousRank": 5,
+      "status": {
+        "activeDays": 24,
+        "badge": "🚀",
+        "caloriesBurned": 12100,
+        "consistency": 84,
+        "level": "Rising",
+        "quizCompleted": 29,
+        "waterIntake": 80
+      },
+      "uid": "Tcii4hjxEEaN9r1SSxZaPGICh3d2",
+      "updatedAt": 1779666536050,
+      "username": "@linh.nguyen"
+    },
+    "USER_1": {
+      "avatar": "https://i.pravatar.cc/300?img=1",
+      "challenge": {
+        "days": {
+          "2026-05-24": {
+            "points": 180,
+            "quizCompleted": 2,
+            "steps": 6200
+          }
+        },
+        "durationDays": 30,
+        "endDate": "2026-06-23",
+        "startDate": "2026-05-24",
+        "streak": 18,
+        "totalChallengePoints": 6200,
+        "weeklySummary": {
+          "week_1": {
+            "end": "2026-05-30",
+            "points": 1420,
+            "start": "2026-05-24"
+          }
+        }
+      },
+      "name": "Ethan",
+      "previousRank": 2,
+      "status": {
+        "activeDays": 29,
+        "badge": "🏆",
+        "caloriesBurned": 15400,
+        "consistency": 96,
+        "level": "Champion",
+        "quizCompleted": 42,
+        "waterIntake": 92
+      }
+    },
+    "USER_2": {
+      "avatar": "https://i.pravatar.cc/300?img=2",
+      "challenge": {
+        "days": {
+          "2026-05-24": {
+            "points": 170,
+            "quizCompleted": 2,
+            "steps": 5800
+          }
+        },
+        "durationDays": 30,
+        "endDate": "2026-06-23",
+        "startDate": "2026-05-24",
+        "streak": 15,
+        "totalChallengePoints": 5900,
+        "weeklySummary": {
+          "week_1": {
+            "end": "2026-05-30",
+            "points": 1360,
+            "start": "2026-05-24"
+          }
+        }
+      },
+      "name": "Sophia",
+      "previousRank": 1,
+      "status": {
+        "activeDays": 27,
+        "badge": "🔥",
+        "caloriesBurned": 14800,
+        "consistency": 91,
+        "level": "Elite",
+        "quizCompleted": 36,
+        "waterIntake": 88
+      }
+    },
+    "USER_3": {
+      "avatar": "https://i.pravatar.cc/300?img=4",
+      "challenge": {
+        "days": {
+          "2026-05-24": {
+            "points": 120,
+            "quizCompleted": 1,
+            "steps": 4200
+          }
+        },
+        "durationDays": 30,
+        "endDate": "2026-06-23",
+        "startDate": "2026-05-24",
+        "streak": 11,
+        "totalChallengePoints": 4900,
+        "weeklySummary": {
+          "week_1": {
+            "end": "2026-05-30",
+            "points": 980,
+            "start": "2026-05-24"
+          }
+        }
+      },
+      "name": "Olivia",
+      "previousRank": 3,
+      "status": {
+        "activeDays": 22,
+        "badge": "💪",
+        "caloriesBurned": 10800,
+        "consistency": 82,
+        "level": "Strong",
+        "quizCompleted": 24,
+        "waterIntake": 73
+      }
+    },
+    "USER_4": {
+      "avatar": "https://i.pravatar.cc/300?img=7",
+      "challenge": {
+        "days": {
+          "2026-05-24": {
+            "points": 105,
+            "quizCompleted": 2,
+            "steps": 3900
+          }
+        },
+        "durationDays": 30,
+        "endDate": "2026-06-23",
+        "startDate": "2026-05-24",
+        "streak": 10,
+        "totalChallengePoints": 4100,
+        "weeklySummary": {
+          "week_1": {
+            "end": "2026-05-30",
+            "points": 980,
+            "start": "2026-05-24"
+          }
+        }
+      },
+      "name": "Emma",
+      "previousRank": 6,
+      "status": {
+        "activeDays": 21,
+        "badge": "⚡",
+        "caloriesBurned": 9200,
+        "consistency": 75,
+        "level": "Active",
+        "quizCompleted": 22,
+        "waterIntake": 67
+      }
+    },
+    "USER_5": {
+      "avatar": "https://i.pravatar.cc/300?img=5",
+      "challenge": {
+        "days": {
+          "2026-05-24": {
+            "points": 60,
+            "quizCompleted": 1,
+            "steps": 2100
+          }
+        },
+        "durationDays": 30,
+        "endDate": "2026-06-23",
+        "startDate": "2026-05-24",
+        "streak": 7,
+        "totalChallengePoints": 2500,
+        "weeklySummary": {
+          "week_1": {
+            "end": "2026-05-30",
+            "points": 760,
+            "start": "2026-05-24"
+          }
+        }
+      },
+      "name": "Liam",
+      "previousRank": 4,
+      "status": {
+        "activeDays": 18,
+        "badge": "🎯",
+        "caloriesBurned": 7900,
+        "consistency": 72,
+        "level": "Focused",
+        "quizCompleted": 15,
+        "waterIntake": 55
+      }
+    },
+    "USER_6": {
+      "avatar": "https://i.pravatar.cc/300?img=6",
+      "challenge": {
+        "days": {
+          "2026-05-24": {
+            "points": 95,
+            "quizCompleted": 1,
+            "steps": 3400
+          }
+        },
+        "durationDays": 30,
+        "endDate": "2026-06-23",
+        "startDate": "2026-05-24",
+        "streak": 9,
+        "totalChallengePoints": 3600,
+        "weeklySummary": {
+          "week_1": {
+            "end": "2026-05-30",
+            "points": 910,
+            "start": "2026-05-24"
+          }
+        }
+      },
+      "name": "Noah",
+      "previousRank": 8,
+      "status": {
+        "activeDays": 20,
+        "badge": "📈",
+        "caloriesBurned": 8400,
+        "consistency": 70,
+        "level": "Consistent",
+        "quizCompleted": 18,
+        "waterIntake": 60
+      }
+    },
+    "USER_7": {
+      "avatar": "https://i.pravatar.cc/300?img=9",
+      "challenge": {
+        "days": {
+          "2026-05-24": {
+            "points": 115,
+            "quizCompleted": 1,
+            "steps": 4100
+          }
+        },
+        "durationDays": 30,
+        "endDate": "2026-06-23",
+        "startDate": "2026-05-24",
+        "streak": 12,
+        "totalChallengePoints": 4500,
+        "weeklySummary": {
+          "week_1": {
+            "end": "2026-05-30",
+            "points": 1040,
+            "start": "2026-05-24"
+          }
+        }
+      },
+      "name": "Ava",
+      "previousRank": 7,
+      "status": {
+        "activeDays": 23,
+        "badge": "🧘",
+        "caloriesBurned": 9800,
+        "consistency": 79,
+        "level": "Balanced",
+        "quizCompleted": 20,
+        "waterIntake": 70
+      }
+    },
+    "USER_8": {
+      "avatar": "https://i.pravatar.cc/300?img=8",
+      "challenge": {
+        "days": {
+          "2026-05-24": {
+            "points": 70,
+            "quizCompleted": 1,
+            "steps": 2600
+          }
+        },
+        "durationDays": 30,
+        "endDate": "2026-06-23",
+        "startDate": "2026-05-24",
+        "streak": 5,
+        "totalChallengePoints": 2900,
+        "weeklySummary": {
+          "week_1": {
+            "end": "2026-05-30",
+            "points": 720,
+            "start": "2026-05-24"
+          }
+        }
+      },
+      "name": "James",
+      "previousRank": 10,
+      "status": {
+        "activeDays": 16,
+        "badge": "🌟",
+        "caloriesBurned": 7100,
+        "consistency": 65,
+        "level": "Improving",
+        "quizCompleted": 12,
+        "waterIntake": 50
+      }
+    },
+    "USER_9": {
+      "avatar": "https://i.pravatar.cc/300?img=10",
+      "challenge": {
+        "days": {
+          "2026-05-24": {
+            "points": 50,
+            "quizCompleted": 1,
+            "steps": 1800
+          }
+        },
+        "durationDays": 30,
+        "endDate": "2026-06-23",
+        "startDate": "2026-05-24",
+        "streak": 4,
+        "totalChallengePoints": 2100,
+        "weeklySummary": {
+          "week_1": {
+            "end": "2026-05-30",
+            "points": 580,
+            "start": "2026-05-24"
+          }
+        }
+      },
+      "name": "Mason",
+      "previousRank": 9,
+      "status": {
+        "activeDays": 13,
+        "badge": "🌱",
+        "caloriesBurned": 5400,
+        "consistency": 58,
+        "level": "Beginner",
+        "quizCompleted": 9,
+        "waterIntake": 42
+      }
+    }
+  },
+  "posts": {
+    "-OrkuQnVIRa4Si4UUt1W": {
+      "avatar": "",
+      "comments": {
+        "-OrqZ-6JEVhhv2cuu--8": {
+          "createdAt": 1777958115261,
+          "likes": {
+            "USER_UID": true
+          },
+          "name": "User",
+          "text": "adsdasdassa",
+          "userId": "USER_UID"
+        },
+        "commentId2": {
+          "createdAt": 123456,
+          "likes": {
+            "USER_UID": true,
+            "userId1": true,
+            "userId2": true
+          },
+          "name": "...",
+          "text": "..."
+        }
+      },
+      "createdAt": 1777863343228,
+      "image": "",
+      "likes": {
+        "Tcii4hjxEEaN9r1SSxZaPGICh3d2": true,
+        "USER_UID": true,
+        "USer2": true,
+        "dhsu": true
+      },
+      "message": "Just finished a 5K run! 🏃",
+      "name": "Linh Nguyen",
+      "userId": "USER_UID"
+    },
+    "-OrqhlJrQtSnMVxhta6A": {
+      "avatar": "",
+      "comments": {
+        "-OrqhqAnTeBlSzQu8Nh3": {
+          "createdAt": 1777960695999,
+          "likes": {
+            "USER_UID": true
+          },
+          "name": "User",
+          "text": "dvfsd",
+          "userId": "USER_UID"
+        }
+      },
+      "createdAt": 1777960676099,
+      "image": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_588796a4-c196-4bec-abd2-779a2dd7ce23.jpg",
+      "likes": {
+        "Tcii4hjxEEaN9r1SSxZaPGICh3d2": true,
+        "USER_UID": true
+      },
+      "message": "fsdfsdf",
+      "name": "User"
+    },
+    "-OsSUiW-18e6J90t5PUh": {
+      "avatar": "",
+      "createdAt": 1778611296610,
+      "image": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_64fa09c3-ef3c-489d-b6e0-ca266151f9d4.jpg",
+      "name": "asd",
+      "postId": "-OsSUiW-18e6J90t5PUh",
+      "qty": "asd",
+      "snackName": "asd",
+      "text": "✅ Approved snack: asd",
+      "type": "snack",
+      "userId": "Tcii4hjxEEaN9r1SSxZaPGICh3d2"
+    },
+    "-OsSV98OVwsmbsaYNOoN": {
+      "avatar": "",
+      "createdAt": 1778611409787,
+      "image": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_7ac513e2-4729-456d-8d47-3fbefd7acff1.jpg",
+      "name": "asd",
+      "postId": "-OsSV98OVwsmbsaYNOoN",
+      "qty": "fddsf",
+      "snackName": "fdsfd",
+      "text": "✅ Approved snack: fdsfd",
+      "type": "snack",
+      "userId": "Tcii4hjxEEaN9r1SSxZaPGICh3d2"
+    },
+    "-OsSxhl9RW5WxWtJ6or_": {
+      "avatar": "",
+      "createdAt": 1778619157752,
+      "image": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_c5d18658-d170-4dfb-8fa9-8fe9f14fdc45.jpg",
+      "likes": {
+        "Tcii4hjxEEaN9r1SSxZaPGICh3d2": true
+      },
+      "name": "asd",
+      "postId": "-OsSxhl9RW5WxWtJ6or_",
+      "qty": "as",
+      "snackName": "saD",
+      "text": "✅ Approved snack: saD",
+      "type": "snack",
+      "userId": "Tcii4hjxEEaN9r1SSxZaPGICh3d2"
+    },
+    "-OsSzmmaGjNJQC_8nGBN": {
+      "avatar": "",
+      "createdAt": 1778619702612,
+      "image": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_514f03fc-95b6-463d-bd72-06a48ab1dc67.jpg",
+      "name": "asd",
+      "postId": "-OsSzmmaGjNJQC_8nGBN",
+      "qty": "sdasd",
+      "requestId": "-OsSzNVgM1EMnKjR_YVN",
+      "snackName": "Hellies",
+      "text": "✅ Approved snack: Hellies",
+      "type": "snack",
+      "userId": "Tcii4hjxEEaN9r1SSxZaPGICh3d2"
+    },
+    "-OsSzrIfScH4wxQDEhI4": {
+      "avatar": "",
+      "createdAt": 1778619721113,
+      "image": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_514f03fc-95b6-463d-bd72-06a48ab1dc67.jpg",
+      "name": "asd",
+      "postId": "-OsSzrIfScH4wxQDEhI4",
+      "qty": "sdasd",
+      "requestId": "-OsSzNVgM1EMnKjR_YVN",
+      "snackName": "Hellies",
+      "text": "✅ Approved snack: Hellies",
+      "type": "snack",
+      "userId": "Tcii4hjxEEaN9r1SSxZaPGICh3d2"
+    },
+    "-OtMNq-82KBfHnDz_Sat": {
+      "avatar": "",
+      "beverageName": "dsa",
+      "createdAt": 1779582543755,
+      "image": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_91d03a58-6085-407d-9c5c-c7ac7763681a.jpg",
+      "ingredients": [
+        "limie",
+        "peach"
+      ],
+      "name": "asd",
+      "postId": "-OtMNq-82KBfHnDz_Sat",
+      "text": "🍹 dsa",
+      "type": "beverage",
+      "userId": "Tcii4hjxEEaN9r1SSxZaPGICh3d2"
+    },
+    "-OtMNzUAgPk3mZF9hLgJ": {
+      "avatar": "",
+      "createdAt": 1779582582518,
+      "image": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_751581d1-7951-4a26-825b-56154343e161.jpg",
+      "name": "asd",
+      "postId": "-OtMNzUAgPk3mZF9hLgJ",
+      "qty": "10",
+      "requestId": "-OtMNxSbR7klHIW7JgF4",
+      "snackName": "jk",
+      "text": "✅ Approved snack: jk",
+      "type": "snack",
+      "userId": "Tcii4hjxEEaN9r1SSxZaPGICh3d2"
+    }
+  },
+  "users": {
+    "Tcii4hjxEEaN9r1SSxZaPGICh3d2": {
+      "goal": {
+        "createdAt": 1779603661297,
+        "selectedGoals": [
+          {
+            "category": "Nutrition",
+            "description": "Book and attend a free nutrition counseling session",
+            "goalText": "1",
+            "id": 1,
+            "screenName": "BookAnAppointment",
+            "title": "Nutrition Session"
+          },
+          {
+            "category": "Fitness",
+            "description": "Do weight training at least 2x per week",
+            "goalText": "12",
+            "id": 6,
+            "screenName": "WeightResistanceTraining",
+            "title": "Strength Training"
+          },
+          {
+            "category": "Fitness",
+            "description": "Join a weekly fitness class",
+            "goalText": "4",
+            "id": 5,
+            "screenName": "WeeklyFitnessClass",
+            "title": "Fitness Class"
+          }
+        ]
+      },
+      "habits": {
+        "Personalized Goal 1": {
+          "May_2026": {
+            "-OtMOD84ZgQWUilRUjEF": {
+              "createdAt": 1779582642544,
+              "photo": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_5d02580c-5aab-43ef-a01d-cd25f9903aa7.jpg",
+              "text": "zc",
+              "time": "May 23, 2026"
+            }
+          }
+        },
+        "Personalized Goal 2": {
+          "May_2026": {
+            "-OtMOH2KQJoD6oJQBOmd": {
+              "createdAt": 1779582658560,
+              "photo": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_c8333ce4-abcc-456a-a1a6-1ad4977d4d47.jpg",
+              "text": "zxc",
+              "time": "May 23, 2026"
+            },
+            "-OtMOIyjr-IMHHfjYi-T": {
+              "createdAt": 1779582666458,
+              "photo": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_bb6f13e5-781b-4552-86d3-e61deda4b8b2.jpg",
+              "text": "zxc",
+              "time": "May 23, 2026"
+            }
+          }
+        },
+        "Personalized Goal 3": {
+          "May_2026": {
+            "-OtMOLjZhaBfNpNHV45j": {
+              "createdAt": 1779582677775,
+              "photo": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_af7e571c-1727-44f0-837a-243d75b56d19.jpg",
+              "text": "nm,",
+              "time": "May 23, 2026"
+            }
+          }
+        },
+        "beverage": {
+          "May_2026": {
+            "days": {
+              "2026-05-23": {
+                "ingredients": [
+                  "limie",
+                  "peach"
+                ],
+                "name": "dsa",
+                "photo": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_91d03a58-6085-407d-9c5c-c7ac7763681a.jpg",
+                "postId": "-OtMNq-82KBfHnDz_Sat",
+                "timestamp": "2026-05-24T00:29:03.670Z",
+                "type": "beverage"
+              }
+            }
+          }
+        },
+        "bodyFatGoal": {
+          "May_2026": {
+            "analytics": {
+              "checkIns": 0,
+              "completionRate": 0,
+              "streak": 0
+            },
+            "categories": {
+              "current": {
+                "color": "#A782FF",
+                "label": "Obese"
+              },
+              "target": {
+                "color": "#5A96FF",
+                "label": "Acceptable"
+              }
+            },
+            "createdAt": 1779581800547,
+            "history": {
+              "1779581800547": {
+                "createdAt": 1779581800547,
+                "goalType": "decrease",
+                "startBFP": 27,
+                "targetBFP": 18
+              }
+            },
+            "logs": {
+              "23": {
+                "completed": true,
+                "createdAt": 1779581800547,
+                "currentBFP": 27,
+                "note": "Initial body fat setup"
+              }
+            },
+            "progress": {
+              "currentBFP": 27,
+              "difference": 9,
+              "startBFP": 27,
+              "targetBFP": 18
+            },
+            "settings": {
+              "goalType": "decrease",
+              "isCut": true
+            },
+            "status": {
+              "editable": false,
+              "locked": true,
+              "otpVerified": true
+            },
+            "target": "18%",
+            "title": "Body Fat",
+            "updatedAt": 1779581800547
+          },
+          "sessionCode": {
+            "code": "3640",
+            "createdAt": 1779581800547,
+            "expiresAt": 1779582400547,
+            "used": false
+          },
+          "target": "Twice a month",
+          "title": "Body Fat"
+        },
+        "booking": {
+          "May_2026": {
+            "-OtMKHWLPs0Y00kTtvVp": {
+              "bookingId": "-OtMKHWLPs0Y00kTtvVp",
+              "code": "7638",
+              "createdAt": 1779581611913,
+              "doctorId": "1",
+              "doctorName": "Jessica Carr",
+              "expiresAt": 1779582211913,
+              "status": "requested",
+              "used": false
+            }
+          }
+        },
+        "cardio": {
+          "May_2026": {
+            "weeks": {
+              "week2": {
+                "avgIntensity": "Low",
+                "days": {
+                  "2026-05-23": {
+                    "createdAt": "2026-05-24T00:28:37.180Z",
+                    "duration": 0,
+                    "endPhoto": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_99e39775-47fc-4291-933c-eea90c88c85a.jpg",
+                    "endTime": "2026-05-24T00:28:34.109Z",
+                    "intensity": "Low",
+                    "startPhoto": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_a3178366-68c9-461c-9449-e8c1e6ccf751.jpg",
+                    "startTime": "2026-05-24T00:28:27.790Z",
+                    "type": "timer"
+                  }
+                },
+                "sessions": 4,
+                "target": "150 min/week",
+                "title": "Cardio Challenge",
+                "totalMinutes": 0
+              }
+            }
+          }
+        },
+        "dailyFruits": {
+          "May_2026": {
+            "week2": {
+              "2026-05-23": {
+                "completed": true,
+                "entries": {
+                  "-OtMO5E5BaMeIrBLaSP8": {
+                    "createdAt": 1779582610164,
+                    "createdDate": "2026-05-23",
+                    "createdTime": "08:30 PM",
+                    "emoji": "🍌",
+                    "fruit": "Banana",
+                    "photo": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_64264552-fa10-4a7e-b149-52a5fb52c2e4.jpg",
+                    "serving": "1 medium (118g)"
+                  },
+                  "-OtMO7CRND3AI6RxSFBF": {
+                    "createdAt": 1779582618262,
+                    "createdDate": "2026-05-23",
+                    "createdTime": "08:30 PM",
+                    "emoji": "🍊",
+                    "fruit": "Orange",
+                    "photo": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_f39ceb61-cdd5-47d2-8f5e-a80d80a986a1.jpg",
+                    "serving": "1 medium (131g)"
+                  },
+                  "-OtMOA9RPjYBK_RLX7Ec": {
+                    "createdAt": 1779582630373,
+                    "createdDate": "2026-05-23",
+                    "createdTime": "08:30 PM",
+                    "emoji": "🍊",
+                    "fruit": "Orange",
+                    "photo": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_be096bb3-cf64-41b9-890e-aa6002d034f8.jpg",
+                    "serving": "1 medium (131g)"
+                  }
+                },
+                "total": 3,
+                "updatedAt": 1779582630509
+              }
+            }
+          }
+        },
+        "exWithFriend": {
+          "May_2026": {
+            "weeks": {
+              "week2": {
+                "completed": false,
+                "updatedAt": 1779582348153,
+                "workoutPhotos": [
+                  {
+                    "friend": "sad",
+                    "timestamp": "2026-05-24T00:24:55.167Z",
+                    "uri": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_b92a2217-3982-4249-9f63-f30c2d4bf22f.jpg"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "fermentedFood": {
+          "May_2026": {
+            "target": "Take Pic every",
+            "title": "fermented Food Challenge",
+            "weeks": {
+              "week2": {
+                "day7": {
+                  "done": true,
+                  "label": "",
+                  "timestamp": "May 23, 2026 08:16 PM",
+                  "uri": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_c9c72c87-f5f5-4a56-a791-9a950d6cb285.jpg"
+                }
+              }
+            }
+          }
+        },
+        "fiber": {
+          "May_2026": {
+            "days": {
+              "2026-05-23": {
+                "completed": false,
+                "progress": "10"
+              }
+            },
+            "target": "25-38g",
+            "title": "Fiber Intake"
+          }
+        },
+        "fitness": {
+          "May_2026": {
+            "weeks": {
+              "week1": {
+                "completed": false,
+                "expiresAt": 1779668047746,
+                "locked": false,
+                "startedAt": 1779581647746,
+                "target": "4 workout photos weekly",
+                "title": "weekly_fitness_class",
+                "totalCompleted": 2,
+                "updatedAt": 1779581651003,
+                "workoutPhotos": [
+                  {
+                    "caption": "I'm at workout #1!",
+                    "uploadedAt": 1779581647746,
+                    "uri": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_c9d9773a-d8aa-4449-aec0-33b6342e09b8.jpg"
+                  },
+                  {
+                    "caption": "I'm at workout #2!",
+                    "uploadedAt": 1779581651003,
+                    "uri": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_35928aab-6a67-42b3-974d-8d0a68e50724.jpg"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "halfPlateChallenge": {
+          "May_2026": {
+            "days": {
+              "2026-05-23": {
+                "completed": true,
+                "timestamp": "2026-05-24T00:15:39.674Z",
+                "uri": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_31405be2-9b1e-487c-a359-5914ec398e75.jpg"
+              }
+            },
+            "startedAt": "2026-05-24T00:15:39.673Z",
+            "target": "1 Photo",
+            "title": "Half Plate Fruits & Veggies",
+            "updatedAt": 1779581787117
+          }
+        },
+        "meatLess": {
+          "May_2026": {
+            "target": "4 Meals Per Week",
+            "title": "Meatless Challenge",
+            "weeks": {
+              "week2": {
+                "meal1": {
+                  "label": "",
+                  "timestamp": "2026-05-24T00:15:50.004Z",
+                  "uri": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_ceb281d9-60ee-40cb-b66b-58af5f768c9a.jpg"
+                }
+              }
+            }
+          }
+        },
+        "newVeggie": {
+          "May_2026": {
+            "updatedAt": 1779581824319,
+            "weeks": {
+              "week1": {
+                "label": "",
+                "locked": false,
+                "timestamp": 1779581820143,
+                "unlockDate": 1778385600000,
+                "uri": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_31933e07-a430-4cf1-aee1-5ed340a67add.jpg"
+              },
+              "week2": {
+                "label": "",
+                "locked": false,
+                "timestamp": 1779581824318,
+                "unlockDate": 1778990400000,
+                "uri": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_91966ae7-3683-4c80-ba65-a3c6e3148f19.jpg"
+              },
+              "week3": {
+                "label": "",
+                "locked": true,
+                "unlockDate": 1779595200000,
+                "uri": ""
+              },
+              "week4": {
+                "label": "",
+                "locked": true,
+                "unlockDate": 1780200000000,
+                "uri": ""
+              },
+              "week5": {
+                "label": "",
+                "locked": true,
+                "unlockDate": 1780804800000,
+                "uri": ""
+              }
+            }
+          }
+        },
+        "sleep": {
+          "May_2026": {
+            "days": {
+              "2026-05-23": {
+                "bedTime": "22:00",
+                "completed": false,
+                "sleep": "8.0 hr",
+                "type": "manual",
+                "updatedAt": 1779581631501,
+                "wakeTime": "06:00"
+              }
+            },
+            "target": "10 hr",
+            "title": "sleep"
+          }
+        },
+        "snacks": {
+          "May_2026": {
+            "days": {
+              "2026-05-23": {
+                "snacks": [
+                  {
+                    "approvedAt": 1779582580612,
+                    "image": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_751581d1-7951-4a26-825b-56154343e161.jpg",
+                    "name": "jk",
+                    "qty": "10",
+                    "requestId": "-OtMNxSbR7klHIW7JgF4",
+                    "status": "approved"
+                  }
+                ],
+                "updatedAt": 1779582580612
+              }
+            }
+          }
+        },
+        "sugarIntake": {
+          "May_2026": {
+            "days": {
+              "2026-05-23": {
+                "items": [
+                  {
+                    "createdAt": 1779581836144,
+                    "name": "sdfa",
+                    "sugar": 30
+                  },
+                  {
+                    "createdAt": 1779582273411,
+                    "name": "sd",
+                    "sugar": 5
+                  }
+                ],
+                "progress": 35
+              }
+            }
+          }
+        },
+        "weightChallenge": {
+          "May_2026": {
+            "target": "Lose ≤ 2 lbs/week",
+            "title": "Weight Challenge",
+            "weeks": {
+              "week1": {
+                "completed": true,
+                "updatedAt": 1779581720511,
+                "weight": "10"
+              },
+              "week2": {
+                "completed": true,
+                "updatedAt": 1779581722613,
+                "weight": "10"
+              },
+              "week3": {
+                "completed": true,
+                "updatedAt": 1779581724414,
+                "weight": "20"
+              }
+            }
+          }
+        }
+      },
+      "posts": {
+        "-OsSxhl9RW5WxWtJ6or_": true,
+        "-OsSzmmaGjNJQC_8nGBN": true,
+        "-OsSzrIfScH4wxQDEhI4": true,
+        "-OtMNq-82KBfHnDz_Sat": true,
+        "-OtMNzUAgPk3mZF9hLgJ": true
+      },
+      "profile": {
+        "avatar": "",
+        "gender": "female",
+        "memberSince": "2024",
+        "name": "Linh Ngu boo boo",
+        "username": "@linh.nguyen"
+      },
+      "snacks": {
+        "requests": {
+          "-OtMNvKRi5X2LnkWjDWO": {
+            "createdAt": 1779582565511,
+            "image": "",
+            "name": "asd",
+            "qty": "262",
+            "status": "rejected",
+            "type": "snack",
+            "updatedAt": 1779582578528
+          },
+          "-OtMNxSbR7klHIW7JgF4": {
+            "createdAt": 1779582574226,
+            "image": "file:///data/user/0/com.healthyuchallenge/cache/rn_image_picker_lib_temp_751581d1-7951-4a26-825b-56154343e161.jpg",
+            "name": "jk",
+            "qty": "10",
+            "status": "approved",
+            "type": "snack",
+            "updatedAt": 1779582580460
+          }
+        }
+      },
+      "stats": {
+        "activeDays": 0,
+        "completedDays": 0,
+        "completionRate": 0,
+        "finalPoints": 60,
+        "longestStreak": 0,
+        "streak": 0,
+        "updatedAt": 1779666534771
+      }
+    },
+    "USER_UID": {
+      "activities": {
+        "workout": {
+          "sessionsDone": 12,
+          "weeklyProgress": {
+            "week1": {
+              "done": 5
+            },
+            "week2": {
+              "done": 3
+            },
+            "week3": {
+              "done": 0
+            },
+            "week4": {
+              "done": 0
+            }
+          },
+          "weeksCompleted": 2
+        }
+      },
+      "posts": {
+        "-OrkuQnVIRa4Si4UUt1W": true
+      },
+      "profile": {
+        "avatar": "",
+        "gender": "female",
+        "memberSince": "2024",
+        "name": "Linh Nguyenvbcvb  bfdg",
+        "username": "@linh.nguyen"
+      },
+      "stats": {
+        "activeDays": 31,
+        "completionRate": 78,
+        "streak": 14,
+        "totalHabitsDone": 87
+      }
+    }
+  }
+  
+}
+
+

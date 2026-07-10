@@ -23,133 +23,158 @@ import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
+import moment from 'moment';
 
 const { width: SW } = Dimensions.get('window');
 const CHART_HEIGHT = 220;
 const PADDING = 20;
 const BAR_WIDTH = 14;
 const ITEM_WIDTH = 30;
-const USER_ID = auth().currentUser?.uid;
 
-const getDateKey = (date = new Date()) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`; // "2026-04-01"
+const getDateKey = (date = moment()) => {
+  return moment(date).format('YYYY-MM-DD');
 };
 
-export default function SugarChart30Days({ navigation }) {
+export default function SugarChart30Days({ route }) {
+  const today = moment();
+  const CURRENT_MONTH_KEY =
+    route?.params?.monthKey ?? today.format('MMMM_YYYY');
+
   const [product, setProduct] = useState('');
   const [sugarInput, setSugarInput] = useState('');
   const [selected, setSelected] = useState(10);
-  const [rawData, setRawData] = useState([]);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [todayString, setTodayString] = useState(new Date().toDateString());
-  const [startDate, setStartDate] = useState(new Date());
+  const [gender, setGender] = useState('female');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [habitDays, setHabitDays] = useState({});
+  const [todayString, setTodayString] = useState(moment().format('YYYY-MM-DD'));
+  const [startDate, setStartDate] = useState(moment().toDate());
+  const goal = gender?.toLowerCase() === 'female' ? 24 : 38;
+  const cycleStart = useMemo(() => {
+    const todayDate = moment().startOf('day');
 
-  const gender = 'female';
-  const goal = gender === 'female' ? 24 : 36;
-  const todayKey = getDateKey();
-  const selectedKey = data?.[selected]?.key;
-  const isToday = selectedKey === todayKey;
-  const todayDate = new Date();
-  todayDate.setHours(0, 0, 0, 0);
+    const base = moment(startDate).startOf('day');
 
-  const base = new Date(startDate);
-  base.setHours(0, 0, 0, 0);
+    const diffDays = todayDate.diff(base, 'days');
 
-  const diffDays = Math.floor((todayDate - base) / (1000 * 60 * 60 * 24));
+    const cycle = Math.floor(diffDays / 30);
 
-  // 👉 cycle index (0 = first 30 days, 1 = next 30 days, etc)
-  const cycle = Math.floor(diffDays / 30);
+    return moment(base).add(cycle * 30, 'days');
+  }, [startDate]);
 
-  // 👉 start of current cycle
-  const cycleStart = new Date(base);
-  cycleStart.setDate(base.getDate() + cycle * 30);
+  const rawData = useMemo(() => {
+    const monthStart = moment(CURRENT_MONTH_KEY, 'MMMM_YYYY').startOf('month');
+
+    console.log('CURRENT_MONTH_KEY =>', CURRENT_MONTH_KEY);
+    console.log('habitDays =>', habitDays);
+
+    const daysInMonth = monthStart.daysInMonth();
+
+    const baseData = Array.from({ length: daysInMonth }, (_, i) => {
+      const date = monthStart.clone().add(i, 'days');
+
+      return {
+        key: date.format('YYYY-MM-DD'),
+        date: date.toDate(),
+        sugar: 0,
+      };
+    });
+
+    console.log(
+      'Matching day sample =>',
+      baseData[0]?.key,
+      habitDays?.[baseData[0]?.key],
+    );
+
+    return baseData.map(item => {
+      const day = habitDays?.[item.key] || {};
+
+      const items = Array.isArray(day.items)
+        ? day.items
+        : Object.values(day.items || {});
+
+      const totalSugar =
+        day.progress ??
+        items.reduce((sum, i) => sum + Number(i?.sugar || 0), 0);
+
+      return {
+        ...item,
+        items,
+        sugar: Number(totalSugar),
+      };
+    });
+  }, [CURRENT_MONTH_KEY, habitDays]);
+
+  useEffect(() => {
+    if (!rawData.length) return;
+
+    const todayIndex = rawData.findIndex(d =>
+      moment(d.date).isSame(moment(), 'day'),
+    );
+
+    if (todayIndex !== -1) {
+      setSelected(todayIndex);
+    }
+  }, [rawData]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const now = new Date().toDateString();
-      if (now !== todayString) setToday(now);
+      const now = moment().format('YYYY-MM-DD');
+      if (now !== todayString) {
+        setTodayString(now);
+      }
     }, 60000);
     return () => clearInterval(interval);
   }, [todayString]);
 
   useEffect(() => {
-    if (!USER_ID) return;
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
 
-    // refs
-    const logsRef = database().ref(`users/${USER_ID}/sugarLogs`);
-    const startDateRef = database().ref(`users/${USER_ID}/goal/startDate`);
+    const userRef = database().ref(`/users/${uid}`);
 
-    // 1️⃣ Get start date ONCE
-    startDateRef.once('value').then(snapshot => {
-      const value = snapshot.val();
+    const onValueChange = snapshot => {
+      const data = snapshot.val() || {};
 
-      if (value) {
-        setStartDate(new Date(value));
-      } else {
-        const fallback = new Date();
-        fallback.setDate(fallback.getDate() - 29);
-        setStartDate(fallback);
-      }
-    });
+      const startDateRaw = data?.goal?.startDate;
+      const dbStartDate = startDateRaw
+        ? moment(startDateRaw).toDate()
+        : moment().toDate();
 
-    // 2️⃣ Listen to sugar logs LIVE
-    const listener = logsRef.on('value', snapshot => {
-      const data = snapshot.val();
+      setStartDate(dbStartDate);
 
-      if (data) {
-        const parsed = Object.keys(data).map(key => ({
-          date: key,
-          items: data[key]?.items || [],
-        }));
+      const habits = data?.habits?.sugarIntake || {};
 
-        setRawData(parsed);
-      } else {
-        setRawData([]);
-      }
+      const gen = data?.profile?.gender;
+      setGender(gen);
 
-      setIsLoaded(true);
-    });
+      // 👇 Add this here
+      const monthData = habits?.[CURRENT_MONTH_KEY];
 
-    // cleanup
-    return () => logsRef.off('value', listener);
-  }, [USER_ID]);
+      const days = monthData?.days || monthData?.Days || {};
 
-  const formatDate = date =>
-    date.toLocaleDateString('en-US', { day: 'numeric' });
+      setHabitDays(days);
+    };
 
+    userRef.on('value', onValueChange);
+
+    return () => userRef.off('value', onValueChange);
+  }, [CURRENT_MONTH_KEY]);
+
+  const formatDate = date => moment(date).format('D');
   const data = useMemo(() => {
-    if (!startDate) return []; // already good
+    console.log('rawData :>> ', rawData);
+    return rawData.map(d => ({
+      ...d,
+      sugar: Number(d.sugar || 0),
+    }));
+  }, [rawData]);
 
-    const base = new Date(cycleStart);
-    base.setHours(0, 0, 0, 0);
-
-    return Array.from({ length: 30 }, (_, i) => {
-      const date = new Date(base);
-      date.setDate(base.getDate() + i);
-
-      const key = getDateKey(date);
-
-      const found = rawData.find(d => d.date === key);
-
-      const totalSugar =
-        found?.items?.reduce((s, item) => s + item.sugar, 0) || 0;
-
-      return {
-        date,
-        sugar: totalSugar,
-        items: found?.items || [],
-        key,
-      };
-    });
-  }, [rawData, cycleStart]);
-
-  const max = Math.max(...data.map(d => d.sugar), goal);
+  const max = Math.max(...data.map(d => d.sugar), goal, 1);
   const graphHeight = CHART_HEIGHT - PADDING * 2;
-  const getBarHeight = val => (val / max) * graphHeight;
+  const getBarHeight = val => {
+    if (!max) return 0;
+    return (val / max) * graphHeight;
+  };
 
   const getColor = val => {
     if (val > goal) return '#ef4444';
@@ -163,13 +188,13 @@ export default function SugarChart30Days({ navigation }) {
   const remainingDays = 30 - (selected + 1);
   const requiredAvg =
     remainingDays > 0 ? Math.max(0, (goal * 30 - total) / remainingDays) : 0;
+  const selectedDate = rawData?.[selected]?.date;
+  const isToday = selectedDate && moment(selectedDate).isSame(moment(), 'day');
 
-  const todayIndex = Math.floor(
-    (new Date() - startDate) / (1000 * 60 * 60 * 24),
+  const todayIndex = data.findIndex(d =>
+    moment(d.date).isSame(moment(), 'day'),
   );
-  const todayIndexSafe = todayIndex >= 0 && todayIndex < 30 ? todayIndex : -1;
-  const todayExceeded =
-    todayIndexSafe !== -1 && data[todayIndexSafe]?.sugar > goal;
+  const todayExceeded = todayIndex !== -1 && data[todayIndex]?.sugar > goal;
   const trendPoints = data
     .map((d, i) => {
       const x = i * ITEM_WIDTH + ITEM_WIDTH / 2;
@@ -179,41 +204,66 @@ export default function SugarChart30Days({ navigation }) {
     .join(' ');
 
   const handleAddSugar = async () => {
-    if (!product || !sugarInput) return;
+    const sugarValue = Number(sugarInput);
+
+    if (!product?.trim() || !sugarInput || sugarValue <= 0) {
+      return;
+    }
+
+    if (sugarValue > 40) {
+      setErrorMsg('You cannot add more than 40g of sugar at one time.');
+      return;
+    }
 
     const newItem = {
-      name: product,
-      sugar: Number(sugarInput),
+      name: product.trim(),
+      sugar: sugarValue,
     };
 
     await saveSugarData(newItem);
 
     setProduct('');
     setSugarInput('');
+    setErrorMsg('');
   };
 
   const saveSugarData = async newItem => {
-    try {
-      const dateKey = getDateKey();
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
 
-      const ref = database().ref(`users/${USER_ID}/sugarLogs/${dateKey}`);
+    const dateKey = getDateKey();
+    const monthName = moment().format('MMMM');
+    const year = moment().format('YYYY');
+    const habitKey = `${monthName}_${year}`;
 
-      const snapshot = await ref.once('value');
-      const existing = snapshot.val();
+    const ref = database().ref(
+      `users/${uid}/habits/sugarIntake/${habitKey}/days/${dateKey}`,
+    );
 
-      if (existing) {
-        await ref.update({
-          items: [...(existing.items || []), newItem],
-        });
-      } else {
-        await ref.set({
-          date: dateKey,
-          items: [newItem],
-        });
-      }
-    } catch (e) {
-      console.log('Save error:', e);
-    }
+    const snapshot = await ref.once('value');
+    const existing = snapshot.val() || {};
+
+    // ✅ existing items array
+    const existingItems = existing.items || [];
+
+    const updatedItems = [
+      ...existingItems,
+      {
+        name: newItem.name,
+        sugar: Number(newItem.sugar),
+        createdAt: moment().valueOf(),
+      },
+    ];
+
+    const totalProgress = updatedItems.reduce(
+      (sum, item) => sum + item.sugar,
+      0,
+    );
+
+    await ref.update({
+      items: updatedItems,
+      progress: totalProgress,
+    });
   };
 
   const chartTotalWidth = ITEM_WIDTH * 30;
@@ -223,10 +273,10 @@ export default function SugarChart30Days({ navigation }) {
       <Header
         header={'Sugar Intake'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />
+
       <Text style={styles.heroTitle}>🍬 30-Day Sugar Tracker</Text>
       <Text style={styles.heroSub}>
         Daily limit: {goal}g · Tap a bar to see day details
@@ -328,7 +378,7 @@ export default function SugarChart30Days({ navigation }) {
                           styles.barLabel,
                           {
                             position: 'absolute',
-                            bottom: PADDING + barHeight + 4,
+                            // bottom: PADDING + barHeight + 4,
                           },
                         ]}
                       >
@@ -375,11 +425,7 @@ export default function SugarChart30Days({ navigation }) {
         <View style={styles.detailCard}>
           <View style={styles.detailHeader}>
             <Text style={styles.detailTitle}>
-              🍽{' '}
-              {data[selected]?.date.toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-              })}
+              🍽 {moment(data[selected]?.date).format('MMM D')}
             </Text>
             <View
               style={[
@@ -400,11 +446,10 @@ export default function SugarChart30Days({ navigation }) {
               </Text>
             </View>
           </View>
-
-          {data[selected]?.items.length === 0 ? (
+          {!data[selected]?.items || data[selected]?.items.length === 0 ? (
             <Text style={styles.emptyText}>No items recorded for this day</Text>
           ) : (
-            data[selected]?.items.map((item, idx) => (
+            data[selected]?.items?.map((item, idx) => (
               <View key={idx} style={styles.itemRow}>
                 <Text style={styles.itemName}>{item.name}</Text>
                 <Text
@@ -440,6 +485,18 @@ export default function SugarChart30Days({ navigation }) {
               placeholderTextColor="rgba(255,255,255,0.25)"
               style={[styles.input, { marginBottom: 0 }]}
             />
+
+            {errorMsg && (
+              <Text
+                style={{
+                  color: colors.danger,
+                  fontFamily: fontFamily.montserratRegular,
+                  fontSize: 11,
+                }}
+              >
+                {errorMsg}
+              </Text>
+            )}
 
             <TouchableOpacity
               style={[

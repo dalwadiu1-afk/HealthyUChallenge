@@ -8,6 +8,7 @@ import {
   TextInput,
   StyleSheet,
   StatusBar,
+  Alert,
 } from 'react-native';
 import Svg, {
   Path,
@@ -17,16 +18,21 @@ import Svg, {
   Rect,
   Circle,
 } from 'react-native-svg';
-import { launchCamera } from 'react-native-image-picker';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
+import moment from 'moment';
+import Modal from 'react-native-modal';
+import storage from '@react-native-firebase/storage';
 
 const TOTAL_DAYS = 7;
 const TOTAL_WEEKS = 4;
 const USER_ID = auth().currentUser?.uid;
+
+const today = moment();
 
 function GradientBg({ id, c1, c2, r = 20, horizontal = false }) {
   const x2 = horizontal ? '1' : '1';
@@ -65,100 +71,255 @@ function CameraIcon() {
   );
 }
 
-const FermentedFoodChallenge = ({ navigation }) => {
+const FermentedFoodChallenge = ({ navigation, route }) => {
+  const isArchive = !!route?.params?.monthKey;
+  const CURRENT_MONTH_KEY =
+    route?.params?.monthKey ?? today.format('MMMM_YYYY');
   const [weeks, setWeeks] = useState(
     Array(TOTAL_WEEKS)
       .fill(null)
       .map(() => Array(TOTAL_DAYS).fill(null)),
   );
-  const [currentWeek, setCurrentWeek] = useState(0);
+  const [currentWeek, setCurrentWeek] = useState(
+    route?.params?.monthKey ? 4 : 0,
+  );
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
-
+  const [startDate, setStartDate] = useState(null);
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(null);
   const completed = weeks.flat().filter(Boolean).length;
   const total = TOTAL_WEEKS * TOTAL_DAYS;
   const progress = completed / total;
-  const userRef = database().ref(`/users/${USER_ID}`);
 
   useEffect(() => {
     if (!USER_ID) return;
+    const goalRef = database().ref(`/users/${USER_ID}/goal`);
 
+    const goalListener = goalRef.on('value', snap => {
+      const data = snap.val();
+
+      if (data?.startDate) {
+        setStartDate(data.startDate);
+      }
+    });
     const ref = database().ref(`/users/${USER_ID}`);
 
     const listener = ref.on('value', snap => {
       const data = snap.val();
 
-      if (!data?.logs) return;
-
       const restored = Array.from({ length: TOTAL_WEEKS }, () =>
         Array(TOTAL_DAYS).fill(null),
       );
 
-      Object.entries(data.logs || {}).forEach(([weekKey, days]) => {
+      const weeksData =
+        data?.habits?.fermentedFood?.[CURRENT_MONTH_KEY]?.weeks || {};
+
+      Object.entries(weeksData).forEach(([weekKey, weekValue]) => {
         const weekIndex = parseInt(weekKey.replace('week', ''), 10) - 1;
 
-        if (isNaN(weekIndex) || weekIndex < 0 || weekIndex >= TOTAL_WEEKS)
-          return;
+        const days = weekValue || {};
 
-        Object.entries(days || {}).forEach(([dayKey, value]) => {
-          const dayIndex = parseInt(dayKey.replace('day', ''), 10);
+        Object.entries(days).forEach(([dayKey, value]) => {
+          const dayIndex = parseInt(dayKey.replace('day', ''), 10) - 1;
 
-          if (isNaN(dayIndex) || dayIndex < 0 || dayIndex >= TOTAL_DAYS) return;
-
-          if (!restored[weekIndex]) return;
-
-          restored[weekIndex][dayIndex] = value;
+          if (
+            weekIndex >= 0 &&
+            weekIndex < TOTAL_WEEKS &&
+            dayIndex >= 0 &&
+            dayIndex < TOTAL_DAYS
+          ) {
+            restored[weekIndex][dayIndex] = value;
+          }
         });
       });
 
       setWeeks(restored);
     });
 
-    return () => ref.off('value', listener);
+    return () => {
+      return () => {
+        goalRef.off();
+        ref.off();
+      };
+    };
   }, []);
+
+  useEffect(() => {
+    if (!startDate) return;
+
+    const start = moment(startDate, 'YYYY-MM-DD').startOf('day');
+
+    const today = moment().startOf('day');
+
+    const diffDays = today.diff(start, 'days');
+
+    const week = Math.min(TOTAL_WEEKS - 1, Math.floor(diffDays / TOTAL_DAYS));
+
+    const day = Math.min(TOTAL_DAYS - 1, diffDays % TOTAL_DAYS);
+
+    setCurrentWeek(week);
+    setCurrentDayIndex(day);
+  }, [startDate]);
+
+  const showImagePicker = dayIndex => {
+    setSelectedDay(dayIndex);
+    setPickerVisible(true);
+  };
+
+  const uploadImageToFirebase = async uri => {
+    try {
+      const fileName = `fermentedFood/${USER_ID}/${Date.now()}.jpg`;
+
+      const reference = storage().ref(fileName);
+
+      await reference.putFile(uri);
+
+      const downloadURL = await reference.getDownloadURL();
+
+      return downloadURL;
+    } catch (error) {
+      console.log('Image Upload Error:', error);
+      return null;
+    }
+  };
 
   const saveToDB = async updatedWeeks => {
     if (!USER_ID) return;
 
-    const updates = {};
+    const basePath = `users/${USER_ID}/habits/fermentedFood/${CURRENT_MONTH_KEY}`;
 
+    const updates = {
+      [`${basePath}/title`]: 'fermented Food Challenge',
+      [`${basePath}/target`]: 'Take Pic every',
+    };
     updatedWeeks.forEach((week, weekIndex) => {
-      week.forEach((day, dayIndex) => {
-        if (!day) return;
+      const weekKey = `week${weekIndex + 1}`;
 
-        updates[`logs/week${weekIndex + 1}/day${dayIndex}`] = day;
+      week.forEach((meal, dayIndex) => {
+        if (!meal) return;
+
+        const mealKey = `day${dayIndex + 1}`;
+
+        updates[`${basePath}/weeks/${weekKey}/${mealKey}`] = meal;
       });
     });
 
-    await database().ref(`/users/${USER_ID}`).update(updates);
+    await database().ref().update(updates);
   };
 
-  const pickImage = async dayIndex => {
-    if (dayIndex !== currentDayIndex) return;
+  const openCamera = async () => {
+    const { canUpload } = getDayAccess(
+      currentWeek,
+      dayIndex,
+      weeks[currentWeek][dayIndex],
+    );
+
+    if (!canUpload) return;
+    setPickerVisible(false);
+
+    const dayIndex = selectedDay;
+
+    const { isToday } = getDayAccess(
+      currentWeek,
+      dayIndex,
+      weeks[currentWeek][dayIndex],
+    );
+
+    const item = weeks[currentWeek][dayIndex];
+
+    if (!isToday && !item) return;
+
     const granted = await requestCameraPermission();
+
     if (!granted) return;
 
-    launchCamera({ mediaType: 'photo', quality: 0.7 }, response => {
-      if (response.didCancel || response.errorCode) return;
-      if (response?.assets?.length > 0) {
-        const nw = weeks.map(w => [...w]);
-        nw[currentWeek][dayIndex] = {
-          uri: response.assets[0].uri,
-          label: '',
-          timestamp: new Date().toLocaleString(),
-        };
-        setWeeks(nw);
-        saveToDB(nw);
-        if (dayIndex < TOTAL_DAYS - 1) {
-          setCurrentDayIndex(p => p + 1);
-        } else if (currentWeek < TOTAL_WEEKS - 1) {
-          setCurrentWeek(p => p + 1);
-          setCurrentDayIndex(0);
-        }
-      }
-    });
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        saveToPhotos: true,
+      },
+      response => {
+        if (response.didCancel || response.errorCode) return;
+
+        const uri = response?.assets?.[0]?.uri;
+
+        if (!uri) return;
+
+        saveImage(dayIndex, uri);
+      },
+    );
   };
 
-  const updateLabel = (dayIndex, text) => {
+  const saveImage = async (dayIndex, localUri) => {
+    try {
+      const imageUrl = await uploadImageToFirebase(localUri);
+
+      if (!imageUrl) return;
+
+      const nw = weeks.map(w => [...w]);
+
+      nw[currentWeek][dayIndex] = {
+        uri: imageUrl,
+        label: '',
+        timestamp: moment().format('MMMM D, YYYY hh:mm A'),
+        uploadedAt: database.ServerValue.TIMESTAMP,
+      };
+
+      setWeeks(nw);
+
+      await saveToDB(nw);
+
+      if (dayIndex < TOTAL_DAYS - 1) {
+        setCurrentDayIndex(prev => prev + 1);
+      } else if (currentWeek < TOTAL_WEEKS - 1) {
+        setCurrentWeek(prev => prev + 1);
+        setCurrentDayIndex(0);
+      }
+    } catch (error) {
+      console.log('Save Image Error:', error);
+    }
+  };
+
+  const openGallery = async () => {
+    const { canUpload } = getDayAccess(
+      currentWeek,
+      dayIndex,
+      weeks[currentWeek][dayIndex],
+    );
+
+    if (!canUpload) return;
+    setPickerVisible(false);
+
+    const dayIndex = selectedDay;
+
+    const { isToday } = getDayAccess(
+      currentWeek,
+      dayIndex,
+      weeks[currentWeek][dayIndex],
+    );
+
+    if (!isToday) return;
+
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        selectionLimit: 1,
+      },
+      response => {
+        if (response.didCancel || response.errorCode) return;
+
+        const uri = response?.assets?.[0]?.uri;
+
+        if (!uri) return;
+
+        saveImage(dayIndex, uri);
+      },
+    );
+  };
+
+  const updateLabel = async (dayIndex, text) => {
     const nw = weeks.map(w => [...w]);
 
     nw[currentWeek][dayIndex] = {
@@ -167,16 +328,110 @@ const FermentedFoodChallenge = ({ navigation }) => {
     };
 
     setWeeks(nw);
-    saveToDB(nw);
+
+    const weekKey = `week${currentWeek + 1}`;
+    const dayKey = `day${dayIndex + 1}`;
+
+    await database()
+      .ref(
+        `users/${USER_ID}/habits/fermentedFood/${CURRENT_MONTH_KEY}/weeks/${weekKey}/${dayKey}`,
+      )
+      .update({
+        label: text,
+      });
   };
 
-  const deletePhoto = dayIndex => {
+  const deletePhoto = async dayIndex => {
+    const { canEditLabel } = getDayAccess(
+      currentWeek,
+      dayIndex,
+      weeks[currentWeek][dayIndex],
+    );
+
+    if (!canEditLabel) return;
+
     const nw = weeks.map(w => [...w]);
 
     nw[currentWeek][dayIndex] = null;
 
     setWeeks(nw);
-    saveToDB(nw);
+
+    const weekKey = `week${currentWeek + 1}`;
+    const dayKey = `day${dayIndex + 1}`;
+
+    await database()
+      .ref(
+        `users/${USER_ID}/habits/fermentedFood/${CURRENT_MONTH_KEY}/weeks/${weekKey}/${dayKey}`,
+      )
+      .remove();
+  };
+
+  const getDayAccess = (week, day, item) => {
+    const isDone = !!item;
+
+    // 🔥 ARCHIVE MODE (NO UPLOAD ALLOWED)
+    if (isArchive) {
+      return {
+        isPast: true,
+        isFuture: false,
+        isToday: false,
+        isDone,
+        isMissed: !isDone, // 🔥 KEY FIX
+        isLocked: true,
+        canUpload: false,
+        canEditLabel: false,
+      };
+    }
+
+    // NORMAL MODE (ACTIVE MONTH)
+    if (!startDate) {
+      return {
+        isPast: false,
+        isFuture: false,
+        isToday: false,
+        isDone,
+        isMissed: false,
+        isLocked: true,
+        canUpload: false,
+        canEditLabel: false,
+      };
+    }
+
+    const start = moment(startDate).startOf('day');
+    const today = moment().startOf('day');
+
+    const diffDays = today.diff(start, 'days');
+    const globalIndex = week * TOTAL_DAYS + day;
+
+    const isPast = globalIndex < diffDays;
+    const isFuture = globalIndex > diffDays;
+    const isToday = globalIndex === diffDays;
+
+    const isMissed = isPast && !isDone;
+
+    return {
+      isPast,
+      isFuture,
+      isToday,
+      isDone,
+      isMissed,
+      isLocked: isFuture,
+      canUpload: isToday && !isDone,
+      canEditLabel: isToday && isDone,
+    };
+  };
+
+  const markMealDone = async (weekKey, mealKey, mealData) => {
+    if (!USER_ID) return;
+
+    await database()
+      .ref(
+        `users/${USER_ID}/habits/fermentedFood/${CURRENT_MONTH_KEY}/weeks/${weekKey}/${mealKey}`,
+      )
+      .update({
+        ...mealData,
+        done: true,
+      });
   };
 
   return (
@@ -184,7 +439,6 @@ const FermentedFoodChallenge = ({ navigation }) => {
       <Header
         header={'🥒 Fermented Food'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />
@@ -219,6 +473,7 @@ const FermentedFoodChallenge = ({ navigation }) => {
           {Array.from({ length: TOTAL_WEEKS }).map((_, i) => {
             const weekDone = weeks[i]?.every(Boolean);
             const isActive = currentWeek === i;
+
             return (
               <TouchableOpacity
                 key={i}
@@ -266,7 +521,7 @@ const FermentedFoodChallenge = ({ navigation }) => {
               Week {currentWeek + 1} Progress
             </Text>
             <Text style={styles.weekProgressCount}>
-              {weeks[currentWeek].filter(Boolean).length}/{TOTAL_DAYS} days
+              {weeks[currentWeek]?.filter(Boolean).length}/{TOTAL_DAYS} days
             </Text>
           </View>
           <View style={styles.dayDots}>
@@ -275,9 +530,9 @@ const FermentedFoodChallenge = ({ navigation }) => {
                 key={i}
                 style={[
                   styles.dayDot,
-                  weeks[currentWeek][i] && styles.dayDotDone,
+                  weeks?.[currentWeek]?.[i] && styles.dayDotDone,
                   i === currentDayIndex &&
-                    !weeks[currentWeek][i] &&
+                    !weeks?.[currentWeek]?.[i] &&
                     styles.dayDotCurrent,
                 ]}
               />
@@ -287,10 +542,21 @@ const FermentedFoodChallenge = ({ navigation }) => {
 
         {/* Day cards */}
         {Array.from({ length: TOTAL_DAYS }).map((_, dayIndex) => {
-          const item = weeks[currentWeek][dayIndex];
-          const isLocked = dayIndex > currentDayIndex;
-          const isCurrent = dayIndex === currentDayIndex;
-          const isDone = !!item;
+          const item = weeks?.[currentWeek]?.[dayIndex];
+          const {
+            isPast,
+            isFuture,
+            isDone,
+            isMissed,
+            canEditLabel,
+            isToday,
+            canUpload,
+            isLocked,
+          } = getDayAccess(currentWeek, dayIndex, item);
+          const globalIndex = currentWeek * TOTAL_DAYS + dayIndex;
+          const todayIndex = currentWeek * TOTAL_DAYS + currentDayIndex;
+
+          const isCurrent = globalIndex === todayIndex;
 
           return (
             <View
@@ -323,33 +589,70 @@ const FermentedFoodChallenge = ({ navigation }) => {
                   Week {currentWeek + 1} · Day {dayIndex + 1}
                 </Text>
                 {isDone && (
-                  <View style={styles.donePill}>
-                    <Text style={styles.donePillText}>Done</Text>
-                  </View>
+                  <TouchableOpacity
+                    style={styles.doneBtn}
+                    onPress={() => {
+                      const weekKey = `week${currentWeek + 1}`;
+                      const mealKey = `day${dayIndex + 1}`;
+
+                      const mealData = weeks[currentWeek][dayIndex];
+
+                      markMealDone(weekKey, mealKey, mealData);
+                    }}
+                  >
+                    <Text style={styles.doneText}>Done</Text>
+                  </TouchableOpacity>
                 )}
                 {isCurrent && !isDone && (
                   <View style={styles.activePill}>
                     <Text style={styles.activePillText}>Upload Now</Text>
                   </View>
                 )}
-                {isLocked && <Text style={styles.lockIcon}>🔒</Text>}
+                {isLocked && !isDone && (
+                  <Text style={styles.lockIcon}>{isMissed ? '❌' : '🔒'}</Text>
+                )}
               </View>
 
               {isDone ? (
                 <View>
                   <Image source={{ uri: item.uri }} style={styles.photo} />
+
                   <TextInput
+                    editable={canEditLabel} // ONLY TODAY editable after upload
                     value={item.label}
-                    onChangeText={t => updateLabel(dayIndex, t)}
+                    onChangeText={t => {
+                      if (!canEditLabel) return;
+
+                      const nw = weeks.map(w => [...w]);
+                      nw[currentWeek][dayIndex] = {
+                        ...nw[currentWeek][dayIndex],
+                        label: t,
+                      };
+                      setWeeks(nw);
+                    }}
+                    onEndEditing={e => {
+                      if (!canEditLabel) return;
+                      updateLabel(dayIndex, e.nativeEvent.text);
+                    }}
                     placeholder="e.g. Yogurt, Kimchi, Kombucha…"
                     placeholderTextColor="rgba(255,255,255,0.25)"
                     style={styles.labelInput}
                   />
-                  <Text style={styles.timestamp}>{item.timestamp}</Text>
+                  <Text style={styles.timestamp}>{item?.timestamp}</Text>
                   <View style={styles.actionRow}>
                     <TouchableOpacity
                       style={styles.retakeBtn}
-                      onPress={() => pickImage(dayIndex)}
+                      onPress={() => {
+                        const { canUpload } = getDayAccess(
+                          currentWeek,
+                          dayIndex,
+                          item,
+                        );
+
+                        if (!canUpload) return; // 🔥 BLOCKS archived + future
+
+                        showImagePicker(dayIndex);
+                      }}
                     >
                       <Text style={styles.retakeText}>Retake</Text>
                     </TouchableOpacity>
@@ -364,18 +667,30 @@ const FermentedFoodChallenge = ({ navigation }) => {
                     </TouchableOpacity>
                   </View>
                 </View>
-              ) : isLocked ? (
+              ) : isMissed ? (
+                <View style={styles.missedBox}>
+                  <Text style={styles.lockEmoji}>❌</Text>
+                  <Text style={styles.lockedSub}>Missed Day</Text>
+                </View>
+              ) : isFuture ? (
                 <View style={styles.lockedBox}>
                   <Text style={styles.lockEmoji}>🔒</Text>
-                  <Text style={styles.lockedSub}>
-                    Complete previous days first
-                  </Text>
+                  <Text style={styles.lockedSub}>Not available yet</Text>
                 </View>
               ) : (
                 <TouchableOpacity
                   style={styles.uploadBtn}
-                  onPress={() => pickImage(dayIndex)}
-                  activeOpacity={0.8}
+                  onPress={() => {
+                    const { canUpload } = getDayAccess(
+                      currentWeek,
+                      dayIndex,
+                      item,
+                    );
+
+                    if (!canUpload) return; // 🔥 BLOCKS archived + future
+
+                    showImagePicker(dayIndex);
+                  }}
                 >
                   <CameraIcon />
                   <Text style={styles.uploadText}>Upload Photo</Text>
@@ -385,13 +700,52 @@ const FermentedFoodChallenge = ({ navigation }) => {
           );
         })}
       </Wrapper>
+      <Modal
+        isVisible={pickerVisible}
+        onBackdropPress={() => setPickerVisible(false)}
+        backdropOpacity={0.7}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Upload Photo</Text>
+
+            <Text style={styles.modalSubtitle}>
+              Choose where you'd like to get your photo from
+            </Text>
+
+            <TouchableOpacity style={styles.modalButton} onPress={openCamera}>
+              <Text style={styles.modalButtonText}>📷 Camera</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalButton} onPress={openGallery}>
+              <Text style={styles.modalButtonText}>🖼 Gallery</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setPickerVisible(false)}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.dark },
-
+  missedBox: {
+    height: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,0,0,0.05)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,0,0,0.2)',
+  },
   heroBg: { paddingBottom: 20, overflow: 'hidden' },
   header: {
     flexDirection: 'row',
@@ -667,6 +1021,22 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: 'rgba(143,175,120,0.04)',
   },
+
+  doneBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 49,
+    backgroundColor: 'rgba(143,175,120,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.4)',
+  },
+
+  doneText: {
+    color: colors.secondary,
+    fontSize: 11,
+    fontFamily: fontFamily.interSemiBold,
+  },
+
   uploadText: {
     color: 'rgba(255,255,255,0.3)',
     fontSize: 13,
@@ -684,6 +1054,71 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.2)',
     fontSize: 11,
     fontFamily: fontFamily.interRegular,
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+
+  modalCard: {
+    width: '100%',
+    borderRadius: 24,
+    padding: 24,
+    backgroundColor: colors.bubbleDark,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 20,
+    textAlign: 'center',
+    marginBottom: 8,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  modalSubtitle: {
+    color: colors.grey,
+    textAlign: 'center',
+    marginBottom: 24,
+    fontSize: 13,
+    fontFamily: fontFamily.montserratRegular,
+  },
+
+  modalButton: {
+    height: 54,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    backgroundColor: 'rgba(143,175,120,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.25)',
+  },
+
+  modalButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  cancelButton: {
+    marginTop: 8,
+    height: 52,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+
+  cancelText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });
 

@@ -4,155 +4,296 @@ import {
   Text,
   TouchableOpacity,
   Image,
-  ScrollView,
   StyleSheet,
   StatusBar,
   Dimensions,
+  Alert,
 } from 'react-native';
-import { launchCamera } from 'react-native-image-picker';
+import Modal from 'react-native-modal';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import Svg, { Path } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import { Header, Wrapper } from '../../../components';
+import moment from 'moment';
+import storage from '@react-native-firebase/storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const USER_ID = auth().currentUser?.uid;
 
-const getToday = () => new Date().toISOString().split('T')[0];
-const TOTAL_DAYS = 30;
+const today = moment();
+
 const CARD_SIZE = (SCREEN_WIDTH - 18 * 2 - 10) / 2;
 
-const HalfPlateFruitsVeggies = ({ navigation }) => {
-  const [photos, setPhotos] = useState(Array(TOTAL_DAYS).fill(null));
-  const [currentIndex, setCurrentIndex] = useState(0);
+const HalfPlateFruitsVeggies = ({ navigation, route }) => {
+  const CURRENT_MONTH_KEY = route?.params?.monthKey
+    ? route?.params?.monthKey
+    : today.format('MMMM_YYYY');
+  const [habitData, setHabitData] = useState({});
+  const [imagePickerVisible, setImagePickerVisible] = useState(false);
+  const [selectedDayKey, setSelectedDayKey] = useState(null);
   const [startDate, setStartDate] = useState(null);
+  const showImagePicker = dayKey => {
+    if (route?.params?.monthKey) {
+      Alert.alert(
+        'Delete Not Allowed',
+        'Photos can only be uploaded during the current month.',
+      );
+    } else {
+      setSelectedDayKey(dayKey);
+      setImagePickerVisible(true);
+    }
+  };
+
+  const openCamera = async () => {
+    setImagePickerVisible(false);
+
+    const granted = await requestCameraPermission();
+    if (!granted) return;
+
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.7,
+      },
+      async res => {
+        if (res.didCancel || res.errorCode) return;
+
+        const uri = res?.assets?.[0]?.uri;
+        if (!uri) return;
+
+        await saveDay(selectedDayKey, uri);
+      },
+    );
+  };
+
+  const openGallery = async () => {
+    setImagePickerVisible(false);
+
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        quality: 0.7,
+        selectionLimit: 1,
+      },
+      async res => {
+        if (res.didCancel || res.errorCode) return;
+
+        const uri = res?.assets?.[0]?.uri;
+        if (!uri) return;
+
+        await saveDay(selectedDayKey, uri);
+      },
+    );
+  };
 
   useEffect(() => {
     if (!USER_ID) return;
 
-    const ref = database().ref(`users/${USER_ID}/logs/halfPlateChallenge`);
+    const ref = database().ref(`users/${USER_ID}/goal`);
+    const userProfile = database().ref(`users/${USER_ID}/profile`);
+    if (route?.params?.monthKey) {
+      const listener = userProfile.on('value', snapshot => {
+        const data = snapshot.val();
+        if (data?.memberSince) {
+          setStartDate(moment(data?.memberSince).format('YYYY-MM-DD')); // "2026-05-10"
+        }
+      });
+      return () => ref.off('value', listener);
+    } else {
+      const listener = ref.on('value', snapshot => {
+        const data = snapshot.val();
+
+        if (data?.startDate) {
+          setStartDate(data.startDate); // "2026-05-10"
+        }
+      });
+      return () => ref.off('value', listener);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!USER_ID) return;
+
+    const ref = database().ref(
+      `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}`,
+    );
 
     const listener = ref.on('value', snapshot => {
       const data = snapshot.val();
-
-      if (!data) return;
-
-      // restore start date
-      if (data.startDate) {
-        const sd = new Date(data.startDate);
-        setStartDate(sd);
-
-        const diff = Math.floor((new Date() - sd) / (1000 * 60 * 60 * 24));
-
-        setCurrentIndex(Math.min(diff, TOTAL_DAYS - 1));
+      if (data) {
+        setHabitData(data);
+      } else {
+        setHabitData({
+          title: 'Half Plate Fruits & Veggies',
+          target: '1',
+          days: {},
+        });
       }
-
-      // restore days safely
-      const serverDays = data?.days || {};
-      const restored = Array(TOTAL_DAYS).fill(null);
-
-      Object.entries(serverDays).forEach(([day, value]) => {
-        restored[Number(day) - 1] = value;
-      });
-
-      setPhotos(restored);
     });
 
     return () => ref.off('value', listener);
   }, []);
 
-  const saveDay = async (index, uri) => {
-    const ref = database().ref(`users/${USER_ID}/logs/halfPlateChallenge`);
+  const startMoment = startDate ? moment(startDate, 'YYYY-MM-DD') : null;
 
-    const timestamp = new Date().toISOString();
+  const TOTAL_DAYS = startMoment ? moment().endOf('month').date() : 0;
 
-    await ref.update({
-      startDate: startDate?.toISOString() || new Date().toISOString(),
+  /* =========================================
+    UPLOAD IMAGE TO FIREBASE STORAGE
+========================================= */
+  const uploadMealPhoto = async (dayKey, localUri) => {
+    try {
+      const storagePath = `halfPlateChallenge/${USER_ID}/${CURRENT_MONTH_KEY}/${dayKey}.jpg`;
 
-      [`days/${index + 1}`]: {
-        uri,
-        timestamp,
-      },
+      const reference = storage().ref(storagePath);
 
-      updatedAt: database.ServerValue.TIMESTAMP,
-    });
-  };
+      await reference.putFile(localUri);
 
-  const pickImage = async index => {
-    const granted = await requestCameraPermission();
-    if (!granted) return;
+      const downloadURL = await reference.getDownloadURL();
 
-    launchCamera({ mediaType: 'photo', quality: 0.7 }, async res => {
-      if (res.didCancel || res.errorCode) return;
-
-      const uri = res?.assets?.[0]?.uri;
-      if (!uri) return;
-
-      const updated = [...photos];
-      updated[index] = {
-        uri,
-        timestamp: new Date().toISOString(),
+      return {
+        success: true,
+        imageUrl: downloadURL,
+        storagePath,
       };
+    } catch (error) {
+      console.log('UPLOAD ERROR:', error);
 
-      setPhotos(updated);
-
-      await saveDay(index, uri);
-    });
+      return {
+        success: false,
+        error,
+      };
+    }
   };
 
-  const deletePhoto = async index => {
-    const newPhotos = [...photos];
-    newPhotos[index] = null;
-    setPhotos(newPhotos);
+  const saveDay = async (dayKey, localUri) => {
+    if (route?.params?.monthKey) {
+      Alert.alert(
+        'Upload Not Allowed',
+        'Photos can only be uploaded during the current month.',
+      );
+    } else {
+      try {
+        const uploadResult = await uploadMealPhoto(dayKey, localUri);
 
-    const docRef = doc(db, 'users', USER_ID);
+        if (!uploadResult.success) {
+          return;
+        }
 
-    await setDoc(
-      docRef,
-      {
-        logs: {
-          halfPlateChallenge: {
-            days: {
-              [index + 1]: null,
-            },
+        const { imageUrl, storagePath } = uploadResult;
+
+        const ref = database().ref(
+          `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}`,
+        );
+
+        await ref.update({
+          title: 'Half Plate Fruits & Veggies',
+          target: '1 Photo',
+          startedAt: habitData?.startedAt || moment().toISOString(),
+
+          [`days/${dayKey}`]: {
+            imageUrl,
+            storagePath,
+            completed: true,
+            timestamp: moment().toISOString(),
+            uploadedAt: Date.now(),
           },
-        },
-      },
-      { merge: true },
-    );
+
+          updatedAt: database.ServerValue.TIMESTAMP,
+        });
+
+        console.log('Photo saved successfully');
+      } catch (error) {
+        console.log('SAVE ERROR:', error);
+      }
+    }
   };
 
-  const completed = photos.filter(Boolean).length;
-  const progress = completed / TOTAL_DAYS;
+  const deletePhoto = async dayKey => {
+    if (route?.params?.monthKey) {
+      Alert.alert(
+        'Delete Not Allowed',
+        'Photos can only be uploaded during the current month.',
+      );
+    } else {
+      try {
+        const snapshot = await database()
+          .ref(
+            `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}/days/${dayKey}`,
+          )
+          .once('value');
+
+        const data = snapshot.val();
+
+        if (data?.storagePath) {
+          await storage().ref(data.storagePath).delete();
+        }
+
+        await database()
+          .ref(
+            `users/${USER_ID}/habits/halfPlateChallenge/${CURRENT_MONTH_KEY}/days/${dayKey}`,
+          )
+          .remove();
+
+        console.log('Photo deleted');
+      } catch (error) {
+        console.log('DELETE ERROR:', error);
+      }
+    }
+  };
+
+  const days = habitData?.days || {};
+
+  const completed = Object.values(days).filter(item => item?.completed).length;
+
+  const progress = TOTAL_DAYS ? completed / TOTAL_DAYS : 0;
 
   // Pair days into rows of 2
-  const rows = Array.from({ length: Math.ceil(TOTAL_DAYS / 2) }, (_, i) => [
-    i * 2,
-    i * 2 + 1 < TOTAL_DAYS ? i * 2 + 1 : null,
-  ]);
+  const rows = Array.from({ length: Math.ceil(TOTAL_DAYS / 2) }, (_, i) => {
+    const day1 = i * 2 + 1;
+    const day2 = i * 2 + 2;
 
-  const DayCard = ({ index }) => {
-    if (index === null) return <View style={{ width: CARD_SIZE }} />;
+    return [day1, day2 <= TOTAL_DAYS ? day2 : null];
+  });
 
-    const item = photos[index];
-    const isLocked = index > currentIndex;
-    const isDone = !!item;
+  const DayCard = ({ dayNumber }) => {
+    if (!dayNumber) return <View style={{ width: CARD_SIZE }} />;
+
+    const dateKey = startMoment
+      ? moment(startMoment)
+          .add(dayNumber - 1, 'days')
+          .format('YYYY-MM-DD')
+      : null;
+
+    const item = days?.[dateKey];
+
+    // LOCK OLD DAYS
+    const dayMoment = startMoment
+      ? moment(startMoment).add(dayNumber - 1, 'days')
+      : null;
+
+    const isToday = dayMoment ? dayMoment.isSame(moment(), 'day') : false;
+    const isPastDay = dayMoment ? dayMoment.isBefore(moment(), 'day') : false;
+    const isFuture = dayMoment ? dayMoment.isAfter(moment(), 'day') : false;
+
+    const isLocked = isPastDay || isFuture;
+
+    const isDone = !!item?.completed;
 
     return (
       <View
         style={[
           styles.card,
           isDone && styles.cardDone,
-          isLocked && styles.cardLocked,
+          isLocked && !isDone && styles.cardLocked,
         ]}
       >
-        {/* Day label */}
         <View style={styles.cardHeader}>
-          <Text style={[styles.dayLabel, isLocked && styles.dayLabelLocked]}>
-            Day {index + 1}
-          </Text>
+          <Text style={styles.dayLabel}>Day {dayNumber}</Text>
+
           {isDone && (
             <View style={styles.doneBadge}>
               <Text style={styles.doneBadgeText}>✓</Text>
@@ -160,35 +301,47 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
           )}
         </View>
 
-        {/* Content */}
-        {isDone ? (
+        {isDone || item?.uri || item?.imageUrl ? (
           <View style={styles.photoWrap}>
-            <Image source={{ uri: item.uri }} style={styles.photo} />
-            <Text style={styles.timestamp}>{item.timestamp}</Text>
-            <View style={styles.photoActions}>
-              <TouchableOpacity
-                style={styles.retakeBtn}
-                onPress={() => pickImage(index)}
-              >
-                <Text style={styles.retakeText}>Retake</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.deleteBtn}
-                onPress={() => deletePhoto(index)}
-              >
-                <Text style={styles.deleteText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
+            <Image
+              source={{ uri: item?.uri || item?.imageUrl }}
+              style={styles.photo}
+            />
+
+            <Text style={styles.timestamp}>
+              {new Date(item.timestamp).toLocaleDateString()}
+            </Text>
+
+            {!isPastDay && (
+              <View style={styles.photoActions}>
+                <TouchableOpacity
+                  style={styles.retakeBtn}
+                  onPress={() => showImagePicker(dateKey)}
+                >
+                  <Text style={styles.retakeText}>Retake</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.deleteBtn}
+                  onPress={() => deletePhoto(dateKey)}
+                >
+                  <Text style={styles.deleteText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         ) : isLocked ? (
           <View style={styles.lockedBox}>
             <Text style={styles.lockEmoji}>🔒</Text>
-            <Text style={styles.lockedText}>Locked</Text>
+
+            <Text style={styles.lockedText}>
+              {isPastDay ? 'Missed' : 'Locked'}
+            </Text>
           </View>
         ) : (
           <TouchableOpacity
             style={styles.uploadBtn}
-            onPress={() => pickImage(index)}
+            onPress={() => showImagePicker(dateKey)}
             activeOpacity={0.8}
           >
             <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
@@ -205,6 +358,7 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
                 strokeWidth={1.8}
               />
             </Svg>
+
             <Text style={styles.uploadText}>Upload Photo</Text>
           </TouchableOpacity>
         )}
@@ -236,9 +390,22 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
           </View>
           {/* Week indicators */}
           <View style={styles.weekRow}>
-            {['W1', 'W2', 'W3', 'W4'].map((w, i) => {
+            {[0, 1, 2, 3].map(i => {
+              const start = i * 7 + 1;
+              const end = Math.min(start + 6, TOTAL_DAYS);
+
+              const weekDays = Array.from(
+                { length: end - start + 1 },
+                (_, idx) => {
+                  const day = String(start + idx).padStart(2, '0');
+                  return days?.[day];
+                },
+              );
+
               const weekDone =
-                photos.slice(i * 7, (i + 1) * 7).filter(Boolean).length === 7;
+                weekDays.filter(item => item?.completed).length ===
+                weekDays.length;
+
               return (
                 <View
                   key={i}
@@ -250,7 +417,7 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
                       weekDone && styles.weekChipTextDone,
                     ]}
                   >
-                    {w}
+                    W{i + 1}
                   </Text>
                 </View>
               );
@@ -261,10 +428,37 @@ const HalfPlateFruitsVeggies = ({ navigation }) => {
         {/* Day grid */}
         {rows.map((pair, rowIndex) => (
           <View key={rowIndex} style={styles.row}>
-            <DayCard index={pair[0]} />
-            <DayCard index={pair[1]} />
+            <DayCard dayNumber={pair[0]} />
+            <DayCard dayNumber={pair[1]} />
           </View>
         ))}
+
+        <Modal
+          isVisible={imagePickerVisible}
+          onBackdropPress={() => setImagePickerVisible(false)}
+          onBackButtonPress={() => setImagePickerVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Choose Image</Text>
+
+              <TouchableOpacity style={styles.modalBtn} onPress={openCamera}>
+                <Text style={styles.modalBtnText}>📸 Camera</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.modalBtn} onPress={openGallery}>
+                <Text style={styles.modalBtnText}>🖼 Gallery</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setImagePickerVisible(false)}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </Wrapper>
     </View>
   );
@@ -279,6 +473,52 @@ const styles = StyleSheet.create({
     paddingTop: (StatusBar.currentHeight || 44) + 8,
     paddingHorizontal: 18,
     paddingBottom: 10,
+  },
+  modalOverlay: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalCard: {
+    width: '85%',
+    backgroundColor: colors.bubbleDark,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  modalBtn: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(143,175,120,0.12)',
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+
+  modalBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  cancelBtn: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+
+  cancelText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    fontFamily: fontFamily.montserratSemiBold,
   },
   backBtn: {
     width: 44,

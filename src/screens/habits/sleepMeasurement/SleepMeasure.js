@@ -8,6 +8,7 @@ import {
   TextInput,
   StatusBar,
   ScrollView,
+  Dimensions,
 } from 'react-native';
 import Svg, {
   Circle,
@@ -22,10 +23,12 @@ import Svg, {
 import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
 import firestore from '@react-native-firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import database from '@react-native-firebase/database';
 import moment from 'moment';
 import auth from '@react-native-firebase/auth';
 import DateTimePicker from '@react-native-community/datetimepicker';
+const { height } = Dimensions.get('window');
 
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   return (
@@ -137,28 +140,27 @@ export default function SleepClock({ navigation }) {
     { key: 'manually', label: 'Manually' },
   ];
 
+  const monthKey = moment().format('MMMM_YYYY');
+  const dayKey = moment().format('YYYY-MM-DD');
   const init = async () => {
     const ref = database().ref(`users/${USER_ID}`);
     const snapshot = await ref.once('value');
+    // month/day keys
     const data = snapshot.val();
     // create if not exists
     if (!data) {
-      await ref.set({
+      await ref.update({
         goal: {
           selectedGoal: '8',
           startDate: new Date().toISOString().split('T')[0],
         },
-        activities: {
-          sleep: `${hours}h ${mins}m`,
-        },
-        logs: {},
       });
     }
 
     // live listener
     ref.on('value', snapshot => {
       const data = snapshot.val() || {};
-
+      console.log('data :>> ', data);
       setSleepData(data);
 
       if (data?.goal?.selectedGoal) {
@@ -177,8 +179,51 @@ export default function SleepClock({ navigation }) {
     return () => ref.off();
   };
 
+  const restoreSleepTimer = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('ACTIVE_SLEEP_TIMER');
+
+      if (!saved) return;
+
+      const parsed = JSON.parse(saved);
+
+      // only restore if timer was running
+      if (!parsed?.startedAt) return;
+
+      const start = new Date(parsed.startedAt);
+
+      setStarted(true);
+      setStartTime(start);
+
+      setBedTime(parsed.bedTime);
+      setBedAngle(timeToAngle(parsed.bedTime));
+
+      // calculate elapsed instantly
+      const now = new Date();
+
+      const seconds = Math.floor((now - start) / 1000);
+
+      setLiveSeconds(seconds);
+
+      const t = getNowTime();
+
+      setLiveWakeTime(t);
+      setWakeTime(t);
+
+      const minutes = Math.floor(seconds / 60);
+
+      const angle =
+        (timeToAngle(parsed.bedTime) + minutesToAngle(minutes)) % 360;
+
+      setWakeAngle(angle);
+    } catch (e) {
+      console.log('restore timer error', e);
+    }
+  };
+
   useEffect(() => {
     init();
+    restoreSleepTimer();
 
     let interval;
 
@@ -216,28 +261,42 @@ export default function SleepClock({ navigation }) {
   const handleManualSave = async () => {
     if (!bedTime || !wakeTime) return;
 
-    const selectedDate = moment(date, 'ddd, MMMM Do').format('YYYY-MM-DD');
-
-    const ref = database().ref(`users/${USER_ID}/sleepLogs/${selectedDate}`);
-
     const startAngle = timeToAngle(bedTime);
     const endAngle = timeToAngle(wakeTime);
 
     const duration = getDuration(startAngle, endAngle);
     const totalHours = duration.hours + duration.mins / 60;
 
-    await ref.set({
-      bedTime,
-      wakeTime,
-      duration: totalHours,
-      type: 'manual',
-      updatedAt: Date.now(),
-    });
+    // month + day keys
+    const monthKey = moment(date, 'ddd, MMMM Do').format('MMMM_YYYY');
+
+    // target
+    const targetHours = Number(goalInput || sleepData?.goal?.selectedGoal || 8);
+
+    await database()
+      .ref(`users/${USER_ID}/habits/sleep/${monthKey}`)
+      .update({
+        title: 'sleep',
+        target: `${targetHours} hr`,
+      });
+
+    console.log('object :>> ', dayKey);
+    // save day data
+    await database()
+      .ref(`users/${USER_ID}/habits/sleep/${monthKey}/days/${dayKey}`)
+      .update({
+        sleep: `${totalHours.toFixed(1)} hr`,
+        completed: totalHours >= targetHours,
+        bedTime,
+        wakeTime,
+        type: 'manual',
+        updatedAt: Date.now(),
+      });
   };
+
   const handleSleepToggle = async () => {
     const now = new Date();
 
-    // ✅ LOCAL DATE (fixes May 1 bug)
     const getLocalDateKey = () => {
       return (
         now.getFullYear() +
@@ -248,46 +307,67 @@ export default function SleepClock({ navigation }) {
       );
     };
 
-    // ───── START ─────
+    // ───────── START ─────────
     if (!started) {
-      const startKey = getLocalDateKey(); // ✅ FIXED
+      const startKey = getLocalDateKey();
 
       setSleepDateKey(startKey);
-
-      const ref = database().ref(`users/${USER_ID}/sleepLogs/${startKey}`);
-
       setStartTime(now);
       setStarted(true);
 
       const t = getNowTime();
+
       setBedTime(t);
       setBedAngle(timeToAngle(t));
 
-      await ref.update({
-        bedTime: t,
-      });
+      // SAVE TIMER LOCALLY
+      await AsyncStorage.setItem(
+        'ACTIVE_SLEEP_TIMER',
+        JSON.stringify({
+          startedAt: now.toISOString(),
+          bedTime: t,
+        }),
+      );
 
       return;
     }
 
-    // ───── STOP ─────
-    const ref = database().ref(`users/${USER_ID}/sleepLogs/${sleepDateKey}`);
-
+    // ───────── STOP ─────────
     setStarted(false);
 
     const wake = getNowTime();
+
     setWakeTime(wake);
     setWakeAngle(timeToAngle(wake));
 
     const duration = getDuration(bedAngle, wakeAngle);
+
     const totalHours = duration.hours + duration.mins / 60;
 
-    await ref.update({
-      bedTime,
-      wakeTime: wake,
-      duration: totalHours,
-    });
+    // target
+    const targetHours = Number(goalInput || sleepData?.goal?.selectedGoal || 8);
 
+    // create habit parent
+    await database()
+      .ref(`users/${USER_ID}/habits/sleep/${monthKey}`)
+      .update({
+        title: 'sleep',
+        target: `${targetHours} hr`,
+      });
+
+    // save sleep log inside days
+    await database()
+      .ref(`users/${USER_ID}/habits/sleep/${monthKey}/days/${dayKey}`)
+      .update({
+        sleep: `${totalHours.toFixed(1)} hr`,
+        completed: totalHours >= targetHours,
+        bedTime,
+        wakeTime: wake,
+        type: 'timer',
+        updatedAt: Date.now(),
+      });
+    // clear local timer
+    await AsyncStorage.removeItem('ACTIVE_SLEEP_TIMER');
     setStartTime(null);
     setLiveSeconds(0);
     setSleepDateKey(null);
@@ -358,7 +438,6 @@ export default function SleepClock({ navigation }) {
       <Header
         header="Sleep"
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />
@@ -594,7 +673,12 @@ export default function SleepClock({ navigation }) {
               label: 'Avg Sleep',
               value: getAverageSleep(sleepData?.logs),
             },
-            { label: 'Goal', value: sleepData?.goal?.selectedGoal + ' Hrs' },
+            {
+              label: 'Goal',
+              value: sleepData?.goal?.selectedGoal
+                ? sleepData?.goal?.selectedGoal
+                : 0 + ' Hrs',
+            },
           ].map((item, i) => (
             <View
               key={i}
@@ -607,7 +691,7 @@ export default function SleepClock({ navigation }) {
         </View>
 
         {/* ── Monthly goal input ── */}
-        {!sleepData?.goal?.selectedGoal ? (
+        {/* {!sleepData?.goal?.selectedGoal ? (
           <View style={styles.goalCard}>
             <Text style={styles.goalCardLabel}>Monthly Goal</Text>
             <TextInput
@@ -620,7 +704,7 @@ export default function SleepClock({ navigation }) {
           </View>
         ) : (
           <View />
-        )}
+        )} */}
 
         {/* ── Set Goal button ── */}
         {(tab == 'manually' || !sleepData?.goal?.selectedGoal) && (
@@ -660,6 +744,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.dark,
+    paddingBottom: height / 12.5,
   },
   scroll: {
     paddingTop: (StatusBar.currentHeight || 44) + 8,

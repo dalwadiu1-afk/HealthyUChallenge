@@ -1,25 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  Dimensions,
-  StyleSheet,
-  TouchableOpacity,
-} from 'react-native';
+import { View, Text, Dimensions, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withRepeat,
-  withSequence,
   withDelay,
   Easing,
 } from 'react-native-reanimated';
 import { colors, fontFamily } from '../../constant';
-import { Header, Hyperlink, SvgImg, Wrapper } from '../../components/index';
-import { backBtn } from '../../assets/images';
+import { Header, Hyperlink, Wrapper } from '../../components/index';
 import { AuthBtn } from '../../components/common/authBtn';
 import InputBox from '../../components/common/InputBox';
+import auth from '@react-native-firebase/auth';
 
 const { height, width } = Dimensions.get('window');
 
@@ -30,6 +22,12 @@ export default function ForgotPassword({ navigation }) {
   const formOpacity = useSharedValue(0);
   const formY = useSharedValue(40);
   const footerOpacity = useSharedValue(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState({
+    email: '',
+    general: '',
+  });
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     contentOpacity.value = withDelay(200, withTiming(1, { duration: 600 }));
@@ -60,6 +58,80 @@ export default function ForgotPassword({ navigation }) {
   const footerAnimStyle = useAnimatedStyle(() => ({
     opacity: footerOpacity.value,
   }));
+
+  const isValidEmail = email => {
+    const regex = /^[a-zA-Z0-9._%+-]+@montclair\.edu$/;
+    return regex.test(email.trim().toLowerCase());
+  };
+
+  const handleForgotPassword = async () => {
+    setError({
+      email: '',
+      general: '',
+    });
+    setSuccessMessage('');
+
+    if (!email.trim()) {
+      setError(prev => ({
+        ...prev,
+        email: 'Email is required.',
+      }));
+      return;
+    }
+
+    if (!isValidEmail(email)) {
+      setError(prev => ({
+        ...prev,
+        email:
+          'Only users with a montclair.edu email address can access this feature.',
+      }));
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await auth().sendPasswordResetEmail(email.trim());
+
+      setSuccessMessage(
+        'Password reset link has been sent to your email address.',
+      );
+    } catch (err) {
+      console.log(err);
+
+      switch (err.code) {
+        case 'auth/user-not-found':
+          setError(prev => ({
+            ...prev,
+            email: 'No account found with this email address.',
+          }));
+          break;
+
+        case 'auth/invalid-email':
+          setError(prev => ({
+            ...prev,
+            email: 'Invalid email address.',
+          }));
+          break;
+
+        case 'auth/network-request-failed':
+          setError(prev => ({
+            ...prev,
+            general: 'Network error. Please check your internet connection.',
+          }));
+          break;
+
+        default:
+          setError(prev => ({
+            ...prev,
+            general: 'Unable to send reset email. Please try again later.',
+          }));
+          break;
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -92,19 +164,54 @@ export default function ForgotPassword({ navigation }) {
                 labelStyle={styles.inputLabel}
                 inputContainerStyle={styles.textInput}
                 value={email}
-                onChangeText={setEmail}
-                placeholder="Enter your email"
-                placeholderTextColor="rgba(255,255,255,0.3)"
+                onChangeText={text => {
+                  setEmail(text);
+
+                  if (error.email) {
+                    setError(prev => ({
+                      ...prev,
+                      email: '',
+                    }));
+                  }
+                }}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                returnKeyType="next"
+                returnKeyType="done"
+                errorMessage={error.email}
               />
             </View>
 
+            {successMessage ? (
+              <Text
+                style={{
+                  color: '#4CAF50',
+                  marginBottom: 12,
+                  textAlign: 'center',
+                  fontFamily: fontFamily.montserratMedium,
+                }}
+              >
+                {successMessage}
+              </Text>
+            ) : null}
+
+            {error.general ? (
+              <Text
+                style={{
+                  color: '#FF6B6B',
+                  marginBottom: 12,
+                  textAlign: 'center',
+                  fontFamily: fontFamily.montserratMedium,
+                }}
+              >
+                {error.general}
+              </Text>
+            ) : null}
+
             <AuthBtn
-              isComplete
-              onPress={() => navigation.navigate('otp')}
-              title="Send Reset Code"
+              isComplete={email.length > 0}
+              onPress={handleForgotPassword}
+              // onPress={() => navigation.navigate('otp')}
+              title={loading ? 'Sending...' : 'Send Reset Link'}
             />
           </Animated.View>
         </View>

@@ -9,6 +9,7 @@ import {
   StyleSheet,
   StatusBar,
   Alert,
+  Platform,
 } from 'react-native';
 import Svg, {
   Path,
@@ -18,18 +19,21 @@ import Svg, {
   Rect,
   Circle,
 } from 'react-native-svg';
-import { launchCamera } from 'react-native-image-picker';
+import storage from '@react-native-firebase/storage';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import Modal from 'react-native-modal';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
 import { Header, Wrapper } from '../../../components';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
+import moment from 'moment';
+import { useSelector } from 'react-redux';
 
 const USER_ID = auth().currentUser?.uid;
+const getMonthKey = () => moment().format('MMMM_YYYY');
 
-const getDateKey = () => {
-  return new Date().toISOString().split('T')[0];
-};
+const getDateKey = () => moment().format('YYYY-MM-DD');
 
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   return (
@@ -51,61 +55,159 @@ function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   );
 }
 
+const uploadImageToFirebase = async uri => {
+  try {
+    const uid = auth().currentUser?.uid;
+
+    if (!uid) {
+      throw new Error('User not logged in');
+    }
+
+    const filename = `beverage_${Date.now()}.jpg`;
+
+    const storageRef = storage().ref(`beverages/${uid}/${filename}`);
+
+    const uploadUri = Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
+
+    await storageRef.putFile(uploadUri);
+
+    const downloadURL = await storageRef.getDownloadURL();
+
+    return downloadURL;
+  } catch (error) {
+    console.log('UPLOAD ERROR:', error);
+    throw error;
+  }
+};
+
 export default function BeverageChallengeUI({ navigation }) {
   const [photo, setPhoto] = useState(null);
   const [label, setLabel] = useState('');
   const [timestamp, setTimestamp] = useState('');
-  const [ingredients, setIngredients] = useState('');
+  const [ingredients, setIngredients] = useState([]);
+  const [ingredientInput, setIngredientInput] = useState('');
+  const [imagePickerVisible, setImagePickerVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const profile = useSelector(state => state?.user?.profile);
 
   useEffect(() => {
     if (!USER_ID) return;
 
     const dateKey = getDateKey();
+    const monthKey = getMonthKey();
 
-    const ref = database().ref(`users/${USER_ID}/logs/beverage/${dateKey}`);
+    const ref = database().ref(
+      `users/${USER_ID}/habits/beverage/${monthKey}/days/${dateKey}`,
+    );
 
     const listener = ref.on('value', snapshot => {
       const data = snapshot.val();
 
-      if (data) {
-        setPhoto(data.photo || null);
-        setLabel(data.name || '');
-        setIngredients(data.ingredients || '');
-        setTimestamp(
-          data.timestamp ? new Date(data.timestamp).toLocaleString() : '',
-        );
-      }
+      // if (data) {
+      //   setPhoto(data.photo || null);
+      //   setLabel(data.name || '');
+      //   setIngredients(data.ingredients || []);
+      //   setTimestamp(
+      //     data.timestamp
+      //       ? moment(data.timestamp).format('MMM D, YYYY • h:mm A')
+      //       : '',
+      //   );
+      // }
     });
 
     return () => ref.off('value', listener);
   }, []);
 
-  const handleCamera = async () => {
-    const granted = await requestCameraPermission();
-    if (!granted) return;
+  const addIngredient = () => {
+    const value = ingredientInput.trim();
 
-    return new Promise(resolve => {
-      launchCamera({ mediaType: 'photo', quality: 0.7 }, response => {
-        if (response.didCancel || response.errorCode) {
-          resolve(null);
-          return;
-        }
+    if (!value) return;
 
-        const uri = response?.assets?.[0]?.uri;
-        if (!uri) {
-          resolve(null);
-          return;
-        }
+    // add locally only
+    setIngredients(prev => [...prev, value]);
 
-        setPhoto(uri);
-        setTimestamp(new Date().toLocaleString());
+    setIngredientInput('');
+  };
 
-        resolve(uri);
-      });
-    });
+  const openCamera = async () => {
+    try {
+      const granted = await requestCameraPermission();
+
+      if (!granted) return;
+
+      launchCamera(
+        {
+          mediaType: 'photo',
+          quality: 0.8,
+        },
+        async response => {
+          if (response.didCancel) return;
+
+          if (response.assets?.length > 0) {
+            try {
+              setUploading(true);
+
+              const localUri = response.assets[0].uri;
+
+              const imageUrl = await uploadImageToFirebase(localUri);
+
+              setPhoto(imageUrl);
+
+              setTimestamp(moment().format('MMM D, YYYY • h:mm A'));
+            } catch (error) {
+              Alert.alert('Error', 'Failed to upload image');
+            } finally {
+              setUploading(false);
+              setImagePickerVisible(false);
+            }
+          }
+        },
+      );
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const openGallery = async () => {
+    try {
+      launchImageLibrary(
+        {
+          mediaType: 'photo',
+          quality: 0.8,
+        },
+        async response => {
+          if (response.didCancel) return;
+
+          if (response.assets?.length > 0) {
+            try {
+              setUploading(true);
+
+              const localUri = response.assets[0].uri;
+
+              const imageUrl = await uploadImageToFirebase(localUri);
+
+              setPhoto(imageUrl);
+
+              setTimestamp(moment().format('MMM D, YYYY • h:mm A'));
+            } catch (error) {
+              Alert.alert('Error', 'Failed to upload image');
+            } finally {
+              setUploading(false);
+              setImagePickerVisible(false);
+            }
+          }
+        },
+      );
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const handlePost = async () => {
+    if (uploading) {
+      Alert.alert('Please wait', 'Image is still uploading');
+      return;
+    }
     if (!photo) {
       Alert.alert('Please upload a photo 📸');
       return;
@@ -116,33 +218,70 @@ export default function BeverageChallengeUI({ navigation }) {
       return;
     }
 
-    if (!ingredients.trim()) {
+    if (ingredients.length === 0) {
       Alert.alert('Add ingredients 🥤');
       return;
     }
 
     try {
       const dateKey = getDateKey();
+      const monthKey = getMonthKey();
 
+      const currentUser = auth().currentUser;
+
+      // create new post ref
+      const postRef = database().ref('posts').push();
+
+      const postId = postRef.key;
+
+      // beverage entry
       const entry = {
         photo,
         name: label,
         ingredients,
-        timestamp: new Date().toISOString(),
+        timestamp: moment().toISOString(),
         type: 'beverage',
+        postId,
       };
 
+      // save inside habit
       await database()
-        .ref(`users/${USER_ID}/logs/beverage/${dateKey}`)
-        .set(entry);
+        .ref(`users/${USER_ID}/habits/beverage/${monthKey}/days/${dateKey}`)
+        .update(entry);
 
-      // reset
+      // create post object
+      const postData = {
+        postId,
+        userId: USER_ID,
+        name: profile?.name || 'User',
+        avatar: profile?.avatar || '',
+        text: `🍹 ${label}`,
+        beverageName: label,
+        ingredients,
+        image: photo,
+        type: 'beverage',
+        likes: {},
+        comments: {},
+        createdAt: moment().valueOf(),
+      };
+
+      // save in posts
+      await postRef.update(postData);
+
+      // save reference inside user
+      await database().ref(`users/${USER_ID}/posts/${postId}`).set(true);
+
+      // reset states
       setPhoto(null);
       setLabel('');
-      setIngredients('');
+      setIngredients([]);
+      setIngredientInput('');
       setTimestamp('');
+
+      Alert.alert('Posted successfully 🎉');
     } catch (e) {
       console.log('Save error:', e);
+      Alert.alert('Something went wrong');
     }
   };
 
@@ -153,7 +292,6 @@ export default function BeverageChallengeUI({ navigation }) {
       <Header
         header={'Healthy Beverage'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />
@@ -167,10 +305,14 @@ export default function BeverageChallengeUI({ navigation }) {
         {/* Photo section */}
         <TouchableOpacity
           style={[styles.photoBox, photo && styles.photoBoxFilled]}
-          onPress={handleCamera}
+          onPress={() => setImagePickerVisible(true)}
           activeOpacity={0.85}
         >
-          {photo ? (
+          {uploading ? (
+            <View style={styles.photoPlaceholder}>
+              <Text style={styles.photoPlaceholderText}>Uploading...</Text>
+            </View>
+          ) : photo ? (
             <Image source={{ uri: photo }} style={styles.photo} />
           ) : (
             <View style={styles.photoPlaceholder}>
@@ -217,13 +359,30 @@ export default function BeverageChallengeUI({ navigation }) {
         </View>
         <View style={styles.inputCard}>
           <Text style={styles.inputLabel}>Ingredients</Text>
-          <TextInput
-            placeholder="e.g. Lemon, Mint, Ginger..."
-            value={ingredients}
-            onChangeText={setIngredients}
-            placeholderTextColor="rgba(255,255,255,0.25)"
-            style={styles.input}
-          />
+
+          <View style={styles.ingRow}>
+            <TextInput
+              placeholder="e.g. Lemon, Mint, Ginger..."
+              value={ingredientInput}
+              onChangeText={setIngredientInput}
+              placeholderTextColor="rgba(255,255,255,0.25)"
+              style={[styles.input, { flex: 1 }]}
+            />
+
+            <TouchableOpacity style={styles.addBtn} onPress={addIngredient}>
+              <Text style={styles.addBtnText}>Add</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Render added ingredients */}
+          <View style={styles.ingList}>
+            {ingredients?.length > 0 &&
+              ingredients?.map((item, index) => (
+                <View key={index} style={styles.ingCard}>
+                  <Text style={styles.ingText}>{item}</Text>
+                </View>
+              ))}
+          </View>
         </View>
 
         {/* Preview */}
@@ -296,6 +455,32 @@ export default function BeverageChallengeUI({ navigation }) {
           ))}
         </View>
       </Wrapper>
+      <Modal
+        isVisible={imagePickerVisible}
+        onBackdropPress={() => setImagePickerVisible(false)}
+        onBackButtonPress={() => setImagePickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Choose Image</Text>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openCamera}>
+              <Text style={styles.modalBtnText}>📸 Camera</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openGallery}>
+              <Text style={styles.modalBtnText}>🖼 Gallery</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setImagePickerVisible(false)}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -343,7 +528,50 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     lineHeight: 20,
   },
+  ingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
 
+  addBtn: {
+    paddingHorizontal: 14,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: 'rgba(106,148,85,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(106,148,85,0.4)',
+  },
+
+  addBtnText: {
+    color: colors.white,
+    fontFamily: fontFamily.montserratSemiBold,
+    fontSize: 13,
+  },
+
+  ingList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 10,
+    gap: 8,
+  },
+
+  ingCard: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
+  ingText: {
+    color: colors.white,
+    fontSize: 12,
+    fontFamily: fontFamily.montserratRegular,
+  },
   scroll: { padding: 18, paddingTop: 16, paddingBottom: 48 },
 
   photoBox: {
@@ -518,5 +746,54 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: fontFamily.montserratRegular,
     flex: 1,
+  },
+  modalOverlay: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalCard: {
+    width: '85%',
+    backgroundColor: '#1E1E1E',
+    borderRadius: 20,
+    padding: 20,
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  modalBtn: {
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+
+  modalBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  cancelBtn: {
+    marginTop: 5,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  cancelText: {
+    color: '#ef4444',
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });

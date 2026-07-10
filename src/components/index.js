@@ -8,6 +8,8 @@ export * from './social/chatCard';
 export * from './social/commentCard';
 export * from './profile/ProfileCard';
 export * from './profile/ProfileHeader2';
+export * from './profile/InsightsLineChart';
 export * from './common/SvgImg';
 export * from './common/calendar';
 export * from './common/RadioBtn';
+export * from './common/CustomDropdown';

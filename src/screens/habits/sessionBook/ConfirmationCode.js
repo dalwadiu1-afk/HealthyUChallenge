@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,18 @@ import {
   Platform,
   Animated,
   Pressable,
+  Dimensions,
+  Alert,
 } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { colors, fontFamily } from '../../../constant';
+import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
+import { Header } from '../../../components';
+import { Wrapper } from '../../../components/index';
 import moment from 'moment';
+
+const { height } = Dimensions.get('window');
 
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   return (
@@ -36,12 +44,111 @@ function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   );
 }
 
-export default function ConfirmationCode({ navigation }) {
+const monthKey = new Date()
+  .toLocaleString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  })
+  .replace(' ', '_');
+
+export default function ConfirmationCode({ navigation, route }) {
+  const { doctor } = route.params || {};
+  console.log('route?.params :>> ', route?.params);
+  const uid = auth().currentUser.uid;
+
   const [showOtp, setShowOtp] = useState(false);
-  const [otp, setOtp] = useState(['', '', '', '']);
+  const [verificationCode, setVerificationCode] = useState('');
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-  const inputs = [useRef(null), useRef(null), useRef(null), useRef(null)];
+  const [booking, setBooking] = useState(null);
+  const [bookingKey, setBookingKey] = useState(null);
+
+  const verifyAppointment = async () => {
+    try {
+      const enteredCode = verificationCode.trim().toUpperCase();
+
+      const adminUsers = await database()
+        .ref('/users')
+        .orderByChild('profile/role')
+        .equalTo('admin')
+        .once('value');
+
+      let adminUid = null;
+      let adminName = '';
+      let adminEmail = '';
+      let validCode = false;
+
+      adminUsers.forEach(child => {
+        const profile = child.val()?.profile || {};
+        const codeData = profile?.verificationCode;
+
+        if (codeData?.code === enteredCode && !codeData?.used) {
+          validCode = true;
+          adminUid = child.key;
+          adminName = profile?.name || profile?.fullName || 'Administrator';
+          adminEmail = profile?.email || '';
+        }
+      });
+
+      if (!validCode) {
+        Alert.alert(
+          'Invalid Code',
+          'Please enter a valid practitioner verification code.',
+        );
+        return;
+      }
+
+      await database()
+        .ref(`/users/${uid}/habits/booking/${monthKey}/${bookingKey}`)
+        .update({
+          status: 'attended',
+          attended: true,
+          verified: true,
+          verifiedAt: moment().format('YYYY-MM-DD HH:mm:ss'),
+
+          verifiedBy: adminUid,
+          verifiedByName: adminName,
+          verifiedByEmail: adminEmail,
+        });
+      // Generate next code for practitioner
+      const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+      await database()
+        .ref(`/users/${adminUid}/profile/verificationCode`)
+        .set({
+          code: newCode,
+          used: false,
+          createdAt: moment().format('YYYY-MM-DD HH:mm:ss'),
+        });
+
+      Alert.alert('Success', 'Appointment attendance verified.');
+
+      closeOtp();
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const fetchBooking = async () => {
+    const snap = await database()
+      .ref(`/users/${uid}/habits/booking/${monthKey}`)
+      .once('value');
+    console.log('auth :>> ', snap);
+
+    if (snap.exists()) {
+      const data = snap.val();
+
+      // get latest booking (or first one)
+      const latestKey = Object.keys(data)[0];
+      console.log('latestKey :>> ', latestKey);
+      setBookingKey(latestKey);
+      setBooking(data[latestKey]);
+    }
+  };
+
+  useEffect(() => {
+    fetchBooking();
+  }, []);
 
   const openOtp = () => {
     setShowOtp(true);
@@ -60,254 +167,279 @@ export default function ConfirmationCode({ navigation }) {
     }).start(() => setShowOtp(false));
   };
 
-  const handleOtpChange = (val, index) => {
-    const next = [...otp];
-    next[index] = val;
-    setOtp(next);
-    if (val && index < 3) {
-      inputs[index + 1].current?.focus();
-    }
-  };
-
-  const handleOtpBackspace = (e, index) => {
-    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      inputs[index - 1].current?.focus();
-    }
-  };
-
-  const otpFilled = otp.every(c => c.length === 1);
-
   const panelTranslate = slideAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [300, 0],
   });
 
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        barStyle="light-content"
-      />
-
-      {/* Doctor Photo */}
-      <View style={styles.photoWrap}>
-        <Image
-          source={{
-            uri: 'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
-          }}
-          style={styles.photo}
-          resizeMode="cover"
+    <Wrapper containerStyle={{ paddingHorizontal: 0 }}>
+      <KeyboardAvoidingView
+        style={styles.root}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <StatusBar
+          translucent
+          backgroundColor="transparent"
+          barStyle="light-content"
         />
-        <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none">
-          <Defs>
-            <LinearGradient id="photoFade2" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0.4" stopColor="transparent" stopOpacity="0" />
-              <Stop offset="1" stopColor={colors.dark} stopOpacity="1" />
-            </LinearGradient>
-          </Defs>
-          <Rect width="100%" height="100%" fill="url(#photoFade2)" />
-        </Svg>
 
-        {/* Back button */}
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation?.goBack()}
-          activeOpacity={0.8}
-        >
-          <Svg width={9} height={16} viewBox="0 0 9 16" fill="none">
-            <Path
-              d="M8 1L1 8L8 15"
-              stroke="#FFFFFF"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+        {/* Doctor Photo */}
+        <View style={styles.photoWrap}>
+          <Image
+            source={{
+              uri:
+                doctor?.image ||
+                'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
+            }}
+            style={styles.photo}
+            resizeMode="stretch"
+          />
+          <Header
+            headerContainer={{
+              paddingHorizontal: 23,
+              zIndex: 2,
+              width: '100%',
+              top: -height / 25,
+            }}
+            leftBtnStyle={{ backgroundColor: 'rgba(7, 4, 19, 0.6)' }}
+          />
+        </View>
+        {/* Doctor info card */}
+        <View style={styles.doctorCard}>
+          <GradientBg id="docCard2" c1="#2D4A25" c2="#1A2818" r={20} />
+          <Text style={styles.doctorName}>{doctor?.name}</Text>
+          <Text style={styles.doctorSpec}>{doctor?.specialty}</Text>
+          <Text style={styles.doctorOrg}>Montclair State University</Text>
+        </View>
+
+        <View style={styles.bookingCard}>
+          {/* STATUS */}
+          <View style={styles.bookingRow}>
+            <View style={styles.bookingIcon}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M5 13l4 4L19 7"
+                  stroke={colors.secondary}
+                  strokeWidth={2}
+                />
+              </Svg>
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text style={styles.bookingLabel}>Session Status</Text>
+              <Text
+                style={[
+                  styles.bookingValue,
+                  {
+                    color:
+                      booking?.status === 'attended'
+                        ? colors.secondary
+                        : '#fff',
+                  },
+                ]}
+              >
+                {booking?.status === 'attended'
+                  ? 'Attended'
+                  : 'Pending Attendance'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.bookingDivider} />
+
+          {/* TIMER */}
+          {/* DOCTOR EMAIL */}
+          <View style={styles.bookingRow}>
+            <View style={styles.bookingIcon}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M4 6h16v12H4z"
+                  stroke={colors.secondary}
+                  strokeWidth={1.5}
+                />
+                <Path
+                  d="M4 7l8 6 8-6"
+                  stroke={colors.secondary}
+                  strokeWidth={1.5}
+                />
+              </Svg>
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text style={styles.bookingLabel}>Dietitian Email</Text>
+
+              <Text
+                selectable
+                selectionColor={colors.secondary}
+                style={styles.bookingValue}
+              >
+                {doctor?.email || 'No email available'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.bookingDivider} />
+
+          {/* OTP */}
+          <View style={styles.bookingRow}>
+            <View style={styles.bookingIcon}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path d="M12 2v20" stroke={colors.secondary} strokeWidth={2} />
+              </Svg>
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text style={styles.bookingLabel}>Session Status</Text>
+
+              <Text
+                style={[
+                  styles.bookingValue,
+                  {
+                    color: booking?.verified ? colors.secondary : '#fff',
+                  },
+                ]}
+              >
+                {booking?.verified ? 'Completed' : 'Awaiting Verification'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.bookingDivider} />
+
+          <View style={styles.bookingRow}>
+            <View style={styles.bookingIcon}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M12 12a4 4 0 100-8 4 4 0 000 8z"
+                  stroke={colors.secondary}
+                  strokeWidth={1.5}
+                />
+                <Path
+                  d="M4 20c0-3.5 3.5-6 8-6s8 2.5 8 6"
+                  stroke={colors.secondary}
+                  strokeWidth={1.5}
+                />
+              </Svg>
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text style={styles.bookingLabel}>Verified By</Text>
+
+              <Text
+                selectable
+                selectionColor={colors.secondary}
+                style={styles.bookingValue}
+              >
+                {booking?.verifiedByName || 'Not Verified Yet'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Status badge */}
+        <View style={styles.statusBadge}>
+          <View style={styles.statusDot} />
+          <Text style={styles.statusText}>Confirmed · Awaiting attendance</Text>
+        </View>
+
+        {/* Attended button */}
+        <View style={styles.btnWrap}>
+          <TouchableOpacity
+            style={styles.attendedBtn}
+            onPress={openOtp}
+            activeOpacity={0.85}
+          >
+            <GradientBg
+              id="attendGrad"
+              c1="#6A9455"
+              c2="#3A5A2A"
+              r={16}
+              horizontal
             />
-          </Svg>
-        </TouchableOpacity>
-      </View>
-
-      {/* Doctor info card */}
-      <View style={styles.doctorCard}>
-        <GradientBg id="docCard2" c1="#2D4A25" c2="#1A2818" r={20} />
-        <Text style={styles.doctorName}>Dr. Smith Sras</Text>
-        <Text style={styles.doctorSpec}>Cardiologist Specialist</Text>
-        <Text style={styles.doctorOrg}>Montclair State University</Text>
-      </View>
-
-      {/* Booking info */}
-      <View style={styles.bookingCard}>
-        <View style={styles.bookingRow}>
-          <View style={styles.bookingIcon}>
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+            <Svg
+              width={18}
+              height={18}
+              viewBox="0 0 24 24"
+              fill="none"
+              style={{ marginRight: 8 }}
+            >
               <Path
-                d="M22 11.08V12a10 10 0 11-5.93-9.14"
-                stroke={colors.secondary}
-                strokeWidth={1.8}
-                strokeLinecap="round"
-              />
-              <Path
-                d="M22 4L12 14.01l-3-3"
-                stroke={colors.secondary}
-                strokeWidth={1.8}
+                d="M20 6L9 17l-5-5"
+                stroke="#fff"
+                strokeWidth={2}
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
             </Svg>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.bookingLabel}>Appointment Booked</Text>
-            <Text style={styles.bookingValue}>
-              {moment().format('MMMM Do YYYY')}
-            </Text>
-          </View>
+            <Text style={styles.attendedBtnText}>Mark as Attended</Text>
+          </TouchableOpacity>
         </View>
-        <View style={styles.bookingDivider} />
-        <View style={styles.bookingRow}>
-          <View style={styles.bookingIcon}>
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M12 2a10 10 0 100 20A10 10 0 0012 2z"
-                stroke={colors.secondary}
-                strokeWidth={1.8}
-              />
-              <Path
-                d="M12 6v6l4 2"
-                stroke={colors.secondary}
-                strokeWidth={1.8}
-                strokeLinecap="round"
-              />
-            </Svg>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.bookingLabel}>Time</Text>
-            <Text style={styles.bookingValue}>
-              {moment().format('hh:mm A')}
-            </Text>
-          </View>
-        </View>
-      </View>
 
-      {/* Status badge */}
-      <View style={styles.statusBadge}>
-        <View style={styles.statusDot} />
-        <Text style={styles.statusText}>Confirmed · Awaiting attendance</Text>
-      </View>
-
-      {/* Attended button */}
-      <View style={styles.btnWrap}>
-        <TouchableOpacity
-          style={styles.attendedBtn}
-          onPress={openOtp}
-          activeOpacity={0.85}
-        >
-          <GradientBg
-            id="attendGrad"
-            c1="#6A9455"
-            c2="#3A5A2A"
-            r={16}
-            horizontal
-          />
-          <Svg
-            width={18}
-            height={18}
-            viewBox="0 0 24 24"
-            fill="none"
-            style={{ marginRight: 8 }}
-          >
-            <Path
-              d="M20 6L9 17l-5-5"
-              stroke="#fff"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
-          <Text style={styles.attendedBtnText}>Mark as Attended</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* OTP bottom sheet */}
-      {showOtp && (
-        <>
-          <Pressable style={styles.overlay} onPress={closeOtp} />
-          <Animated.View
-            style={[
-              styles.otpPanel,
-              { transform: [{ translateY: panelTranslate }] },
-            ]}
-          >
-            <GradientBg id="otpPanel" c1="#1E2D1A" c2="#161D15" r={24} />
-
-            {/* Handle */}
-            <View style={styles.panelHandle} />
-
-            <Text style={styles.otpTitle}>Enter Confirmation Code</Text>
-            <Text style={styles.otpSub}>
-              Enter the 4-digit code provided by your practitioner
-            </Text>
-
-            <View style={styles.otpRow}>
-              {otp.map((digit, i) => (
-                <TextInput
-                  key={i}
-                  ref={inputs[i]}
-                  style={[styles.otpBox, digit && styles.otpBoxFilled]}
-                  value={digit}
-                  onChangeText={val => handleOtpChange(val.slice(-1), i)}
-                  onKeyPress={e => handleOtpBackspace(e, i)}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  textAlign="center"
-                  placeholderTextColor="rgba(255,255,255,0.15)"
-                  placeholder="·"
-                  selectionColor={colors.secondary}
-                />
-              ))}
-            </View>
-
-            <TouchableOpacity
+        {/* OTP bottom sheet */}
+        {showOtp && (
+          <>
+            <Pressable style={styles.overlay} onPress={closeOtp} />
+            <Animated.View
               style={[
-                styles.otpConfirmBtn,
-                !otpFilled && styles.otpConfirmBtnDisabled,
+                styles.otpPanel,
+                { transform: [{ translateY: panelTranslate }] },
               ]}
-              activeOpacity={0.85}
-              disabled={!otpFilled}
-              onPress={closeOtp}
             >
-              {otpFilled && (
-                <GradientBg
-                  id="otpConfirm"
-                  c1="#6A9455"
-                  c2="#3A5A2A"
-                  r={14}
-                  horizontal
-                />
-              )}
-              <Text
-                style={[
-                  styles.otpConfirmText,
-                  !otpFilled && styles.otpConfirmTextDisabled,
-                ]}
-              >
-                Confirm
+              <GradientBg id="otpPanel" c1="#1E2D1A" c2="#161D15" r={24} />
+
+              {/* Handle */}
+              <View style={styles.panelHandle} />
+
+              <Text style={styles.otpTitle}>Verify Appointment</Text>
+
+              <Text style={styles.otpSub}>
+                Ask your practitioner for the verification code to confirm
+                attendance.
               </Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </>
-      )}
-    </KeyboardAvoidingView>
+
+              <TextInput
+                value={verificationCode}
+                onChangeText={text => setVerificationCode(text.toUpperCase())}
+                placeholder="ENTER CODE"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                autoCapitalize="characters"
+                style={styles.codeInput}
+              />
+
+              <TouchableOpacity
+                style={[
+                  styles.otpConfirmBtn,
+                  !verificationCode.trim() && styles.otpConfirmBtnDisabled,
+                ]}
+                activeOpacity={0.85}
+                onPress={verifyAppointment}
+                disabled={!verificationCode.trim()}
+              >
+                {verificationCode.trim() && (
+                  <GradientBg
+                    id="otpConfirm"
+                    c1="#6A9455"
+                    c2="#3A5A2A"
+                    r={14}
+                    horizontal
+                  />
+                )}
+                <Text style={[styles.otpConfirmText]}>Confirm</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </>
+        )}
+      </KeyboardAvoidingView>
+    </Wrapper>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.dark },
 
-  photoWrap: { height: 260, width: '100%' },
-  photo: { width: '100%', height: '100%' },
+  photoWrap: { height: height / 2.2, width: '100%' },
+  photo: { width: '100%', height: '100%', position: 'absolute' },
   backBtn: {
     position: 'absolute',
     top: (StatusBar.currentHeight || 44) + 8,
@@ -393,7 +525,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
     marginLeft: 48,
   },
-
+  codeInput: {
+    height: 60,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(143,175,120,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    color: colors.white,
+    textAlign: 'center',
+    fontSize: 22,
+    letterSpacing: 6,
+    fontFamily: fontFamily.montserratBold,
+    marginBottom: 24,
+  },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -458,7 +602,6 @@ const styles = StyleSheet.create({
   panelHandle: {
     width: 40,
     height: 4,
-    borderRadius: 2,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignSelf: 'center',
     marginBottom: 22,

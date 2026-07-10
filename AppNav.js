@@ -1,0 +1,214 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useDispatch } from 'react-redux';
+import analytics from '@react-native-firebase/analytics';
+import auth from '@react-native-firebase/auth';
+import database from '@react-native-firebase/database';
+import BootSplash from 'react-native-bootsplash';
+
+import AuthStack from './src/navigation/AuthStack';
+import BottomNavigation from './src/navigation/BottomNavigation';
+import SplashScreen from './src/screens/authentication/splashScreen';
+
+import { setUserData, clearUser } from './src/redux/slices/userSlice';
+import moment from 'moment';
+
+const Stack = createNativeStackNavigator();
+
+const GOAL_TO_HABIT = {
+  BookAnAppointment: 'booking',
+  WeightResistanceTraining: 'fitness',
+  WeeklyFitnessClass: 'fitness',
+
+  DailyFruitIntake: 'dailyFruits',
+  SleepTracking: 'sleep',
+  CardioChallenge: 'cardio',
+  FiberIntake: 'fiber',
+  SugarIntake: 'sugarIntake',
+  WeightChallenge: 'weightChallenge',
+  BodyFatGoal: 'bodyFatGoal',
+};
+
+export default function AppNav() {
+  const dispatch = useDispatch();
+
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
+  const [userDataLoaded, setUserDataLoaded] = useState(false);
+
+  const userRef = useRef(null);
+
+  // =========================
+  // AUTH LISTENER
+  // =========================
+  useEffect(() => {
+    const unsubscribe = auth().onAuthStateChanged(async authUser => {
+      if (authUser) {
+        setUser(authUser);
+
+        if (authUser) {
+          const uid = authUser?.uid;
+          const today = moment().format('YYYY-MM-DD');
+
+          await database()
+            .ref(`/analytics/activeUsers/${today}/${uid}`)
+            .update({
+              active: true,
+              lastSeen: moment().valueOf(),
+            });
+
+          await analytics().setAnalyticsCollectionEnabled(true);
+
+          await analytics().logEvent('app_open', {
+            uid,
+            time: moment().valueOf(),
+          });
+
+          await database().ref(`/users/${uid}/lastSeen`).set(Date.now());
+        }
+      } else {
+        setUser(null);
+        setUserDataLoaded(true); // allow navigation to auth stack
+        dispatch(clearUser());
+      }
+
+      setLoading(false);
+    });
+
+    return unsubscribe;
+  }, [dispatch]);
+
+  // =========================
+  // USER DATA SYNC
+  // =========================
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const uid = user.uid;
+
+    setUserDataLoaded(false);
+
+    if (userRef.current) {
+      userRef.current.off();
+    }
+
+    const ref = database().ref(`users/${uid}`);
+    userRef.current = ref;
+
+    const listener = ref.on('value', snapshot => {
+      const userData = snapshot.val();
+
+      if (!userData) {
+        dispatch(clearUser());
+        setUserDataLoaded(true);
+        return;
+      }
+
+      try {
+        const selectedGoals = userData?.goal?.selectedGoals || [];
+
+        const selectedHabits = selectedGoals
+          .map(goal => {
+            const habitKey = GOAL_TO_HABIT[goal.screenName];
+
+            if (!habitKey) return null;
+
+            return {
+              ...goal,
+              habitKey,
+              habitData: userData?.habits?.[habitKey] || {},
+            };
+          })
+          .filter(Boolean);
+
+        dispatch(
+          setUserData({
+            uid,
+
+            profile: userData?.profile || {},
+            habits: userData?.habits || {},
+            goal: userData?.goal || {},
+            selectedHabits,
+
+            posts: userData?.posts || {},
+            snacks: userData?.snacks || {},
+            activities: userData?.activities || {},
+            challenges: userData?.challenges || {},
+
+            stats: {
+              ...(userData?.stats || {}),
+            },
+          }),
+        );
+
+        setUserDataLoaded(true);
+      } catch (error) {
+        console.log('APP SYNC ERROR:', error);
+        setUserDataLoaded(true);
+      }
+    });
+
+    return () => {
+      ref.off('value', listener);
+    };
+  }, [user?.uid, dispatch]);
+
+  // =========================
+  // SPLASH CONTROL
+  // =========================
+  useEffect(() => {
+    const hideSplash = async () => {
+      const appReady = !loading && (!user || userDataLoaded);
+  
+      console.log('appReady', appReady);
+  
+      if (!appReady) return;
+  
+      try {
+        console.log('Hiding BootSplash');
+  
+        await BootSplash.hide({
+          fade: true,
+        });
+  
+        console.log('BootSplash hidden');
+  
+        setShowSplash(false);
+      } catch (error) {
+        console.log(error);
+        setShowSplash(false);
+      }
+    };
+  
+    hideSplash();
+  }, [loading, userDataLoaded, user]);
+
+  // =========================
+  // LOADING
+  // =========================
+  console.log('loading || showSplash :>> ', loading , showSplash);
+  if (loading || showSplash) {
+    return <SplashScreen />;
+  }
+
+  // =========================
+  // NAVIGATION
+  // =========================
+  return (
+    <SafeAreaProvider>
+      {user ? (
+        <BottomNavigation />
+      ) : (
+        <Stack.Navigator
+          screenOptions={{
+            headerShown: false,
+          }}
+        >
+          <Stack.Screen name="Auth" component={AuthStack} />
+        </Stack.Navigator>
+      )}
+    </SafeAreaProvider>
+  );
+}

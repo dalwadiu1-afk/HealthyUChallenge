@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,34 +8,22 @@ import {
   StatusBar,
   Animated,
 } from 'react-native';
+
 import Svg, { Path, Circle } from 'react-native-svg';
+
 import { colors, fontFamily } from '../../../constant';
 import { Header, Wrapper } from '../../../components';
-import { useFocusEffect, useIsFocused } from '@react-navigation/native';
-import firestore, { FieldValue } from '@react-native-firebase/firestore';
+
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import storage from '@react-native-firebase/storage';
 import { launchCamera } from 'react-native-image-picker';
 import { requestCameraPermission } from '../../../utils/helper';
+import moment from 'moment';
 
-const TOTAL = 8;
-const WEEKLY_TARGET = 2;
+const DEFAULT_WEEKLY_TARGET = 2;
+
 const USER_ID = auth().currentUser?.uid;
-
-const getLocalDateKey = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-    2,
-    '0',
-  )}-${String(d.getDate()).padStart(2, '0')}`;
-};
-
-const emptySessions = () =>
-  Array.from({ length: TOTAL }, () => ({
-    photo: null,
-    timestamp: null,
-  }));
 
 function CameraIcon() {
   return (
@@ -72,33 +60,143 @@ function CheckIcon() {
   );
 }
 
-export default function WeightTrainingUI({ navigation, route }) {
-  const [workoutData, setWorkoutData] = useState({});
+export default function WeightTrainingUI({ route }) {
+  const [weeklyTarget, setWeeklyTarget] = useState(DEFAULT_WEEKLY_TARGET);
+  const CURRENT_MONTH_KEY = route?.params?.monthKey
+    ? route.params.monthKey
+    : moment().format('MMMM_YYYY');
+  const [selectedWeek, setSelectedWeek] = useState(1);
+  const selectedMonth = moment(CURRENT_MONTH_KEY, 'MMMM_YYYY');
+
+  const isPastMonth = selectedMonth.isBefore(moment(), 'month');
+
+  let TOTAL_WEEKS = Number(route?.params?.archivedGoal?.weeks) || 4;
+  const TOTAL = weeklyTarget * 4;
   const [sessions, setSessions] = useState(
-    Array.from({ length: TOTAL }, () => ({ photo: null, timestamp: null })),
+    Array.from({ length: TOTAL }, () => ({
+      photo: null,
+      timestamp: null,
+    })),
   );
-
+  const [startDate, setStartDate] = useState(null);
   const tempPhotos = useRef({});
-
   const headerAnim = useRef(new Animated.Value(0)).current;
 
-  const today = getLocalDateKey();
+  useEffect(() => {
+    if (isPastMonth) {
+      setSelectedWeek(1);
+    } else {
+      setSelectedWeek(currentUnlockedWeek + 1);
+    }
+  }, [currentUnlockedWeek, isPastMonth]);
 
-  let weeksPassed = 0;
+  /* =========================================
+      FETCH USER START DATE
+  ========================================= */
+  useEffect(() => {
+    const ref = database().ref(`users/${USER_ID}/goal/startDate`);
 
-  if (workoutData?.goal?.startDate) {
-    const startDate = new Date(workoutData.goal.startDate);
-    const diffTime = today.getTime() - startDate.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    weeksPassed = Math.max(0, Math.floor(diffDays / 7));
+    const listener = ref.on('value', snapshot => {
+      const value = snapshot.val();
+
+      if (value) {
+        setStartDate(value);
+      }
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
+
+  /* =========================================
+    FETCH GOAL TARGET FROM FIREBASE
+  ========================================= */
+  useEffect(() => {
+    const ref = database().ref(`users/${USER_ID}/goal/selectedGoals`);
+
+    const listener = ref.on('value', snapshot => {
+      const goals = snapshot.val() || [];
+
+      const weightTrainingGoal = Array.isArray(goals)
+        ? goals.find(item => item?.key === 'weightTraining')
+        : Object.values(goals).find(item => item?.key === 'weightTraining');
+
+      const target =
+        Number(weightTrainingGoal?.goalText) || DEFAULT_WEEKLY_TARGET;
+
+      setWeeklyTarget(target);
+    });
+
+    return () => ref.off('value', listener);
+  }, [weeklyTarget, CURRENT_MONTH_KEY]);
+
+  /* =========================================
+      WEEK UNLOCK LOGIC
+      Week 1 => Day 0-6
+      Week 2 => Day 7-13
+      Week 3 => Day 14-20
+      Week 4 => Day 21-27
+  ========================================= */
+
+  let currentUnlockedWeek = 0;
+
+  if (isPastMonth) {
+    currentUnlockedWeek = TOTAL_WEEKS - 1;
+  } else if (startDate) {
+    const start = moment(startDate).startOf('day');
+    const now = moment().startOf('day');
+
+    const diffDays = now.diff(start, 'days');
+
+    currentUnlockedWeek = Math.floor(diffDays / 7);
+
+    if (currentUnlockedWeek < 0) {
+      currentUnlockedWeek = 0;
+    }
+
+    if (currentUnlockedWeek > TOTAL_WEEKS - 1) {
+      currentUnlockedWeek = TOTAL_WEEKS - 1;
+    }
   }
 
-  const isFocused = useIsFocused();
-  const unsubscribeRef = useRef(null);
-  const firstLoadRef = useRef(true);
+  /* =========================================
+      FETCH SAVED WORKOUTS
+  ========================================= */
+  useEffect(() => {
+    const ref = database().ref(
+      `users/${USER_ID}/habits/weightTraining/${CURRENT_MONTH_KEY}`,
+    );
 
-  const todayRef = useRef(new Date().toISOString().split('T')[0]).current;
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val();
 
+      const restored = [];
+
+      for (let week = 1; week <= TOTAL_WEEKS; week++) {
+        const weekData = data?.weeks?.[`week${week}`];
+
+        const photosObj = weekData?.workoutPhotos || {};
+
+        const photosArray = Array.isArray(photosObj)
+          ? photosObj
+          : Object.values(photosObj);
+
+        for (let i = 0; i < weeklyTarget; i++) {
+          restored.push({
+            photo: photosArray?.[i]?.imageUrl || null,
+            timestamp: photosArray?.[i]?.timestamp || null,
+          });
+        }
+      }
+
+      setSessions(restored);
+    });
+
+    return () => ref.off('value', listener);
+  }, [weeklyTarget, CURRENT_MONTH_KEY]);
+
+  /* =========================================
+      HEADER ANIMATION
+  ========================================= */
   useEffect(() => {
     Animated.timing(headerAnim, {
       toValue: 1,
@@ -107,77 +205,19 @@ export default function WeightTrainingUI({ navigation, route }) {
     }).start();
   }, []);
 
-  useEffect(() => {
-    const today = getLocalDateKey();
-    const ref = database().ref(`users/${USER_ID}/logs/${today}`);
-
-    const onValueChange = ref.on('value', snapshot => {
-      const data = snapshot.val();
-
-      const rawPhotos = data?.workoutPhotos || [];
-
-      const normalized = Array.from({ length: TOTAL }, (_, i) => ({
-        photo: rawPhotos?.[i]?.photo || null,
-        timestamp: rawPhotos?.[i]?.timestamp || null,
-      }));
-
-      setSessions(normalized);
-    });
-
-    return () => ref.off('value', onValueChange);
-  }, []);
-
-  /* =========================
-     SAFE STATS (NO CRASHES)
-  ========================= */
+  /* =========================================
+      STATS
+  ========================================= */
   const done = sessions.filter(s => s?.photo).length;
-  const weeksCompleted = Math.floor(done / WEEKLY_TARGET);
-  const totalWeeks = TOTAL / WEEKLY_TARGET;
 
-  const getWeeklyProgress = (list = []) => {
-    const weeks = Array.from({ length: totalWeeks }, () => 0);
+  const weeksCompleted = Math.floor(done / weeklyTarget);
 
-    list.forEach((s, index) => {
-      if (!s?.photo) return;
-
-      const weekIndex = Math.floor(index / WEEKLY_TARGET);
-      if (weekIndex < totalWeeks) {
-        weeks[weekIndex] += 1;
-      }
-    });
-
-    return weeks.map((done, i) => ({
-      week: i + 1,
-      done,
-    }));
-  };
-  /* =========================
-     SAVE STATS (OPTIMIZED)
-  ========================= */
-  const saveWorkoutStats = async stats => {
-    try {
-      await database()
-        .ref(`users/${USER_ID}/activities/workout`)
-        .update({
-          ...stats,
-          updatedAt: database.ServerValue.TIMESTAMP,
-        });
-    } catch (e) {
-      console.log('stats save error:', e);
-    }
-  };
-
-  useEffect(() => {
-    saveWorkoutStats({
-      sessionsDone: done,
-      weeksCompleted,
-      weeklyProgress: getWeeklyProgress(sessions),
-    });
-  }, [sessions]);
-
-  /* 📸 PICK IMAGE */
+  /* =========================================
+      UPLOAD PHOTO
+  ========================================= */
   const handleUpload = async index => {
     const granted = await requestCameraPermission();
+
     if (!granted) return;
 
     const result = await launchCamera({
@@ -189,11 +229,12 @@ export default function WeightTrainingUI({ navigation, route }) {
     if (result.didCancel) return;
 
     const uri = result?.assets?.[0]?.uri;
+
     if (!uri) return;
 
     const photoData = {
       photo: uri,
-      timestamp: new Date().toISOString(),
+      timestamp: moment().toISOString(),
     };
 
     tempPhotos.current[index] = photoData;
@@ -205,50 +246,73 @@ export default function WeightTrainingUI({ navigation, route }) {
     });
   };
 
-  /* 🔥 SAVE SESSION */
+  /* =========================================
+      SAVE TO FIREBASE
+  ========================================= */
   const handleDone = async index => {
+    if (isPastMonth) return;
+
     try {
       const photoData = tempPhotos.current[index];
+
       if (!photoData) return;
 
-      const today = getLocalDateKey();
-      const ref = database().ref(`users/${USER_ID}/logs/${today}`);
+      const weekNumber = Math.floor(index / weeklyTarget) + 1;
+
+      const positionInsideWeek = index % weeklyTarget;
+
+      // STORAGE PATH
+      const storagePath = `weightTraining/${USER_ID}/${CURRENT_MONTH_KEY}/week${weekNumber}/${positionInsideWeek}.jpg`;
+      const reference = storage().ref(storagePath);
+
+      // Upload local image
+      await reference.putFile(photoData.photo);
+
+      // Download URL
+      const downloadURL = await reference.getDownloadURL();
+
+      // Database Path
+      const ref = database().ref(
+        `users/${USER_ID}/habits/weightTraining/${CURRENT_MONTH_KEY}/weeks/week${weekNumber}`,
+      );
 
       const snapshot = await ref.once('value');
+
       const data = snapshot.val() || {};
 
-      // ALWAYS normalize to array
-      let workoutPhotos = data?.workoutPhotos || [];
+      let workoutPhotos = Array.isArray(data?.workoutPhotos)
+        ? data.workoutPhotos
+        : Object.values(data?.workoutPhotos || {});
 
-      if (!Array.isArray(workoutPhotos)) {
-        workoutPhotos = Object.values(workoutPhotos || {});
-      }
+      console.log('downloadURL :>> ', downloadURL);
+      workoutPhotos[positionInsideWeek] = {
+        imageUrl: downloadURL,
+        storagePath,
+        timestamp: photoData.timestamp,
+        uploadedAt: Date.now(),
+      };
 
-      workoutPhotos = Array(TOTAL)
-        .fill(null)
-        .map((_, i) => workoutPhotos[i] || null);
+      const totalCompleted = workoutPhotos.filter(Boolean).length;
 
-      workoutPhotos[index] = photoData;
-      console.log('photoData :>> ', photoData);
-      await ref.set({
-        ...data,
-        workoutWeek: weeksPassed + 1,
-        workoutPhotos,
+      await ref.update({
+        completed: totalCompleted >= weeklyTarget,
+        totalCompleted,
         updatedAt: database.ServerValue.TIMESTAMP,
+        workoutPhotos,
       });
 
-      setSessions(workoutPhotos);
-
       delete tempPhotos.current[index];
+
+      console.log('Upload Success');
     } catch (e) {
-      console.log('Upload error:', e);
+      console.log('UPLOAD ERROR:', e);
     }
   };
 
-  /* =========================
-   UI COMPONENT (UNCHANGED)
-========================= */
-  function WorkoutCard({ index, photo, timestamp, onUpload, weeksPassed }) {
+  /* =========================================
+      CARD COMPONENT
+  ========================================= */
+  function WorkoutCard({ index, photo, timestamp }) {
     const anim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -260,22 +324,29 @@ export default function WeightTrainingUI({ navigation, route }) {
       }).start();
     }, []);
 
-    const done = photo;
-    const weekNum = Math.floor(index / WEEKLY_TARGET) + 1;
-    const sessionNum = (index % WEEKLY_TARGET) + 1;
+    const done = !!photo;
 
-    const totalWeeks = TOTAL / WEEKLY_TARGET;
-    const currentWeek = weeksPassed;
-    const startIndex = currentWeek * WEEKLY_TARGET;
-    const endIndex = startIndex + WEEKLY_TARGET - 1;
+    const weekNum = Math.floor(index / weeklyTarget) + 1;
 
-    const isLocked =
-      weeksPassed >= totalWeeks ? true : index < startIndex || index > endIndex;
+    const sessionNum = (index % weeklyTarget) + 1;
 
+    const isLocked = isPastMonth ? false : weekNum - 1 !== currentUnlockedWeek;
+
+    // Week is already over and user didn't upload
+    const isMissed =
+      !done && (isPastMonth || weekNum - 1 < currentUnlockedWeek);
+
+    console.log({
+      weekNum,
+      currentUnlockedWeek,
+      done,
+      isMissed,
+      isLocked,
+    });
     return (
       <Animated.View
         style={{
-          opacity: isLocked ? 0.6 : anim,
+          opacity: isLocked ? 0.5 : anim,
           transform: [
             {
               translateY: anim.interpolate({
@@ -286,7 +357,13 @@ export default function WeightTrainingUI({ navigation, route }) {
           ],
         }}
       >
-        <View style={[styles.card, done && styles.cardDone]}>
+        <View
+          style={[
+            styles.card,
+            done && styles.cardDone,
+            isMissed && styles.cardMissed,
+          ]}
+        >
           <View style={styles.cardHeader}>
             <View style={[styles.numBadge, done && styles.numBadgeDone]}>
               {done ? (
@@ -298,17 +375,20 @@ export default function WeightTrainingUI({ navigation, route }) {
 
             <View style={styles.cardHeaderText}>
               <Text style={styles.cardTitle}>Session #{index + 1}</Text>
+
               <Text style={styles.cardSub}>
                 Week {weekNum} · Session {sessionNum}{' '}
-                {isLocked
+                {isMissed
+                  ? 'Missed ❌'
+                  : isLocked
                   ? 'Locked 🔒'
                   : done
-                  ? 'Photo uploaded ✓'
+                  ? 'Completed ✓'
                   : 'Tap to upload proof'}
               </Text>
             </View>
 
-            {done && !isLocked && (
+            {done && !isLocked && !isPastMonth && (
               <TouchableOpacity
                 onPress={() => handleDone(index)}
                 style={styles.donePill}
@@ -321,23 +401,27 @@ export default function WeightTrainingUI({ navigation, route }) {
           <TouchableOpacity
             style={[styles.uploadBox, done && styles.uploadBoxDone]}
             onPress={() => {
-              if (!isLocked) onUpload(index);
+              if (!isLocked && !isPastMonth && !isMissed) {
+                handleUpload(index);
+              }
             }}
+            activeOpacity={0.8}
           >
             {photo ? (
-              <>
-                <Image source={{ uri: photo }} style={styles.uploadImage} />
-              </>
+              <Image source={{ uri: photo }} style={styles.uploadImage} />
             ) : (
               <View style={styles.uploadPlaceholder}>
                 <CameraIcon />
+
                 <Text style={styles.uploadText}>+ Upload Photo</Text>
               </View>
             )}
           </TouchableOpacity>
 
           {done && timestamp && (
-            <Text style={styles.timestamp}>Uploaded {timestamp}</Text>
+            <Text style={styles.timestamp}>
+              Uploaded {moment(timestamp).format('MMM D, YYYY • h:mm A')}
+            </Text>
           )}
         </View>
       </Animated.View>
@@ -347,32 +431,42 @@ export default function WeightTrainingUI({ navigation, route }) {
   return (
     <View style={styles.root}>
       <Header
-        header={'Weight Training'}
+        header={'Strength Training'}
         headerContainer={{
-          marginTop: StatusBar.currentHeight,
           paddingHorizontal: 24,
         }}
       />
 
       <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
         <Animated.View style={{ opacity: headerAnim }}>
-          <Text style={styles.heroTitle}>🏋️ Weight Training Sessions</Text>
+          {/* <Text style={styles.heroTitle}>🏋️ Strength Training Sessions</Text> */}
+
           <Text style={styles.heroSub}>
-            Complete at least {WEEKLY_TARGET} workouts per week and upload your
+            Complete at least {weeklyTarget} workouts per week and upload your
             proof
           </Text>
 
           <View style={styles.statsStrip}>
             {[
-              { label: 'Sessions Done', value: `${done}` },
-              { label: 'Weeks Complete', value: `${weeksCompleted}` },
-              { label: 'Target / Week', value: `${WEEKLY_TARGET}` },
+              {
+                label: 'Sessions Done',
+                value: `${done}`,
+              },
+              {
+                label: 'Weeks Complete',
+                value: `${weeksCompleted}`,
+              },
+              {
+                label: 'Target / Week',
+                value: `${weeklyTarget}`,
+              },
             ].map((s, i) => (
               <View
                 key={i}
                 style={[styles.statItem, i < 2 && styles.statBorder]}
               >
                 <Text style={styles.statValue}>{s.value}</Text>
+
                 <Text style={styles.statLabel}>{s.label}</Text>
               </View>
             ))}
@@ -381,6 +475,7 @@ export default function WeightTrainingUI({ navigation, route }) {
           <View style={styles.progressCard}>
             <View style={styles.progressLabelRow}>
               <Text style={styles.progressLabel}>Overall progress</Text>
+
               <Text style={styles.progressCount}>
                 {done} / {TOTAL}
               </Text>
@@ -390,45 +485,123 @@ export default function WeightTrainingUI({ navigation, route }) {
               <View
                 style={[
                   styles.progressFill,
-                  { width: `${(done / TOTAL) * 100}%` },
+                  {
+                    width: `${(done / TOTAL) * 100}%`,
+                  },
                 ]}
               />
             </View>
 
             <View style={styles.weekMarkers}>
-              {Array.from({ length: totalWeeks }).map((_, i) => {
-                const weekDone = i < Math.min(weeksPassed, totalWeeks);
+              {Array.from({ length: TOTAL_WEEKS }).map((_, i) => {
+                const weekNumber = i + 1;
+                const lockedForSelection =
+                  !isPastMonth && weekNumber > currentUnlockedWeek + 1;
+                const unlocked = isPastMonth ? true : i <= currentUnlockedWeek;
+
+                const completedCount = sessions
+                  .slice(i * weeklyTarget, i * weeklyTarget + weeklyTarget)
+                  .filter(item => item?.photo).length;
+
+                const isCompleted = completedCount >= weeklyTarget;
+
+                const isActive = selectedWeek === weekNumber;
 
                 return (
-                  <View
+                  <TouchableOpacity
                     key={i}
-                    style={[styles.weekChip, weekDone && styles.weekChipDone]}
+                    onPress={() => setSelectedWeek(weekNumber)}
+                    style={[
+                      styles.weekChip,
+                      unlocked && styles.weekChipDone,
+                      isCompleted && styles.weekChipCompleted,
+                      isActive && styles.weekChipActive,
+                      lockedForSelection && { opacity: 0.5 },
+                    ]}
                   >
                     <Text
                       style={[
                         styles.weekChipText,
-                        weekDone && styles.weekChipTextDone,
+                        unlocked && styles.weekChipTextDone,
+                        isActive && styles.weekChipTextActive,
                       ]}
                     >
-                      W{i + 1}
+                      W{weekNumber}
+                      {lockedForSelection ? ' 🔒' : ''}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
           </View>
         </Animated.View>
+        {(() => {
+          const weekIndex = selectedWeek - 1;
 
-        {sessions.map((s, index) => (
-          <WorkoutCard
-            key={index}
-            index={index}
-            photo={s?.photo}
-            timestamp={s?.timestamp}
-            onUpload={handleUpload}
-            weeksPassed={weeksPassed}
-          />
-        ))}
+          const weekSessions = sessions.slice(
+            weekIndex * weeklyTarget,
+            weekIndex * weeklyTarget + weeklyTarget,
+          );
+
+          const completedCount = weekSessions.filter(
+            item => item?.photo,
+          ).length;
+
+          const isCurrentWeek = weekIndex === currentUnlockedWeek;
+
+          const isLocked = !isPastMonth && weekIndex > currentUnlockedWeek;
+
+          const isCompleted = completedCount >= weeklyTarget;
+
+          return (
+            <View style={styles.weekContainer}>
+              <View style={styles.weekHeader}>
+                <View>
+                  <Text style={styles.weekTitle}>Week {selectedWeek}</Text>
+
+                  <Text style={styles.weekSubtitle}>
+                    {completedCount}/{weeklyTarget} Sessions
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.weekStatusPill,
+                    isCompleted && styles.weekStatusCompleted,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.weekStatusText,
+                      isCompleted && styles.weekStatusTextCompleted,
+                    ]}
+                  >
+                    {isCompleted
+                      ? 'Completed'
+                      : isLocked
+                      ? 'Locked'
+                      : isCurrentWeek
+                      ? 'Current'
+                      : 'Missed'}
+                  </Text>
+                </View>
+              </View>
+
+              {weekSessions.map((session, localIndex) => {
+                const globalIndex = weekIndex * weeklyTarget + localIndex;
+
+                return (
+                  <WorkoutCard
+                    key={globalIndex}
+                    index={globalIndex}
+                    photo={session?.photo}
+                    timestamp={session?.timestamp}
+                  />
+                );
+              })}
+            </View>
+          );
+        })()}
       </Wrapper>
     </View>
   );
@@ -437,34 +610,13 @@ export default function WeightTrainingUI({ navigation, route }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.dark },
 
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.15)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    color: colors.white,
-    fontSize: 16,
-    fontFamily: fontFamily.montserratBold,
-    lineHeight: 22,
-  },
-
-  scroll: { paddingHorizontal: 18, paddingBottom: 48 },
-
   heroTitle: {
     color: colors.white,
     fontSize: 22,
     fontFamily: fontFamily.montserratBold,
     marginBottom: 6,
-    includeFontPadding: false,
   },
+
   heroSub: {
     color: colors.grey,
     fontSize: 13,
@@ -473,7 +625,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  /* Stats strip */
   statsStrip: {
     flexDirection: 'row',
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -483,24 +634,31 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     overflow: 'hidden',
   },
-  statItem: { flex: 1, alignItems: 'center', paddingVertical: 14 },
+
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+
   statBorder: {
     borderRightWidth: 1,
     borderRightColor: 'rgba(255,255,255,0.08)',
   },
+
   statValue: {
     color: colors.white,
     fontSize: 18,
     fontFamily: fontFamily.montserratBold,
     marginBottom: 2,
   },
+
   statLabel: {
     color: 'rgba(255,255,255,0.35)',
     fontSize: 10,
     fontFamily: fontFamily.montserratMedium,
   },
 
-  /* Progress */
   progressCard: {
     backgroundColor: colors.bubbleDark,
     borderRadius: 20,
@@ -509,21 +667,25 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 22,
   },
+
   progressLabelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 10,
   },
+
   progressLabel: {
     color: 'rgba(255,255,255,0.45)',
     fontSize: 12,
     fontFamily: fontFamily.montserratMedium,
   },
+
   progressCount: {
     color: colors.white,
     fontSize: 12,
     fontFamily: fontFamily.montserratSemiBold,
   },
+
   progressBg: {
     height: 6,
     borderRadius: 6,
@@ -531,12 +693,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 12,
   },
+
   progressFill: {
     height: '100%',
     backgroundColor: colors.secondary,
     borderRadius: 6,
   },
-  weekMarkers: { flexDirection: 'row', gap: 6 },
+
+  weekMarkers: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+
   weekChip: {
     paddingHorizontal: 12,
     paddingVertical: 5,
@@ -545,18 +713,26 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
+
   weekChipDone: {
     borderColor: 'rgba(143,175,120,0.4)',
     backgroundColor: 'rgba(104, 250, 0, 0.12)',
   },
+
   weekChipText: {
     color: 'rgba(255,255,255,0.35)',
     fontSize: 11,
     fontFamily: fontFamily.montserratMedium,
   },
-  weekChipTextDone: { color: colors.secondary },
 
-  /* Card */
+  weekChipTextDone: {
+    color: colors.secondary,
+  },
+  cardMissed: {
+    borderColor: 'rgba(255, 80, 80, 0.4)',
+    backgroundColor: 'rgba(255, 80, 80, 0.08)',
+  },
+
   card: {
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 20,
@@ -565,16 +741,19 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 12,
   },
+
   cardDone: {
     borderColor: 'rgba(143,175,120,0.3)',
     backgroundColor: 'rgba(143,175,120,0.06)',
   },
+
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
     gap: 12,
   },
+
   numBadge: {
     width: 36,
     height: 36,
@@ -585,27 +764,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   numBadgeDone: {
     backgroundColor: colors.primary,
     borderColor: colors.secondary,
   },
+
   numText: {
     color: colors.white,
     fontSize: 14,
     fontFamily: fontFamily.montserratBold,
   },
-  cardHeaderText: { flex: 1 },
+
+  cardHeaderText: {
+    flex: 1,
+  },
+
   cardTitle: {
     color: colors.white,
     fontSize: 14,
     fontFamily: fontFamily.montserratSemiBold,
     marginBottom: 2,
   },
+
   cardSub: {
     color: colors.grey,
     fontSize: 11,
     fontFamily: fontFamily.montserratRegular,
   },
+
   donePill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -614,6 +801,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(143,175,120,0.3)',
   },
+
   donePillText: {
     color: colors.secondary,
     fontSize: 11,
@@ -631,46 +819,89 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.03)',
   },
-  uploadBoxDone: { borderStyle: 'solid', borderColor: 'rgba(143,175,120,0.3)' },
-  uploadPlaceholder: { alignItems: 'center', gap: 8 },
+
+  uploadBoxDone: {
+    borderStyle: 'solid',
+    borderColor: 'rgba(143,175,120,0.3)',
+  },
+
+  uploadPlaceholder: {
+    alignItems: 'center',
+    gap: 8,
+  },
+
   uploadText: {
     color: 'rgba(255,255,255,0.3)',
     fontSize: 13,
     fontFamily: fontFamily.montserratMedium,
   },
-  uploadImage: { width: '100%', height: '100%' },
-  uploadOverlay: { position: 'absolute', bottom: 8, right: 8 },
-  retakeBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 49,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+
+  uploadImage: {
+    width: '100%',
+    height: '100%',
   },
-  retakeText: {
-    color: colors.white,
-    fontSize: 11,
-    fontFamily: fontFamily.montserratMedium,
-  },
+
   timestamp: {
     marginTop: 8,
     fontSize: 11,
     color: 'rgba(255,255,255,0.3)',
     fontFamily: fontFamily.montserratRegular,
   },
-
-  ctaBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 49,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginTop: 8,
+  weekContainer: {
+    marginBottom: 20,
   },
-  ctaText: {
+
+  weekHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+
+  weekTitle: {
     color: colors.white,
-    fontSize: 15,
+    fontSize: 18,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  weekSubtitle: {
+    color: colors.grey,
+    fontSize: 12,
+    marginTop: 3,
+    fontFamily: fontFamily.montserratMedium,
+  },
+
+  weekStatusPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+
+  weekStatusCompleted: {
+    backgroundColor: 'rgba(143,175,120,0.15)',
+  },
+
+  weekStatusText: {
+    color: colors.grey,
+    fontSize: 11,
     fontFamily: fontFamily.montserratSemiBold,
-    letterSpacing: 0.3,
+  },
+
+  weekStatusTextCompleted: {
+    color: colors.secondary,
+  },
+  weekChipActive: {
+    backgroundColor: colors.secondary,
+    borderColor: colors.secondary,
+  },
+
+  weekChipCompleted: {
+    borderColor: colors.secondary,
+  },
+
+  weekChipTextActive: {
+    color: colors.dark,
+    fontFamily: fontFamily.montserratBold,
   },
 });

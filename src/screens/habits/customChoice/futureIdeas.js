@@ -1,180 +1,4 @@
-// import React, { useState } from 'react';
-// import {
-//   View,
-//   Text,
-//   StyleSheet,
-//   TextInput,
-//   TouchableOpacity,
-//   Image,
-//   FlatList,
-// } from 'react-native';
-
-// import { Button, Header, Wrapper } from '../../../components';
-// import { colors, fontFamily } from '../../../constant';
-
-// export default function FutureIdeasUI() {
-//   const [idea, setIdea] = useState('');
-//   const [image, setImage] = useState(null);
-//   const [ideas, setIdeas] = useState([]);
-
-//   // 🔥 mock image picker
-//   const pickImage = () => {
-//     setImage('https://images.unsplash.com/photo-1521737604893-d14cc237f11d');
-//   };
-
-//   const submitIdea = () => {
-//     if (!idea) return;
-
-//     const newIdea = {
-//       id: Date.now().toString(),
-//       text: idea,
-//       image,
-//       time: new Date().toLocaleString(),
-//     };
-
-//     setIdeas(prev => [newIdea, ...prev]);
-
-//     setIdea('');
-//     setImage(null);
-//   };
-
-//   return (
-//     <Wrapper>
-//       <Header header="Future Ideas 💡" />
-
-//       {/* INPUT CARD */}
-//       <View style={styles.card}>
-//         <Text style={styles.title}>Share your ideas for the future</Text>
-
-//         <TextInput
-//           placeholder="Type your idea... (e.g. new feature, product, app idea)"
-//           value={idea}
-//           onChangeText={setIdea}
-//           style={styles.input}
-//           multiline
-//           placeholderTextColor={colors.white}
-//         />
-
-//         {/* IMAGE UPLOAD */}
-//         <TouchableOpacity style={styles.upload} onPress={pickImage}>
-//           <Text style={styles.uploadText}>
-//             {image ? 'Change Image' : 'Upload Image (Optional)'}
-//           </Text>
-//         </TouchableOpacity>
-
-//         {image && <Image source={{ uri: image }} style={styles.image} />}
-
-//         <Button
-//           title="Submit Idea"
-//           onPress={submitIdea}
-//           buttonStyle={{ marginTop: 15 }}
-//         />
-//       </View>
-
-//       {/* LIST */}
-//       <Text style={styles.sectionTitle}>Community Ideas</Text>
-
-//       <FlatList
-//         data={ideas}
-//         keyExtractor={i => i.id}
-//         renderItem={({ item }) => (
-//           <View style={styles.ideaCard}>
-//             {item.image && (
-//               <Image source={{ uri: item.image }} style={styles.ideaImg} />
-//             )}
-
-//             <View style={{ flex: 1 }}>
-//               <Text style={styles.ideaText}>{item.text}</Text>
-//               <Text style={styles.time}>{item.time}</Text>
-//             </View>
-//           </View>
-//         )}
-//       />
-//     </Wrapper>
-//   );
-// }
-
-// // ---------------- STYLES ----------------
-
-// const styles = StyleSheet.create({
-//   card: {
-//     backgroundColor: 'rgba(143, 175, 120,0.16)',
-//     padding: 16,
-//     borderRadius: 12,
-//     marginBottom: 15,
-//   },
-
-//   title: {
-//     fontSize: 16,
-//     fontFamily: fontFamily.montserratBold,
-//     marginBottom: 10,
-//     color: colors.white,
-//   },
-
-//   input: {
-//     borderWidth: 1,
-//     borderColor: '#ddd',
-//     borderRadius: 10,
-//     padding: 12,
-//     minHeight: 80,
-//     textAlignVertical: 'top',
-//     fontFamily: fontFamily.montserratMedium,
-//   },
-
-//   upload: {
-//     marginTop: 12,
-//     padding: 12,
-//     backgroundColor: '#eee',
-//     borderRadius: 10,
-//     alignItems: 'center',
-//   },
-
-//   uploadText: {
-//     fontFamily: fontFamily.montserratMedium,
-//     color: '#555',
-//   },
-
-//   image: {
-//     height: 140,
-//     borderRadius: 10,
-//     marginTop: 10,
-//   },
-
-//   sectionTitle: {
-//     marginVertical: 10,
-//     fontSize: 16,
-//     fontFamily: fontFamily.montserratBold,
-//     color: colors.white,
-//   },
-
-//   ideaCard: {
-//     flexDirection: 'row',
-//     backgroundColor: '#fff',
-//     padding: 12,
-//     borderRadius: 10,
-//     marginBottom: 10,
-//     alignItems: 'center',
-//   },
-
-//   ideaImg: {
-//     width: 60,
-//     height: 60,
-//     borderRadius: 10,
-//     marginRight: 10,
-//   },
-
-//   ideaText: {
-//     fontSize: 14,
-//     fontFamily: fontFamily.montserratSemiBold,
-//   },
-
-//   time: {
-//     fontSize: 11,
-//     color: '#888',
-//     marginTop: 4,
-//   },
-// });
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -184,6 +8,8 @@ import {
   TextInput,
   StyleSheet,
   StatusBar,
+  Alert,
+  Platform,
 } from 'react-native';
 import Svg, {
   Path,
@@ -193,9 +19,18 @@ import Svg, {
   Rect,
   Circle,
 } from 'react-native-svg';
-import { launchCamera } from 'react-native-image-picker';
+import storage from '@react-native-firebase/storage';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import Modal from 'react-native-modal';
 import { colors, fontFamily } from '../../../constant';
 import { requestCameraPermission } from '../../../utils/helper';
+
+import auth from '@react-native-firebase/auth';
+import database from '@react-native-firebase/database';
+import moment from 'moment';
+
+const user = auth().currentUser;
+const USER_ID = user?.uid;
 
 function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   return (
@@ -217,36 +52,183 @@ function GradientBg({ id, c1, c2, r = 16, horizontal = false }) {
   );
 }
 
-export default function FutureIdeasUI({ navigation }) {
+export default function FutureIdeasUI({ navigation, route }) {
   const [goalText, setGoalText] = useState('');
   const [photo, setPhoto] = useState(null);
   const [goals, setGoals] = useState([]);
+  const [imagePickerVisible, setImagePickerVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const today = moment();
+  const goalTitle = route?.params?.goalTitle || 'Custom Goal';
+  const CURRENT_MONTH_KEY =
+    route?.params?.monthKey ?? today.format('MMMM_YYYY');
+
+  const uploadImageToFirebase = async imageUri => {
+    try {
+      const uid = auth().currentUser?.uid;
+
+      if (!uid) {
+        throw new Error('User not authenticated');
+      }
+
+      const fileName = `${Date.now()}_${Math.floor(
+        Math.random() * 1000000,
+      )}.jpg`;
+
+      const reference = storage().ref(`${goalTitle}/${uid}/${fileName}`);
+
+      const pathToFile =
+        Platform.OS === 'ios' ? imageUri.replace('file://', '') : imageUri;
+
+      await reference.putFile(pathToFile);
+
+      const downloadURL = await reference.getDownloadURL();
+
+      return downloadURL;
+    } catch (error) {
+      console.log('Firebase Upload Error:', error);
+      throw error;
+    }
+  };
+
+  // FETCH GOALS
+  useEffect(() => {
+    if (!USER_ID) return;
+
+    const ref = database().ref(
+      `users/${USER_ID}/habits/${goalTitle}/${CURRENT_MONTH_KEY}`,
+    );
+
+    const listener = ref.on('value', snapshot => {
+      const data = snapshot.val();
+
+      if (data) {
+        const formatted = Object.entries(data)
+          .map(([id, value]) => ({
+            id,
+            ...value,
+          }))
+          .sort((a, b) => b.createdAt - a.createdAt);
+
+        setGoals(formatted);
+      } else {
+        setGoals([]);
+      }
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
 
   const pickPhoto = async () => {
     const granted = await requestCameraPermission();
+
     if (!granted) return;
+
     launchCamera({ mediaType: 'photo', quality: 0.7 }, res => {
-      if (res.assets?.length > 0) setPhoto(res.assets[0].uri);
+      if (res.assets?.length > 0) {
+        setPhoto(res.assets[0].uri);
+      }
     });
   };
 
-  const submitGoal = () => {
+  const openCamera = async () => {
+    try {
+      const granted = await requestCameraPermission();
+
+      if (!granted) return;
+
+      launchCamera(
+        {
+          mediaType: 'photo',
+          quality: 0.8,
+        },
+        async response => {
+          if (response.didCancel) return;
+
+          if (response.assets?.length > 0) {
+            try {
+              setUploading(true);
+
+              const localUri = response.assets[0].uri;
+
+              const imageUrl = await uploadImageToFirebase(localUri);
+
+              setPhoto(imageUrl);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to upload image');
+            } finally {
+              setUploading(false);
+              setImagePickerVisible(false);
+            }
+          }
+        },
+      );
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const openGallery = async () => {
+    const granted = await requestCameraPermission();
+
+    if (!granted) return;
+    try {
+      launchImageLibrary(
+        {
+          mediaType: 'photo',
+          quality: 0.8,
+        },
+        async response => {
+          if (response.didCancel) return;
+
+          if (response.assets?.length > 0) {
+            try {
+              setUploading(true);
+
+              const localUri = response.assets[0].uri;
+
+              const imageUrl = await uploadImageToFirebase(localUri);
+
+              setPhoto(imageUrl);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to upload image');
+            } finally {
+              setUploading(false);
+              setImagePickerVisible(false);
+            }
+          }
+        },
+      );
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  // SAVE GOAL
+  const submitGoal = async () => {
     if (!goalText.trim()) return;
-    setGoals(prev => [
-      {
-        id: Date.now().toString(),
+
+    try {
+      const ref = database()
+        .ref(`users/${USER_ID}/habits/${goalTitle}/${CURRENT_MONTH_KEY}`)
+        .push();
+
+      const payload = {
         text: goalText.trim(),
-        photo,
-        time: new Date().toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        }),
-      },
-      ...prev,
-    ]);
-    setGoalText('');
-    setPhoto(null);
+        photo: photo || '',
+        createdAt: moment().valueOf(),
+        time: moment().format('MMM DD, YYYY'),
+      };
+
+      // SAVE TO FIREBASE
+      await ref.set(payload);
+
+      // RESET
+      setGoalText('');
+      setPhoto(null);
+    } catch (error) {
+      console.log('SAVE GOAL ERROR :>> ', error);
+    }
   };
 
   return (
@@ -260,6 +242,7 @@ export default function FutureIdeasUI({ navigation }) {
       {/* Hero */}
       <View style={styles.heroBg}>
         <GradientBg id="goalsHero" c1="#1A2818" c2="#161D15" r={0} />
+
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backBtn}
@@ -276,15 +259,18 @@ export default function FutureIdeasUI({ navigation }) {
               />
             </Svg>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Custom Goal</Text>
+
+          <Text style={styles.headerTitle}>{goalTitle}</Text>
+
           <View style={{ width: 44 }} />
         </View>
+
         <Text style={styles.heroTitle}>💡 Add Your Personal Goal</Text>
+
         <Text style={styles.heroSub}>
           Set your own health goals and track your journey your way
         </Text>
 
-        {/* Count badge */}
         {goals.length > 0 && (
           <View style={styles.countBadge}>
             <Text style={styles.countText}>
@@ -298,121 +284,162 @@ export default function FutureIdeasUI({ navigation }) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
-        {/* Input card */}
-        <View style={styles.inputCard}>
-          <Text style={styles.inputCardTitle}>New Goal</Text>
-          <Text style={styles.inputCardSub}>
-            What health habit do you want to build?
-          </Text>
+        {/* Input Card */}
+        {!route?.params?.monthKey && (
+          <View style={styles.inputCard}>
+            <Text style={styles.inputCardTitle}>New Goal</Text>
 
-          <TextInput
-            placeholder="e.g. Drink 8 glasses of water daily, meditate for 10 minutes…"
-            value={goalText}
-            onChangeText={setGoalText}
-            placeholderTextColor="rgba(255,255,255,0.2)"
-            style={styles.textArea}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-
-          {/* Optional photo */}
-          <TouchableOpacity
-            style={[styles.photoBtn, photo && styles.photoBtnFilled]}
-            onPress={pickPhoto}
-            activeOpacity={0.8}
-          >
-            {photo ? (
-              <>
-                <Image source={{ uri: photo }} style={styles.photoImg} />
-                <View style={styles.retakeOverlay}>
-                  <Text style={styles.retakeText}>Tap to change</Text>
-                </View>
-              </>
-            ) : (
-              <View style={styles.photoBtnInner}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                  <Path
-                    d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
-                    stroke="rgba(143,175,120,0.5)"
-                    strokeWidth={1.8}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <Circle
-                    cx={12}
-                    cy={13}
-                    r={4}
-                    stroke="rgba(143,175,120,0.5)"
-                    strokeWidth={1.8}
-                  />
-                </Svg>
-                <Text style={styles.photoBtnText}>
-                  Add Inspiration Photo (optional)
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.submitBtn,
-              !goalText.trim() && styles.submitBtnDisabled,
-            ]}
-            onPress={submitGoal}
-            activeOpacity={0.85}
-          >
-            {goalText.trim() && (
-              <GradientBg
-                id="submitGrad"
-                c1="#6A9455"
-                c2="#3A5A2A"
-                r={14}
-                horizontal
-              />
-            )}
-            <Text
-              style={[
-                styles.submitBtnText,
-                !goalText.trim() && styles.submitBtnTextDisabled,
-              ]}
-            >
-              Add Goal
+            <Text style={styles.inputCardSub}>
+              What health habit do you want to build?
             </Text>
-          </TouchableOpacity>
-        </View>
 
-        {/* Goals list */}
-        {goals.length > 0 && (
+            <TextInput
+              placeholder="e.g. Drink 8 glasses of water daily..."
+              value={goalText}
+              onChangeText={setGoalText}
+              placeholderTextColor="rgba(255,255,255,0.2)"
+              style={styles.textArea}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+
+            {/* PHOTO */}
+            <TouchableOpacity
+              style={[styles.photoBtn, photo && styles.photoBtnFilled]}
+              onPress={() => setImagePickerVisible(true)}
+              activeOpacity={0.8}
+            >
+              {uploading ? (
+                <View style={styles.photoBtnInner}>
+                  <Text style={styles.photoBtnText}>Uploading...</Text>
+                </View>
+              ) : photo ? (
+                <>
+                  <Image source={{ uri: photo }} style={styles.photoImg} />
+
+                  <View style={styles.retakeOverlay}>
+                    <Text style={styles.retakeText}>Tap to change</Text>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.photoBtnInner}>
+                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
+                      stroke="rgba(143,175,120,0.5)"
+                      strokeWidth={1.8}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <Circle
+                      cx={12}
+                      cy={13}
+                      r={4}
+                      stroke="rgba(143,175,120,0.5)"
+                      strokeWidth={1.8}
+                    />
+                  </Svg>
+
+                  <Text style={styles.photoBtnText}>Add Inspiration Photo</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* SUBMIT */}
+            <TouchableOpacity
+              style={[
+                styles.submitBtn,
+                !goalText.trim() && styles.submitBtnDisabled,
+              ]}
+              onPress={submitGoal}
+              activeOpacity={0.85}
+            >
+              {goalText.trim() && (
+                <GradientBg
+                  id="submitGrad"
+                  c1="#6A9455"
+                  c2="#3A5A2A"
+                  r={14}
+                  horizontal
+                />
+              )}
+
+              <Text
+                style={[
+                  styles.submitBtnText,
+                  !goalText.trim() && styles.submitBtnTextDisabled,
+                ]}
+              >
+                Add Goal
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* GOALS */}
+        {goals.length > 0 ? (
           <>
             <Text style={styles.listLabel}>Your Goals</Text>
+
             {goals.map((item, idx) => (
               <View key={item.id} style={styles.goalCard}>
                 <View style={styles.goalCardHeader}>
                   <View style={styles.goalNumBadge}>
                     <Text style={styles.goalNumText}>{goals.length - idx}</Text>
                   </View>
-                  <Text style={styles.goalTime}>{item.time}</Text>
+                  <Text style={styles.goalTime}>
+                    {item?.time ||
+                      moment(item?.createdAt).format('MMM DD, YYYY hh:mm A')}
+                  </Text>
                 </View>
-                {item.photo && (
+
+                {!!item.photo && (
                   <Image source={{ uri: item.photo }} style={styles.goalImg} />
                 )}
+
                 <Text style={styles.goalText}>{item.text}</Text>
               </View>
             ))}
           </>
-        )}
-
-        {goals.length === 0 && (
+        ) : (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>🎯</Text>
+
             <Text style={styles.emptyTitle}>No goals yet</Text>
+
             <Text style={styles.emptySub}>
               Add your first personal health goal above to get started
             </Text>
           </View>
         )}
       </ScrollView>
+      <Modal
+        isVisible={imagePickerVisible}
+        onBackdropPress={() => setImagePickerVisible(false)}
+        onBackButtonPress={() => setImagePickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Choose Image</Text>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openCamera}>
+              <Text style={styles.modalBtnText}>📸 Camera</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openGallery}>
+              <Text style={styles.modalBtnText}>🖼 Gallery</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setImagePickerVisible(false)}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -477,7 +504,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.montserratSemiBold,
   },
 
-  scroll: { padding: 18, paddingTop: 16, paddingBottom: 48 },
+  scroll: { padding: 18, paddingTop: 16, paddingBottom: 120 },
 
   inputCard: {
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -639,5 +666,54 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.montserratRegular,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  modalOverlay: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalCard: {
+    width: '85%',
+    backgroundColor: '#1E1E1E',
+    borderRadius: 20,
+    padding: 20,
+  },
+
+  modalTitle: {
+    color: colors.white,
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontFamily: fontFamily.montserratBold,
+  },
+
+  modalBtn: {
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+
+  modalBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
+  },
+
+  cancelBtn: {
+    marginTop: 5,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  cancelText: {
+    color: '#ef4444',
+    fontSize: 15,
+    fontFamily: fontFamily.montserratSemiBold,
   },
 });

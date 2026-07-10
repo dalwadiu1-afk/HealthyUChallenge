@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,37 +9,219 @@ import {
   StatusBar,
   Dimensions,
   ActivityIndicator,
+  Linking,
+  AppState,
+  Alert,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import firestore from '@react-native-firebase/firestore';
-
+import auth from '@react-native-firebase/auth';
 import { colors, fontFamily } from '../../../constant';
-import { Wrapper } from '../../../components';
+import { Header, Wrapper } from '../../../components/index';
+import database from '@react-native-firebase/database';
+import ActionSheet from 'react-native-actions-sheet';
 
 const { height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.46;
+const user = auth().currentUser;
+const fullName = user?.displayName || '';
+const email = user?.email || '';
+const uid = user?.uid || '';
+
+const generateCode = () => {
+  return Math.floor(1000 + Math.random() * 9000).toString();
+};
 
 export default function BookAnAppointment({ navigation, route }) {
   const { doctorId = '1' } = route.params || {};
 
+  const actionSheetRef = useRef(null);
+  const [selectedDay, setSelectedDay] = useState([]);
   const [doctor, setDoctor] = useState(null);
+  const [seeMore, setSeeMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const appState = useRef(AppState.currentState);
+  const [emailOpened, setEmailOpened] = useState(false);
+  // Need to fix this fun
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === 'active' &&
+        emailOpened
+      ) {
+        // User came back from Gmail
+        showConfirmation();
+      }
+
+      appState.current = nextAppState;
+    });
+
+    return () => subscription.remove();
+  }, [emailOpened]);
+
+  const showConfirmation = () => {
+    setEmailOpened(false);
+    actionSheetRef.current?.show();
+  };
 
   const fetchData = async () => {
-    setLoading(false);
     try {
-      const snapshot = await firestore().collection('doctors').doc('1').get();
+      const doctorSnapshot = await firestore()
+        .collection('doctors')
+        .doc('1')
+        .get();
 
-      console.log('snapshot :>> ', snapshot.data());
-      setDoctor(snapshot?.data());
+      const doctorData = doctorSnapshot?.data();
+
+      setDoctor(doctorData);
+
+      const ref = database().ref(`/users/${uid}/habits/booking`);
+
+      const listener = ref.on('value', snapshot => {
+        const data = snapshot.val();
+        console.log('data :>> ', data);
+        if (!data) {
+          setLoading(false);
+          return;
+        }
+        const allBookings = Object.values(data || {}).flatMap(month =>
+          Object.values(month || {}),
+        );
+
+        const latest =
+          allBookings.length > 0
+            ? allBookings.reduce((latest, current) =>
+                current.createdAt > latest.createdAt ? current : latest,
+              )
+            : null;
+
+        if (latest?.status === 'requested') {
+          navigation.replace('ConfirmationCode', {
+            doctor: {
+              ...latest,
+              ...doctorData,
+            },
+          });
+        }
+
+        setLoading(false);
+      });
+
+      return () => ref.off('value', listener);
     } catch (e) {
-      console.log('error :>> ', e);
+      console.log(e);
+      setLoading(false);
     }
+  };
+
+  const openEmail = () => {
+    const professorEmail = doctor?.email;
+    const subject = 'Request for Appointment';
+
+    const selectedDaysText =
+      selectedDay.length > 0 ? selectedDay.join(', ') : 'your available times';
+
+    const body = `Dear Professor [Last Name],
+
+I hope you are doing well.
+
+I am ${fullName}, a student. I wanted to ask about your availability for an appointment.
+
+Please let me know a time that works best for you.
+
+Thank you for your time and consideration.
+
+Best regards,
+${fullName}
+${uid}
+Email: ${email}`;
+
+    const url = `mailto:${professorEmail}?subject=${encodeURIComponent(
+      subject,
+    )}&body=${encodeURIComponent(body)}`;
+
+    setEmailOpened(true); // 👈 important
+    Linking.openURL(url);
   };
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  const saveAppointment = async () => {
+    try {
+      const userId = uid;
+
+      const monthKey = new Date()
+        .toLocaleString('en-US', {
+          month: 'long',
+          year: 'numeric',
+        })
+        .replace(' ', '_');
+
+      // ==========================
+      // CHECK EXISTING APPOINTMENT
+      // ==========================
+      const bookingSnap = await database()
+        .ref(`/users/${userId}/habits/booking/${monthKey}`)
+        .once('value');
+
+      const bookings = bookingSnap.val();
+
+      if (bookings) {
+        const latest = Object.values(bookings).reduce((a, b) =>
+          a.createdAt > b.createdAt ? a : b,
+        );
+
+        if (latest?.status === 'requested') {
+          Alert.alert(
+            'Appointment Pending',
+            'Please complete your current appointment before booking another one.',
+          );
+          return;
+        }
+      }
+
+      // ==========================
+      // CREATE NEW APPOINTMENT
+      // ==========================
+      const now = Date.now();
+
+      const appointmentId = database().ref().push().key;
+
+      const code = generateCode();
+
+      const updates = {};
+
+      updates[`users/${userId}/habits/booking/${monthKey}/${appointmentId}`] = {
+        code,
+        doctorId,
+        doctorName: doctor?.name || '',
+        days: selectedDay,
+        status: 'requested',
+        bookingId: appointmentId,
+        createdAt: now,
+        used: false,
+        verifiedBy: '',
+        verifiedAt: '',
+        attended: false,
+      };
+
+      await database().ref().update(updates);
+
+      navigation.navigate('ConfirmationCode', {
+        doctor: {
+          ...doctor,
+          ...updates[
+            `users/${userId}/habits/booking/${monthKey}/${appointmentId}`
+          ],
+        },
+      });
+    } catch (e) {
+      console.log('error:', e);
+    }
+  };
 
   if (loading) {
     return (
@@ -59,28 +241,40 @@ export default function BookAnAppointment({ navigation, route }) {
 
   return (
     <View style={styles.root}>
-      {/* HERO IMAGE */}
-      <Image
-        source={{ uri: doctor.image }}
-        style={styles.heroImage}
-        resizeMode="cover"
+      {/* FIXED HERO IMAGE */}
+      <Header
+        headerContainer={{
+          paddingHorizontal: 23,
+          zIndex: 2,
+          // position: 'absolute',/
+          width: '100%',
+        }}
+        leftBtnStyle={{ backgroundColor: 'rgba(7, 4, 19, 0.6)' }}
       />
+      <Wrapper>
+        <Image
+          source={{
+            uri:
+              doctor.image ||
+              'https://www.newdirectionsforwomen.org/wp-content/uploads/2021/02/Woman-smiling-sunlight-768x510.jpg',
+          }}
+          style={styles.heroImage}
+          resizeMode="cover"
+        />
 
-      {/* CONTENT */}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-        style={styles.scroll}
-      >
-        <View style={{ height: HERO_HEIGHT - 32 }} />
-
-        <View style={styles.card}>
-          <Wrapper style={{ paddingHorizontal: 0 }}>
-            {/* NAME */}
+        {/* SCROLLABLE CONTENT */}
+        <ScrollView
+          // scrollEnabled={seeMore}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingTop: HERO_HEIGHT - 40,
+            flexGrow: 1,
+          }}
+        >
+          <View style={styles.card}>
             <Text style={styles.doctorName}>{doctor.name}</Text>
             <Text style={styles.specialty}>{doctor.specialty}</Text>
 
-            {/* STATS */}
             <View style={styles.statsRow}>
               <Stat value={`${doctor.patients}+`} label="Patients" />
               <Stat value={doctor.experience} label="Experience" />
@@ -90,54 +284,69 @@ export default function BookAnAppointment({ navigation, route }) {
 
             <View style={styles.divider} />
 
-            {/* ABOUT */}
             <Text style={styles.sectionTitle}>About Me</Text>
-            <Text style={styles.aboutText}>
+
+            <Text style={styles.aboutText} numberOfLines={seeMore ? 0 : 3}>
               {doctor.about}
-              <Text style={styles.readMore}> Read More…</Text>
             </Text>
 
-            {/* AVAILABLE DAYS */}
-            <Text style={[styles.sectionTitle, { marginTop: 24 }]}>
-              Available Days
-            </Text>
-
-            <View style={styles.daysRow}>
-              {doctor.availableDays?.map((day, index) => (
-                <View key={index} style={styles.dayChip}>
-                  <Text style={styles.dayText}>{day}</Text>
-                </View>
-              ))}
-            </View>
-
-            {/* BOOK BUTTON */}
             <TouchableOpacity
-              style={styles.bookBtn}
-              onPress={() =>
-                navigation.navigate('SessionConfirmation', { doctorId })
-              }
+              style={{ marginTop: 10, alignSelf: 'flex-end' }}
+              onPress={() => setSeeMore(!seeMore)}
             >
-              <Text style={styles.bookBtnText}>Book An Appointment</Text>
+              <Text style={styles.readMore}>
+                {!seeMore ? '...Read More' : '...Read Less'}
+              </Text>
             </TouchableOpacity>
-          </Wrapper>
-        </View>
-      </ScrollView>
 
-      {/* BACK BUTTON */}
-      <TouchableOpacity
-        style={styles.backBtn}
-        onPress={() => navigation.goBack()}
-      >
-        <Svg width={9} height={16} viewBox="0 0 9 16" fill="none">
-          <Path
-            d="M8 1L1 8L8 15"
-            stroke="#FFFFFF"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      </TouchableOpacity>
+            <View style={{ marginTop: 20, justifyContent: 'flex-end' }}>
+              <TouchableOpacity
+                style={styles.bookBtn}
+                onPress={() => openEmail()}
+              >
+                <Text style={styles.bookBtnText}>Book An Appointment</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+
+        <ActionSheet ref={actionSheetRef}>
+          <View style={{ padding: 20 }}>
+            <Text style={{ fontSize: 16, marginBottom: 20 }}>
+              Did you send the appointment email?
+            </Text>
+
+            <TouchableOpacity
+              style={{
+                padding: 14,
+                backgroundColor: colors.secondary,
+                borderRadius: 10,
+                marginBottom: 10,
+              }}
+              onPress={async () => {
+                actionSheetRef.current?.hide();
+                await saveAppointment();
+              }}
+            >
+              <Text style={{ color: '#000', textAlign: 'center' }}>
+                Yes, Sent
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                padding: 14,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: '#ccc',
+              }}
+              onPress={() => actionSheetRef.current?.hide()}
+            >
+              <Text style={{ textAlign: 'center' }}>Not Yet</Text>
+            </TouchableOpacity>
+          </View>
+        </ActionSheet>
+      </Wrapper>
     </View>
   );
 }
@@ -155,7 +364,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.dark,
   },
-
   loader: {
     flex: 1,
     justifyContent: 'center',
@@ -182,11 +390,12 @@ const styles = StyleSheet.create({
   },
 
   card: {
+    paddingHorizontal: 23,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     backgroundColor: colors.dark,
     paddingTop: 28,
-    minHeight: height * 0.6,
+    paddingBottom: 40,
   },
 
   doctorName: {
@@ -244,6 +453,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: fontFamily.montserratMedium,
     lineHeight: 21,
+    textAlign: 'justify',
   },
 
   readMore: {
@@ -277,6 +487,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 49,
     alignItems: 'center',
+    justifyContent: 'flex-end',
   },
 
   bookBtnText: {

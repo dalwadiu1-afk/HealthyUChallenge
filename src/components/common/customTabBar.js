@@ -6,14 +6,27 @@ import {
   Animated,
   Platform,
 } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
-import { fontFamily } from '../../constant';
+import { colors, fontFamily } from '../../constant';
+import Svg, {
+  Path,
+  Circle,
+  Defs,
+  Stop,
+  LinearGradient,
+  RadialGradient,
+} from 'react-native-svg';
 
 const TABS = [
-  { key: 1, name: 'Habits', label: 'Habits' },
-  { key: 2, name: 'SocialStack', label: 'Social' },
-  { key: 3, name: 'Resources', label: 'Resources' },
-  { key: 4, name: 'Profile', label: 'Profile' },
+  { key: 1, name: 'Habits', label: 'Habits', Icon: HabitsIcon },
+  { key: 2, name: 'SocialStack', label: 'Social', Icon: SocialIcon },
+  {
+    key: 3,
+    name: 'Dashboard',
+    label: 'Dashboard',
+    Icon: DashboardIcon,
+  }, // CENTER
+  { key: 4, name: 'Resources', label: 'Resources', Icon: ResourcesIcon },
+  { key: 5, name: 'Profile', label: 'Profile', Icon: ProfileIcon },
 ];
 
 function HabitsIcon({ active }) {
@@ -38,6 +51,50 @@ function HabitsIcon({ active }) {
   );
 }
 
+function DashboardIcon({ active, activeColor }) {
+  const color = active ? activeColor || '#8FAF78' : 'rgba(255,255,255,0.4)';
+
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      {/* Top Left */}
+      <Path
+        d="M3 3H10V10H3V3Z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* Top Right */}
+      <Path
+        d="M14 3H21V7H14V3Z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* Bottom Left */}
+      <Path
+        d="M3 14H7V21H3V14Z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* Bottom Right */}
+      <Path
+        d="M14 11H21V21H14V11Z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 function SocialIcon({ active }) {
   const color = active ? '#8FAF78' : 'rgba(255,255,255,0.4)';
   return (
@@ -53,8 +110,13 @@ function SocialIcon({ active }) {
   );
 }
 
-function ResourcesIcon({ active }) {
-  const color = active ? '#8FAF78' : 'rgba(255,255,255,0.4)';
+function ResourcesIcon({ active, activeColor }) {
+  const color = active
+    ? activeColor
+      ? activeColor
+      : '#8FAF78'
+    : 'rgba(255,255,255,0.4)';
+
   return (
     <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
       <Path
@@ -98,89 +160,38 @@ function ProfileIcon({ active }) {
     </Svg>
   );
 }
-
-const TAB_ICONS = [HabitsIcon, SocialIcon, ResourcesIcon, ProfileIcon];
-
-function TabItem({ tab, iconComponent: IconComponent, isActive, onPress }) {
-  const borderOpacity = useRef(new Animated.Value(isActive ? 1 : 0)).current;
-  const iconScale = useRef(new Animated.Value(isActive ? 1.1 : 1)).current;
-  const labelOpacity = useRef(new Animated.Value(isActive ? 1 : 0.4)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(borderOpacity, {
-        toValue: isActive ? 1 : 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.spring(iconScale, {
-        toValue: isActive ? 1.1 : 1,
-        friction: 10,
-        useNativeDriver: true,
-      }),
-      Animated.timing(labelOpacity, {
-        toValue: isActive ? 1 : 0.4,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [isActive]);
-
-  return (
-    <TouchableOpacity
-      style={styles.tabItem}
-      onPress={onPress}
-      activeOpacity={0.8}
-    >
-      {/* Top border indicator */}
-      <Animated.View style={[styles.topBorder, { opacity: borderOpacity }]} />
-
-      <Animated.View style={{ transform: [{ scale: iconScale }] }}>
-        <IconComponent active={isActive} />
-      </Animated.View>
-
-      <Animated.Text
-        style={[
-          styles.label,
-          {
-            opacity: labelOpacity,
-            color: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.4)',
-            fontFamily: isActive
-              ? fontFamily.montserratBold
-              : fontFamily.montserratMedium,
-          },
-        ]}
-      >
-        {tab.label}
-      </Animated.Text>
-    </TouchableOpacity>
-  );
-}
-
 export default function CustomTabBar({ state, navigation }) {
-  const [tabIndex, setTabIndex] = useState(state?.index ?? 0);
-
-  useEffect(() => {
-    setTabIndex(state?.index);
-  }, [state?.index]);
-
-  const onPress = (tab, index) => {
-    setTabIndex(index);
+  const onPress = tab => {
     navigation.navigate(tab.name);
   };
 
   return (
     <View style={styles.wrapper}>
-      <View style={styles.tabBar}>
-        {TABS.map((tab, index) => (
-          <TabItem
-            key={tab.key}
-            tab={tab}
-            iconComponent={TAB_ICONS[index]}
-            isActive={tabIndex === index}
-            onPress={() => onPress(tab, index)}
-          />
-        ))}
+      <View style={styles.floatingBar}>
+        {TABS.map((tab, index) => {
+          const isCenter = index === 2;
+          const isActive = state.index === index;
+          const Icon = tab.Icon;
+
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={{
+                ...styles.tabItem,
+              }}
+              onPress={() => onPress(tab)}
+              activeOpacity={0.8}
+            >
+              <Animated.View
+                style={{
+                  transform: [{ scale: isActive ? 1.15 : 1 }],
+                }}
+              >
+                <Icon active={isActive} />
+              </Animated.View>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -188,37 +199,40 @@ export default function CustomTabBar({ state, navigation }) {
 
 const styles = StyleSheet.create({
   wrapper: {
-    paddingHorizontal: 0,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
-    paddingTop: 0,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: '#161D15',
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 30,
+    position: 'absolute',
+    width: '100%',
+    bottom: 0,
   },
-  tabBar: {
+
+  floatingBar: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    height: 70,
+    backgroundColor: '#1C2419',
+    borderRadius: 35,
+    justifyContent: 'space-between',
+    overflow: 'hidden',
   },
+
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 10,
-    paddingBottom: 4,
-    position: 'relative',
   },
-  topBorder: {
-    position: 'absolute',
-    top: 0,
-    left: '15%',
-    right: '15%',
-    height: 2,
-    backgroundColor: '#8FAF78',
-    borderRadius: 2,
+
+  centerButton: {
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  label: {
-    fontSize: 10,
-    marginTop: 4,
-    letterSpacing: 0.2,
+
+  centerInner: {
+    width: 58,
+    height: 58,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
