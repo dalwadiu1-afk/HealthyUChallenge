@@ -49,6 +49,8 @@ export default function SugarChart30Days({ route }) {
   const [todayString, setTodayString] = useState(moment().format('YYYY-MM-DD'));
   const [startDate, setStartDate] = useState(moment().toDate());
   const goal = gender?.toLowerCase() === 'female' ? 24 : 38;
+  const lowerLimit = goal - 5;
+  const upperLimit = goal + 5;
   const cycleStart = useMemo(() => {
     const todayDate = moment().startOf('day');
 
@@ -62,15 +64,10 @@ export default function SugarChart30Days({ route }) {
   }, [startDate]);
 
   const rawData = useMemo(() => {
-    const monthStart = moment(CURRENT_MONTH_KEY, 'MMMM_YYYY').startOf('month');
+    const start = moment(startDate).startOf('day');
 
-    console.log('CURRENT_MONTH_KEY =>', CURRENT_MONTH_KEY);
-    console.log('habitDays =>', habitDays);
-
-    const daysInMonth = monthStart.daysInMonth();
-
-    const baseData = Array.from({ length: daysInMonth }, (_, i) => {
-      const date = monthStart.clone().add(i, 'days');
+    const baseData = Array.from({ length: 30 }, (_, i) => {
+      const date = start.clone().add(i, 'days');
 
       return {
         key: date.format('YYYY-MM-DD'),
@@ -78,12 +75,6 @@ export default function SugarChart30Days({ route }) {
         sugar: 0,
       };
     });
-
-    console.log(
-      'Matching day sample =>',
-      baseData[0]?.key,
-      habitDays?.[baseData[0]?.key],
-    );
 
     return baseData.map(item => {
       const day = habitDays?.[item.key] || {};
@@ -102,7 +93,7 @@ export default function SugarChart30Days({ route }) {
         sugar: Number(totalSugar),
       };
     });
-  }, [CURRENT_MONTH_KEY, habitDays]);
+  }, [habitDays, startDate]);
 
   useEffect(() => {
     if (!rawData.length) return;
@@ -177,9 +168,15 @@ export default function SugarChart30Days({ route }) {
   };
 
   const getColor = val => {
-    if (val > goal) return '#ef4444';
-    if (val === goal) return '#f59e0b';
-    return '#22c55e';
+    if (val < lowerLimit) {
+      return '#22c55e'; // below healthy range
+    }
+
+    if (val <= upperLimit) {
+      return '#f59e0b'; // within ±5g range
+    }
+
+    return '#ef4444'; // above healthy range
   };
 
   const pastData = data.slice(0, selected + 1);
@@ -194,7 +191,8 @@ export default function SugarChart30Days({ route }) {
   const todayIndex = data.findIndex(d =>
     moment(d.date).isSame(moment(), 'day'),
   );
-  const todayExceeded = todayIndex !== -1 && data[todayIndex]?.sugar > goal;
+  const todayExceeded =
+    todayIndex !== -1 && data[todayIndex]?.sugar > upperLimit;
   const trendPoints = data
     .map((d, i) => {
       const x = i * ITEM_WIDTH + ITEM_WIDTH / 2;
@@ -207,11 +205,6 @@ export default function SugarChart30Days({ route }) {
     const sugarValue = Number(sugarInput);
 
     if (!product?.trim() || !sugarInput || sugarValue <= 0) {
-      return;
-    }
-
-    if (sugarValue > 40) {
-      setErrorMsg('You cannot add more than 40g of sugar at one time.');
       return;
     }
 
@@ -266,7 +259,7 @@ export default function SugarChart30Days({ route }) {
     });
   };
 
-  const chartTotalWidth = ITEM_WIDTH * 30;
+  const chartTotalWidth = ITEM_WIDTH * data.length;
 
   return (
     <View style={styles.root}>
@@ -279,7 +272,7 @@ export default function SugarChart30Days({ route }) {
 
       <Text style={styles.heroTitle}>🍬 30-Day Sugar Tracker</Text>
       <Text style={styles.heroSub}>
-        Daily limit: {goal}g · Tap a bar to see day details
+        Recommended: {goal}g/day (Healthy range {lowerLimit}-{upperLimit}g)
       </Text>
 
       {/* Stats strip */}
@@ -290,11 +283,14 @@ export default function SugarChart30Days({ route }) {
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statVal}>{goal}g</Text>
-          <Text style={styles.statLbl}>Daily Limit</Text>
+          <Text style={styles.statVal}>
+            {lowerLimit}-{upperLimit}g
+          </Text>
+
+          <Text style={styles.statLbl}>Healthy Range</Text>
         </View>
         <View style={styles.statDivider} />
-        <View style={styles.statItem}>
+        {/* <View style={styles.statItem}>
           <Text
             style={[
               styles.statVal,
@@ -304,7 +300,7 @@ export default function SugarChart30Days({ route }) {
             {requiredAvg.toFixed(1)}g
           </Text>
           <Text style={styles.statLbl}>Required Avg</Text>
-        </View>
+        </View> */}
       </View>
       <Wrapper isForgot safeAreaPops={{ edges: ['bottom'] }}>
         {/* Today exceeded warning */}
@@ -396,7 +392,7 @@ export default function SugarChart30Days({ route }) {
                     />
                     {/* Date label */}
                     <Text style={styles.dateLabel}>
-                      {formatDate(item.date)}
+                      {moment(item?.date).format('D')}
                     </Text>
                   </TouchableOpacity>
                 );

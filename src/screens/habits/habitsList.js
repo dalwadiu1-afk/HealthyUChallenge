@@ -418,7 +418,7 @@ export default function HabitsList({ navigation }) {
       id: 4,
       title: 'Sleep Well',
       description: 'Get 7–9 hours of sleep each night',
-      screenName: 'SleepMeasure',
+      screenName: 'SleepChartDays',
       category: 'Sleep',
       key: 'sleep',
       showInput: 'Enter sleep goal in hours (max 15)',

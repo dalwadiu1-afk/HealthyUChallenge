@@ -16,8 +16,9 @@ import { docJen, docJes, docsheri } from '../../assets/images';
 
 export default function Social() {
   const INSTAGRAM_URL = 'https://www.instagram.com/montclair_dietitian/';
-  const WEBSITE_URL = 'https://dineoncampus.com/montclair/meet-the-team';
-  const EMAIL = 'nutrition@montclair.edu';
+  const WEBSITE_URL =
+    'https://dineoncampus.com/montclair/wellness--dietitian-services';
+  const EMAIL = 'NourishMontclairDietitian@cpgplc.onmicrosoft.com';
 
   const openLink = async url => {
     try {
@@ -75,14 +76,14 @@ export default function Social() {
               Director of Dining and Wellness | Freeman
             </Text>
 
-            <TouchableOpacity
+            {/* <TouchableOpacity
               activeOpacity={0.8}
               onPress={() => openEmail('mailto:jbostedo@gourmetdiningllc.com')}
-            >
-              <Text style={styles.contactText}>
-                ✉️ jbostedo@gourmetdiningllc.com
-              </Text>
-            </TouchableOpacity>
+            > */}
+            <Text selectable style={styles.contactText}>
+              ✉️ jbostedo@gourmetdiningllc.com
+            </Text>
+            {/* </TouchableOpacity> */}
 
             {/* <TouchableOpacity
             activeOpacity={0.8}
@@ -99,14 +100,14 @@ export default function Social() {
 
             <Text style={styles.role}>Campus Dietitian | Sam's</Text>
 
-            <TouchableOpacity
+            {/* <TouchableOpacity
               activeOpacity={0.8}
               onPress={() => openEmail('mailto:jbostedo@gourmetdiningllc.com')}
-            >
-              <Text style={styles.contactText}>
-                ✉️ swheeler@gourmetdiningllc.com
-              </Text>
-            </TouchableOpacity>
+            > */}
+            <Text selectable style={styles.contactText}>
+              ✉️ swheeler@gourmetdiningllc.com
+            </Text>
+            {/* </TouchableOpacity> */}
 
             {/* <TouchableOpacity
             activeOpacity={0.8}
@@ -122,15 +123,15 @@ export default function Social() {
             <Text style={styles.name}>Jessica Carr, MS, RDN</Text>
 
             <Text style={styles.role}>Senior Campus Dietitian | Freeman</Text>
-
+            {/* 
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={() => openEmail('mailto:jcarr@gourmetdiningllc.com')}
-            >
-              <Text style={styles.contactText}>
-                ✉️ jcarr@gourmetdiningllc.com
-              </Text>
-            </TouchableOpacity>
+            > */}
+            <Text selectable style={styles.contactText}>
+              ✉️ jcarr@gourmetdiningllc.com
+            </Text>
+            {/* </TouchableOpacity> */}
 
             {/* <TouchableOpacity
             activeOpacity={0.8}
@@ -159,7 +160,7 @@ export default function Social() {
                 openEmail(`mailto:${EMAIL}`, 'Nutrition Consultation Request')
               }
             >
-              <Text style={styles.actionText}>📧 Contact Dietitian</Text>
+              <Text style={styles.actionText}>📧 Book An Appointment</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -172,7 +173,7 @@ export default function Social() {
           </View>
 
           {/* Meet The Team */}
-          <View style={styles.teamCard}>
+          {/* <View style={styles.teamCard}>
             <Text style={styles.teamTitle}>👩‍⚕️ Meet the Dietitian Team</Text>
 
             <Text style={styles.teamDescription}>
@@ -187,7 +188,7 @@ export default function Social() {
             >
               <Text style={styles.teamButtonText}>View Team</Text>
             </TouchableOpacity>
-          </View>
+          </View> */}
           {/* Services */}
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Services</Text>

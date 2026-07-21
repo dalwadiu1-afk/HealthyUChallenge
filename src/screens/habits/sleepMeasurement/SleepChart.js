@@ -1,53 +1,124 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { View, FlatList, Text, StyleSheet } from 'react-native';
 import Svg, { Rect, Text as SvgText, G } from 'react-native-svg';
 import { Button, Header, Wrapper } from '../../../components';
 import { colors, fontFamily } from '../../../constant';
+import auth from '@react-native-firebase/auth';
+import database from '@react-native-firebase/database';
+import moment from 'moment';
 
-export default function SleepChart30Days() {
+const formatKey = date => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+export default function SleepChart30Days({ navigation }) {
+  const [selected, setSelected] = useState(0);
+  const [goalStartDate, setGoalStartDate] = useState(new Date());
+  const [sleepData, setSleepData] = useState({});
   const chartHeight = 220;
   const padding = 20;
   const barWidth = 14;
   const itemWidth = 30;
+  const scrollRef = useRef(null);
 
   // 📅 Start date
-  const startDate = new Date('2026-03-25');
+
+  const graph = Array.from({ length: 30 }, (_, i) => {
+    const d = moment(goalStartDate).add(i, 'days');
+
+    return {
+      date: d.toDate(),
+      key: d.format('YYYY-MM-DD'),
+    };
+  });
+
+  useEffect(() => {
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
+
+    const ref = database().ref(`users/${uid}`);
+
+    const listener = ref.on('value', snapshot => {
+      const user = snapshot.val() || {};
+
+      setGoalStartDate(
+        user.goal?.startDate
+          ? moment(user.goal.startDate).toDate()
+          : new Date(),
+      );
+
+      setSleepData(user.habits?.sleep || {});
+    });
+
+    return () => ref.off('value', listener);
+  }, []);
+
+  const TODAY_KEY = formatKey(new Date());
+
+  useEffect(() => {
+    if (!data.length) return;
+
+    const todayIndex = data.findIndex(
+      item => formatKey(item.date) === TODAY_KEY,
+    );
+
+    if (todayIndex === -1) return;
+
+    setSelected(todayIndex);
+
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToOffset({
+        offset: todayIndex * itemWidth,
+        animated: true,
+      });
+    });
+  }, [data]);
 
   // 🌙 Sleep data (hours)
-  const rawData = [
-    { dayIndex: 0, sleep: 6.5 },
-    { dayIndex: 1, sleep: 7.2 },
-    { dayIndex: 2, sleep: 5.8 },
-    { dayIndex: 3, sleep: 8 },
-    { dayIndex: 4, sleep: 7.5 },
-    { dayIndex: 6, sleep: 6.2 },
-    { dayIndex: 7, sleep: 7.8 },
-    { dayIndex: 10, sleep: 6.9 },
-    { dayIndex: 12, sleep: 8.2 },
-    { dayIndex: 15, sleep: 7.1 },
-  ];
+  const rawData = useMemo(() => {
+    const result = [];
+
+    Object.values(sleepData).forEach(month => {
+      const days = month?.days || {};
+
+      Object.entries(days).forEach(([date, value]) => {
+        const sleepHours = parseFloat(value?.sleep) || 0;
+
+        result.push({
+          date,
+          sleep: sleepHours,
+        });
+      });
+    });
+
+    return result;
+  }, [sleepData]);
+
+  const data = useMemo(() => {
+    if (!goalStartDate) return [];
+
+    return Array.from({ length: 30 }, (_, i) => {
+      const date = new Date(goalStartDate);
+
+      date.setDate(date.getDate() + i);
+
+      const key = formatKey(date);
+
+      const entry = rawData.find(x => x.date === key);
+
+      return {
+        date,
+        sleep: entry?.sleep ?? 0,
+      };
+    });
+  }, [goalStartDate, rawData]);
 
   const formatDate = date =>
     date.toLocaleDateString('en-US', { day: 'numeric' });
-
-  // ✅ FIXED DATE LOGIC
-  const data = useMemo(() => {
-    return Array.from({ length: 30 }, (_, i) => {
-      const found = rawData.find(d => d.dayIndex === i);
-
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i); // ✅ FIXED
-
-      return {
-        dayIndex: i,
-        sleep: found?.sleep || 0,
-        date,
-      };
-    });
-  }, []);
-
-  const [selected, setSelected] = useState(10);
 
   // 📊 scale
   const max = Math.max(...data.map(d => d.sleep), 8); // min scale = 8h
@@ -129,49 +200,70 @@ export default function SleepChart30Days() {
     );
   };
 
+  const ITEM_WIDTH = 30;
   // -------------------------
   // UI
   // -------------------------
   return (
-    <Wrapper>
-      <Header header={'Sleep Tracker'} />
-
-      <View style={{ flex: 1 }}>
-        <View style={styles.chartContainer}>
-          <FlatList
-            data={data}
-            horizontal
-            keyExtractor={item => item.dayIndex.toString()}
-            renderItem={renderItem}
-            showsHorizontalScrollIndicator={false}
-          />
-        </View>
-
-        {/* STATS */}
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <Text style={styles.label}>😴 Avg Sleep</Text>
-            <Text style={styles.value}>{avgSleep.toFixed(1)} hrs</Text>
+    <View style={{ flex: 1, backgroundColor: colors.dark }}>
+      <Header
+        header={'Sleep Tracker'}
+        headerContainer={{ paddingHorizontal: 23 }}
+      />
+      <Wrapper orbsRight safeAreaPops={{ edges: ['bottom'] }}>
+        <View style={{ flex: 1 }}>
+          <View style={styles.chartContainer}>
+            <FlatList
+              ref={scrollRef}
+              data={data}
+              horizontal
+              keyExtractor={item => formatKey(item.date)}
+              renderItem={renderItem}
+              getItemLayout={(_, index) => ({
+                length: itemWidth,
+                offset: itemWidth * index,
+                index,
+              })}
+              onContentSizeChange={() => {
+                if (selected >= 0) {
+                  scrollRef.current?.scrollToIndex({
+                    index: selected,
+                    animated: false,
+                    viewPosition: 0.5,
+                  });
+                }
+              }}
+            />
           </View>
 
-          <View style={styles.divider} />
+          {/* STATS */}
+          <View style={styles.card}>
+            <View style={styles.row}>
+              <Text style={styles.label}>😴 Avg Sleep</Text>
+              <Text style={styles.value}>{avgSleep.toFixed(1)} hrs</Text>
+            </View>
 
-          <View style={styles.row}>
-            <Text style={styles.label}>🎯 Goal</Text>
-            <Text style={styles.value}>8 hrs/day</Text>
-          </View>
+            <View style={styles.divider} />
 
-          <View style={styles.divider} />
+            <View style={styles.row}>
+              <Text style={styles.label}>🎯 Goal</Text>
+              <Text style={styles.value}>8 hrs/day</Text>
+            </View>
 
-          <View style={styles.row}>
+            <View style={styles.divider} />
+
+            {/* <View style={styles.row}>
             <Text style={styles.label}>🔮 Required Avg</Text>
             <Text style={styles.value}>{requiredAvg.toFixed(1)} hrs/day</Text>
+          </View> */}
           </View>
         </View>
-      </View>
-
-      <Button title="Share" buttonStyle={{ marginVertical: 30 }} />
-    </Wrapper>
+        <Button
+          title="Add Sleep Data Manually"
+          onPress={() => navigation.navigate('SleepMeasure')}
+        />
+      </Wrapper>
+    </View>
   );
 }
 

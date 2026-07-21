@@ -142,6 +142,7 @@ export default function SleepClock({ navigation }) {
   const [liveWakeTime, setLiveWakeTime] = useState(getNowTime());
   const [bedAngle, setBedAngle] = useState(timeToAngle('22:00'));
   const [wakeAngle, setWakeAngle] = useState(timeToAngle('06:00'));
+  const [dayKey, setDayKey] = useState(moment().format('YYYY-MM-DD'));
   const [sleepDateKey, setSleepDateKey] = useState(null);
   const [tab, setTab] = useState('manually');
   const tabs = [
@@ -162,7 +163,6 @@ export default function SleepClock({ navigation }) {
   };
 
   const monthKey = moment().format('MMMM_YYYY');
-  const dayKey = moment().format('YYYY-MM-DD');
   const init = async () => {
     const ref = database().ref(`users/${USER_ID}`);
     const snapshot = await ref.once('value');
@@ -325,6 +325,7 @@ export default function SleepClock({ navigation }) {
         type: 'manual',
         updatedAt: Date.now(),
       });
+    navigation.goBack();
   };
 
   const handleSleepToggle = async () => {
@@ -440,10 +441,9 @@ export default function SleepClock({ navigation }) {
   const onChange = (event, selectedDate) => {
     setShow(false);
 
-    console.log('event type:', event.type);
-
     if (selectedDate?.toString()) {
       setDate(moment(selectedDate.toString()).format('ddd, MMMM Do'));
+      setDayKey(moment(selectedDate.toString()).format('YYYY-MM-DD'));
     }
   };
 

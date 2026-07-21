@@ -328,6 +328,12 @@ export default function Profile({ navigation }) {
       subtitle: 'Your personalized health overview',
       screenName: 'ProfileDetails',
     },
+    {
+      emoji: '👥',
+      title: 'Connect with Your Dietitians',
+      subtitle: 'Schedule a free nutrition counseling!',
+      screenName: 'Social',
+    },
     profile?.role === 'admin'
       ? {
           emoji: '🔑',
@@ -355,7 +361,7 @@ export default function Profile({ navigation }) {
       emoji: '📘',
       title: 'Guidelines',
       subtitle: 'Everything you need to know before you start',
-      screenName: 'Guidelines',
+      screenName: 'CompetitionGuidelines',
     },
     {
       emoji: '🧠',
@@ -380,12 +386,6 @@ export default function Profile({ navigation }) {
       badge: 'Admin',
     },
 
-    {
-      emoji: '👥',
-      title: 'Social',
-      subtitle: 'Connect with our dietitian',
-      screenName: 'Social',
-    },
     // { // emoji: '🎯', // title: 'Goals', // subtitle: 'View & edit your health goals', // screenName: 'ProfileDetails', // badge: null, // },
     // { // emoji: '💪', // title: 'My Body', // subtitle: 'BMI, weight, body measurements', // screenName: 'ProfileDetails', // badge: 'Missing Info', // },
     // { // emoji: '📋', // title: 'Instructions', // subtitle: 'App guide and how-to tips', // screenName: 'Instructions', // badge: 'New', // },
@@ -413,7 +413,7 @@ export default function Profile({ navigation }) {
               activeOpacity={0.8}
               onPress={() => navigation?.navigate('NotificationSettings')}
             >
-              <Text style={styles.settingsIcon}>⚙️</Text>
+              <Text style={styles.settingsIcon}>🔔</Text>
             </TouchableOpacity>
           </View>
           {/* Avatar */}

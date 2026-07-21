@@ -1,7 +1,7 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import Profile from '../screens/profile/profile';
-import Instructions from '../screens/profile/instructions';
+import CompetitionGuidelines from '../screens/profile/CompetitionGuidelines';
 import ProfileDetails from '../screens/profile/profileDetails';
 import InstructionsDetails from '../screens/profile/instructionsDetails';
 import Leaderboard from '../screens/profile/leaderboard';
@@ -27,7 +27,10 @@ export default function ProfileStack() {
     >
       <Stack.Screen name="Profile" component={Profile} />
       <Stack.Screen name="EditProfile" component={EditProfile} />
-      <Stack.Screen name="Instructions" component={Instructions} />
+      <Stack.Screen
+        name="CompetitionGuidelines"
+        component={CompetitionGuidelines}
+      />
       <Stack.Screen
         name="InstructionsDetails"
         component={InstructionsDetails}
